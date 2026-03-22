@@ -1,0 +1,26 @@
+app:
+  environment: local
+  timezone: America/New_York
+
+email:
+  smtp_server: smtp.example.com
+  smtp_port: 587
+  username: assistant@example.com
+  password: change-me
+  from_address: assistant@example.com
+  to_address: your.work@email.com
+
+alpaca:
+  api_key: YOUR_PAPER_API_KEY
+  api_secret: YOUR_PAPER_API_SECRET
+  base_url: https://paper-api.alpaca.markets
+
+risk:
+  starting_capital: 1000
+  planned_risk_pct_min: 0.005
+  planned_risk_pct_max: 0.01
+  max_open_positions: 2
+
+automation:
+  morning_watchlist_hour_et: 8
+  eod_recap_hour_et: 16
