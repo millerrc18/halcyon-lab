@@ -12,14 +12,14 @@ email:
   smtp_server: smtp.example.com
   smtp_port: 587
   use_tls: true
-  username: assistant@example.com
-  password: change-me
-  from_address: assistant@example.com
-  to_address: your.work@email.com
+  username: halcyonlabai@gmail.com
+  password: 3L@N8JJK6deKGeN.ic.U
+  from_address: halcyonlabai@gmail.com
+  to_address: ryan.c.miller@gd-ms.com
 
 alpaca:
-  api_key: YOUR_PAPER_API_KEY
-  api_secret: YOUR_PAPER_API_SECRET
+  api_key: PKBGTT7YF5HIZZKXL3ZIDYGVBO
+  api_secret: 3bfePT6WnVrtr4iBNZAQwA1wEKm3gYSdmeWdYwiRTojj
   base_url: https://paper-api.alpaca.markets
 
 risk:
