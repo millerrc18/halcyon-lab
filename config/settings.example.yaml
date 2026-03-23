@@ -9,17 +9,17 @@ app:
 # credentials they supply.  See docs/guides/email_setup.md for details.
 # ─────────────────────────────────────────────────────────────────────
 email:
-  smtp_server: smtp.example.com
+  smtp_server: smtp.gmail.com
   smtp_port: 587
   use_tls: true
-  username: halcyonlabai@gmail.com
-  password: 3L@N8JJK6deKGeN.ic.U
-  from_address: halcyonlabai@gmail.com
-  to_address: ryan.c.miller@gd-ms.com
+  username: your-assistant-email@gmail.com
+  password: your-app-password-here
+  from_address: your-assistant-email@gmail.com
+  to_address: your.work@email.com
 
 alpaca:
-  api_key: PKBGTT7YF5HIZZKXL3ZIDYGVBO
-  api_secret: 3bfePT6WnVrtr4iBNZAQwA1wEKm3gYSdmeWdYwiRTojj
+  api_key: YOUR_PAPER_API_KEY
+  api_secret: YOUR_PAPER_API_SECRET
   base_url: https://paper-api.alpaca.markets
 
 risk:
