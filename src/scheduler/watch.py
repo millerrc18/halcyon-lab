@@ -150,6 +150,14 @@ class WatchLoop:
             return
 
         features = compute_all_features(ohlcv, spy)
+
+        # Enrich features with fundamental, insider, and macro data
+        try:
+            from src.data_enrichment.enricher import enrich_features
+            features = enrich_features(features, self.config)
+        except Exception as e:
+            logger.warning("[WATCH] Data enrichment failed: %s", e)
+
         ranked = rank_universe(features)
         candidates = get_top_candidates(ranked)
         packet_worthy = candidates["packet_worthy"]
@@ -190,6 +198,14 @@ class WatchLoop:
             return
 
         features = compute_all_features(ohlcv, spy)
+
+        # Enrich features with fundamental, insider, and macro data
+        try:
+            from src.data_enrichment.enricher import enrich_features
+            features = enrich_features(features, self.config)
+        except Exception as e:
+            logger.warning("[WATCH] Data enrichment failed: %s", e)
+
         ranked = rank_universe(features)
         candidates = get_top_candidates(ranked)
         packet_worthy = candidates["packet_worthy"]
@@ -371,15 +387,31 @@ class WatchLoop:
             print(f"[WATCH] Training not needed: {reason}")
 
     def _run_saturday_reports(self):
-        """Generate and send Saturday training report."""
+        """Generate and send Saturday training and CTO reports."""
         from src.training.report import generate_training_report
         from src.email.notifier import send_email
+
+        # Training report
         print("[WATCH] Generating Saturday training report...")
         report = generate_training_report()
         print(report)
         subject = "[TRADE DESK] Weekly Training Report"
         send_email(subject, report)
         print("[WATCH] Training report email sent.")
+
+        # CTO performance report
+        try:
+            from src.evaluation.cto_report import generate_cto_report, format_cto_report
+            print("[WATCH] Generating CTO performance report...")
+            cto_data = generate_cto_report(days=7)
+            cto_text = format_cto_report(cto_data)
+            print(cto_text)
+            cto_subject = f"[TRADE DESK] CTO Performance Report ({cto_data['report_period']['start']} to {cto_data['report_period']['end']})"
+            send_email(cto_subject, cto_text)
+            print("[WATCH] CTO report email sent.")
+        except Exception as e:
+            logger.error("[WATCH] CTO report failed: %s", e)
+            print(f"[WATCH] CTO report failed: {e}")
 
     def _minutes_until_next_scan(self, now: datetime) -> float:
         """Calculate minutes until next scan is due."""

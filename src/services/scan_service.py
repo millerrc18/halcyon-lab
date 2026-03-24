@@ -51,6 +51,14 @@ def run_scan(config: dict, dry_run: bool = False, send_email_flag: bool = False,
         }
 
     features = compute_all_features(ohlcv, spy)
+
+    # Enrich features with fundamental, insider, and macro data
+    try:
+        from src.data_enrichment.enricher import enrich_features
+        features = enrich_features(features, config)
+    except Exception as e:
+        logger.warning("[SCAN] Data enrichment failed: %s — continuing without enrichment", e)
+
     ranked = rank_universe(features)
     candidates = get_top_candidates(ranked)
 

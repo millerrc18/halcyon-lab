@@ -39,6 +39,14 @@ def scan_historical_date(data: dict, scan_date: str) -> list[dict]:
     if spy_df.empty or len(spy_df) < 200:
         return []
 
+    # Compute market regime ONCE for this date
+    regime = {}
+    try:
+        from src.features.regime import compute_market_regime
+        regime = compute_market_regime(spy_df, ohlcv_dict)
+    except Exception as e:
+        logger.debug("Failed to compute market regime for %s: %s", scan_date, e)
+
     # Compute features for all tickers (skip earnings — not available historically)
     candidates = []
     for ticker, df in ohlcv_dict.items():
@@ -49,6 +57,14 @@ def scan_historical_date(data: dict, scan_date: str) -> list[dict]:
             features["hold_overlaps_earnings"] = False
             features["days_to_earnings"] = None
             features["event_risk_level"] = "none"
+
+            # Add market regime data
+            features.update(regime)
+
+            # Add placeholder enrichment for historical scans
+            features["fundamental_summary"] = "Not available for historical scan"
+            features["insider_summary"] = "Not available for historical scan"
+            features["macro_summary"] = "Not available for historical scan"
 
             score = _score_ticker(features)
             if score < PACKET_WORTHY_THRESHOLD:
@@ -241,8 +257,9 @@ def generate_backfill_example(candidate: dict, outcome: dict) -> dict:
     ticker = candidate["ticker"]
     company_name = get_company_name(ticker)
 
-    # Build input_text in the same format as _build_feature_prompt()
-    input_text = f"""Ticker: {ticker} ({company_name})
+    # Build input_text in the same multi-source format as _build_feature_prompt()
+    input_text = f"""=== TECHNICAL DATA ===
+Ticker: {ticker} ({company_name})
 Current Price: ${features.get('current_price', 0):.2f}
 Trend State: {features.get('trend_state', 'n/a')} | SMA50 slope: {features.get('sma50_slope', 'n/a')} | SMA200 slope: {features.get('sma200_slope', 'n/a')}
 Price vs SMA50: {features.get('price_vs_sma50_pct', 0):.1f}% | Price vs SMA200: {features.get('price_vs_sma200_pct', 0):.1f}%
@@ -252,6 +269,27 @@ Pullback Depth: {features.get('pullback_depth_pct', 0):.1f}% from 50-day high
 ATR(14): ${features.get('atr_14', 0):.2f} ({features.get('atr_pct', 0):.1f}% of price)
 Volume Ratio: {features.get('volume_ratio_20d', 0):.2f}x 20-day average
 Distance to SMA20: {features.get('dist_to_sma20_pct', 0):.1f}%
+
+=== MARKET REGIME ===
+Market Trend: {features.get('market_trend', 'n/a')} | SPY RSI(14): {features.get('spy_rsi_14', 'n/a')}
+Volatility: {features.get('volatility_regime', 'n/a')} ({features.get('vix_proxy', 0):.1f}% realized vol)
+SPY: {features.get('spy_20d_return', 0):+.1f}% (20d) | {features.get('spy_drawdown_from_high', 0):.1f}% from 52-week high
+Breadth: {features.get('market_breadth_label', 'n/a')} ({features.get('market_breadth_pct', 0):.0f}% above 50d MA)
+Regime: {features.get('regime_label', 'n/a')}
+
+=== SECTOR CONTEXT ===
+Sector: {features.get('sector', 'n/a')} | Rank: {features.get('sector_rs_rank', 'n/a')} | Sector Avg Score: {features.get('sector_avg_score', 0):.0f}
+
+=== FUNDAMENTAL SNAPSHOT ===
+{features.get('fundamental_summary', 'Not available for historical scan')}
+
+=== INSIDER ACTIVITY ===
+{features.get('insider_summary', 'Not available for historical scan')}
+
+=== MACRO CONTEXT ===
+{features.get('macro_summary', 'Not available for historical scan')}
+
+=== TRADE PARAMETERS ===
 Score: {candidate['score']:.0f}/100
 Entry: ${candidate['entry_price']:.2f} | Stop: ${candidate['stop_price']:.2f} | Target 1: ${candidate['target_1']:.2f} | Target 2: ${candidate['target_2']:.2f}
 Event Risk: none"""
