@@ -1,6 +1,10 @@
 """Deterministic ranking and qualification for trade candidates."""
 
+import logging
+
 from src.config import load_config
+
+logger = logging.getLogger(__name__)
 
 
 def _load_thresholds() -> dict:
@@ -16,9 +20,9 @@ def _load_thresholds() -> dict:
             "packet_worthy": bootcamp_cfg.get("qualification_threshold", 40),
             "watchlist": bootcamp_cfg.get("watchlist_threshold", 25),
         }
-        print(f"  [BOOTCAMP] Using bootcamp thresholds: "
-              f"packet_worthy={thresholds['packet_worthy']}, "
-              f"watchlist={thresholds['watchlist']}")
+        logger.info("[BOOTCAMP] Using bootcamp thresholds: "
+                     "packet_worthy=%s, watchlist=%s",
+                     thresholds['packet_worthy'], thresholds['watchlist'])
         return thresholds
 
     ranking_cfg = config.get("ranking", {})
@@ -26,6 +30,39 @@ def _load_thresholds() -> dict:
         "packet_worthy": ranking_cfg.get("packet_worthy_threshold", 70),
         "watchlist": ranking_cfg.get("watchlist_threshold", 45),
     }
+
+
+def _regime_adjustment(features: dict) -> float:
+    """Compute regime-based score adjustment from -10 to +10."""
+    regime = features.get("regime_label", "")
+    breadth = features.get("market_breadth_label", "")
+    spy_rsi = features.get("spy_rsi_14", 50)
+
+    adj = 0.0
+
+    if regime == "calm_uptrend" and breadth == "healthy":
+        adj += 5
+    elif regime == "calm_uptrend" and breadth == "narrowing":
+        adj += 2
+    elif regime == "volatile_uptrend":
+        adj += 0
+    elif regime == "transitional":
+        adj -= 3
+    elif regime == "calm_downtrend":
+        adj -= 5
+    elif regime == "volatile_downtrend":
+        adj -= 10
+
+    # SPY overbought/oversold
+    if spy_rsi > 75:
+        adj -= 3
+    elif spy_rsi < 30:
+        adj += 3
+
+    logger.debug("Regime adjustment: regime=%s breadth=%s spy_rsi=%.1f adj=%.1f",
+                 regime, breadth, spy_rsi, adj)
+
+    return max(-10, min(10, adj))
 
 
 def _score_ticker(features: dict) -> float:
@@ -65,7 +102,12 @@ def _score_ticker(features: dict) -> float:
     if vol_ratio < 0.8:
         score += 10
 
-    return score
+    # Regime adjustment
+    adj = _regime_adjustment(features)
+    score += adj
+
+    # Cap at 0-100
+    return max(0, min(100, score))
 
 
 def rank_universe(features: dict[str, dict]) -> list[dict]:
@@ -78,13 +120,31 @@ def rank_universe(features: dict[str, dict]) -> list[dict]:
         List of dicts with keys: ticker, score, qualification, features.
         Sorted by score descending.
     """
+    from src.features.regime import compute_sector_context
+
     thresholds = _load_thresholds()
     packet_threshold = thresholds["packet_worthy"]
     watchlist_threshold = thresholds["watchlist"]
 
-    ranked = []
+    # First pass: score all tickers and store scores in features
+    scored = {}
     for ticker, feat in features.items():
         score = _score_ticker(feat)
+        feat["_score"] = score
+        scored[ticker] = score
+
+    # Second pass: compute sector context (needs all scores)
+    for ticker, feat in features.items():
+        try:
+            sector_ctx = compute_sector_context(ticker, scored[ticker], features)
+            feat.update(sector_ctx)
+        except Exception:
+            pass
+
+    # Third pass: classify
+    ranked = []
+    for ticker, feat in features.items():
+        score = scored[ticker]
 
         if score >= packet_threshold:
             event_risk_level = feat.get("event_risk_level", "none")
