@@ -29,6 +29,8 @@ class TradePacket(BaseModel):
     position_sizing: PositionSizing
     deeper_analysis: str
     rendered_text: Optional[str] = None
+    llm_conviction: Optional[int] = None
+    llm_conviction_reason: Optional[str] = None
 
 
 class RankedCandidate(BaseModel):

@@ -25,7 +25,11 @@ RULES:
 - Reference fundamental context when it strengthens or weakens the thesis. Growing revenue and expanding margins support a continuation trade. Declining margins and missed guidance undermine it.
 - Note the macro backdrop when it's relevant. Fed tightening and an inverted yield curve create headwinds for rate-sensitive names.
 
-OUTPUT FORMAT — return ONLY these two sections, clearly labeled:
+- Your CONVICTION score must reflect the FULL picture, not just the technical score. A score-85 setup where fundamentals, insider activity, and regime all converge deserves 9/10. A score-85 setup where insiders are selling and the regime is deteriorating deserves 6/10. Justify your conviction in one sentence.
+
+OUTPUT FORMAT — return ONLY these sections, clearly labeled:
+
+CONVICTION: [1-10] [one sentence justification]
 
 WHY NOW:
 [2-3 sentences explaining the setup and why this specific moment is attractive]

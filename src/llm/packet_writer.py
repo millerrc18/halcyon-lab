@@ -77,24 +77,50 @@ Event Risk: {packet.event_risk}"""
     return prompt
 
 
-def _parse_llm_response(response: str) -> tuple[str | None, str | None]:
-    """Parse WHY NOW and DEEPER ANALYSIS sections from LLM response.
+def _parse_llm_response(response: str) -> tuple[int | None, str | None, str | None]:
+    """Parse CONVICTION, WHY NOW, and DEEPER ANALYSIS from LLM response.
 
-    Returns (why_now, deeper_analysis) or (None, None) on parse failure.
+    Returns (conviction, why_now, deeper_analysis) or (None, None, None) on failure.
     """
+    import re
+
+    conviction = None
+    conviction_reason = None
     why_now = None
     deeper_analysis = None
+
+    upper = response.upper()
+
+    # Parse CONVICTION line
+    conviction_marker = "CONVICTION:"
+    conv_idx = upper.find(conviction_marker)
+    if conv_idx != -1:
+        conv_start = conv_idx + len(conviction_marker)
+        # Find the end of the conviction line (next section or newline)
+        why_idx_temp = upper.find("WHY NOW:", conv_start)
+        conv_end = why_idx_temp if why_idx_temp != -1 else conv_start + 200
+        conv_text = response[conv_start:conv_end].strip()
+        # Extract number 1-10
+        match = re.search(r'\b(\d{1,2})\b', conv_text)
+        if match:
+            val = int(match.group(1))
+            if 1 <= val <= 10:
+                conviction = val
+                # Everything after the number is the reason
+                reason_start = match.end()
+                conviction_reason = conv_text[reason_start:].strip().rstrip('.')
+                if not conviction_reason:
+                    conviction_reason = None
 
     # Find WHY NOW section
     why_now_marker = "WHY NOW:"
     deeper_marker = "DEEPER ANALYSIS:"
 
-    upper = response.upper()
     why_idx = upper.find(why_now_marker.upper())
     deeper_idx = upper.find(deeper_marker.upper())
 
     if why_idx == -1 or deeper_idx == -1:
-        return None, None
+        return conviction, None, None
 
     # Extract WHY NOW (between marker and DEEPER ANALYSIS)
     why_start = why_idx + len(why_now_marker)
@@ -105,9 +131,9 @@ def _parse_llm_response(response: str) -> tuple[str | None, str | None]:
     deeper_analysis = response[deeper_start:].strip()
 
     if not why_now or not deeper_analysis:
-        return None, None
+        return conviction, None, None
 
-    return why_now, deeper_analysis
+    return conviction, why_now, deeper_analysis
 
 
 def enhance_packet_with_llm(packet: TradePacket, features: dict,
@@ -143,7 +169,7 @@ def enhance_packet_with_llm(packet: TradePacket, features: dict,
         print(f"  [LLM] Fallback to template for {packet.ticker}")
         return packet
 
-    why_now, deeper_analysis = _parse_llm_response(response)
+    conviction, why_now, deeper_analysis = _parse_llm_response(response)
 
     if why_now is None or deeper_analysis is None:
         logger.warning("[LLM] Failed to parse response — fallback to template for %s", packet.ticker)
@@ -153,6 +179,9 @@ def enhance_packet_with_llm(packet: TradePacket, features: dict,
     # Only update prose fields — never touch deterministic fields
     packet.why_now = why_now
     packet.deeper_analysis = deeper_analysis
-    logger.info("[LLM] Enhanced packet for %s", packet.ticker)
-    print(f"  [LLM] Enhanced packet for {packet.ticker}")
+    if conviction is not None:
+        packet.llm_conviction = conviction
+    logger.info("[LLM] Enhanced packet for %s (conviction: %s)", packet.ticker,
+                conviction if conviction else "n/a")
+    print(f"  [LLM] Enhanced packet for {packet.ticker} (conviction: {conviction or 'n/a'})")
     return packet

@@ -86,6 +86,9 @@ def generate_cto_report(days: int = 7, db_path: str = "ai_research_desk.sqlite3"
     # Training status
     training_status = _compute_training_status(days, db_path)
 
+    # Confidence calibration
+    confidence_calibration = _compute_confidence_calibration(closed, recommendations)
+
     return {
         "report_period": {
             "start": start_str,
@@ -108,6 +111,7 @@ def generate_cto_report(days: int = 7, db_path: str = "ai_research_desk.sqlite3"
         "signal_quality": signal_quality,
         "feature_correlations": feature_correlations,
         "training_status": training_status,
+        "confidence_calibration": confidence_calibration,
     }
 
 
@@ -384,6 +388,65 @@ def _compute_training_status(days: int, db_path: str) -> dict:
         "live_examples": counts.get("live", 0),
         "examples_this_period": 0,  # Would need date filtering
         "model_version_trend": "stable",
+    }
+
+
+def _compute_confidence_calibration(closed: list, recommendations: list) -> dict:
+    """Compute confidence calibration from LLM conviction scores."""
+    conv_map = {r.get("recommendation_id"): r.get("llm_conviction") for r in recommendations}
+
+    bands = {"8-10": [], "5-7": [], "1-4": []}
+    convictions = []
+    pnls = []
+
+    for t in closed:
+        rec_id = t.get("recommendation_id")
+        conv = conv_map.get(rec_id)
+        if conv is None:
+            continue
+
+        pnl = t.get("pnl_pct", 0) or 0
+        won = 1 if (t.get("pnl_dollars") or 0) > 0 else 0
+        convictions.append(conv)
+        pnls.append(pnl)
+
+        if conv >= 8:
+            bands["8-10"].append((pnl, won))
+        elif conv >= 5:
+            bands["5-7"].append((pnl, won))
+        else:
+            bands["1-4"].append((pnl, won))
+
+    by_band = {}
+    for band, data in bands.items():
+        if data:
+            wr = sum(w for _, w in data) / len(data)
+            avg_pnl = sum(p for p, _ in data) / len(data)
+            by_band[band] = {"trades": len(data), "win_rate": round(wr, 2), "avg_pnl": round(avg_pnl, 1)}
+        else:
+            by_band[band] = {"trades": 0, "win_rate": 0, "avg_pnl": 0}
+
+    # Correlation
+    correlation = 0.0
+    if len(convictions) >= 5:
+        from src.evaluation.feature_importance import _pearson_correlation
+        correlation = _pearson_correlation([float(c) for c in convictions], pnls)
+
+    # Calibration check: higher conviction should = higher win rate
+    is_calibrated = True
+    if by_band["8-10"]["trades"] >= 3 and by_band["1-4"]["trades"] >= 3:
+        is_calibrated = by_band["8-10"]["win_rate"] > by_band["1-4"]["win_rate"]
+
+    # Overconfidence rate
+    high_conv_losers = sum(1 for p, w in bands["8-10"] if w == 0)
+    overconfidence = high_conv_losers / len(bands["8-10"]) if bands["8-10"] else 0
+
+    return {
+        "by_conviction_band": by_band,
+        "correlation_with_outcomes": round(correlation, 3),
+        "is_calibrated": is_calibrated,
+        "overconfidence_rate": round(overconfidence, 2),
+        "total_with_conviction": len(convictions),
     }
 
 

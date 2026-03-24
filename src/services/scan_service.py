@@ -90,6 +90,7 @@ def run_scan(config: dict, dry_run: bool = False, send_email_flag: bool = False,
                 packet, feat, candidate["score"], candidate["qualification"],
                 model_version=model_ver,
                 enriched_prompt=enriched_prompt,
+                llm_conviction=getattr(packet, 'llm_conviction', None),
             )
 
         if send_email_flag and not dry_run:

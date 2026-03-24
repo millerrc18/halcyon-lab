@@ -69,6 +69,7 @@ class WatchLoop:
         self._training_collection_done = False
         self._training_run_done = False
         self._saturday_reports_done = False
+        self._daily_audit_done = False
 
     def _is_market_open(self, now: datetime) -> bool:
         """Check if market is currently open (weekday, between open and close)."""
@@ -231,6 +232,7 @@ class WatchLoop:
                 packet, feat, candidate["score"], candidate["qualification"],
                 model_version=model_ver,
                 enriched_prompt=enriched_prompt,
+                llm_conviction=getattr(packet, 'llm_conviction', None),
             )
             print(f"  -> Logged {ticker}: {rec_id}")
             self._trades_managed_today += 1
@@ -317,7 +319,13 @@ class WatchLoop:
                     self._safe_run("EOD recap", self._run_eod_recap)
                     self._eod_done = True
 
-                # 4. Training data collection (4:30 PM ET)
+                # 4. Daily audit (4:15 PM ET)
+                elif (hour == 16 and now.minute >= 15 and now.minute < 30
+                      and not self._daily_audit_done):
+                    self._safe_run("daily audit", self._run_daily_audit)
+                    self._daily_audit_done = True
+
+                # 5. Training data collection (4:30 PM ET)
                 elif (self.training_enabled and hour == 16 and now.minute >= 30
                       and not self._training_collection_done):
                     self._safe_run("training collection", self._run_training_collection)
@@ -367,6 +375,29 @@ class WatchLoop:
             logger.error(traceback.format_exc())
             print(f"[WATCH] ERROR in {name}: {e} (error {self._consecutive_errors}/3)")
 
+    def _run_daily_audit(self):
+        """Run the daily auditor agent."""
+        from src.evaluation.auditor import run_daily_audit, check_escalation
+        from src.email.notifier import send_email
+
+        print("[WATCH] Running daily audit...")
+        audit = run_daily_audit()
+        assessment = audit.get("overall_assessment", "green")
+        summary = (audit.get("summary") or "")[:200]
+        print(f"[WATCH] Audit: {assessment} — {summary}")
+
+        # Check for escalation
+        actions = check_escalation(audit)
+        for action in actions:
+            print(f"[WATCH] Escalation: {action['action']} ({action['severity']})")
+
+        # Send alert if red or yellow
+        if assessment == "red":
+            subject = "[TRADE DESK] DAILY AUDIT — RED"
+            send_email(subject, f"Assessment: RED\n\n{audit.get('summary', '')}")
+        elif assessment == "yellow":
+            logger.info("[AUDIT] Yellow assessment — included in EOD recap")
+
     def _run_training_collection(self):
         """Collect training data from closed trades."""
         from src.training.data_collector import collect_training_examples_from_closed_trades
@@ -400,6 +431,16 @@ class WatchLoop:
         subject = "[TRADE DESK] Weekly Training Report"
         send_email(subject, report)
         print("[WATCH] Training report email sent.")
+
+        # Weekly deep audit
+        try:
+            from src.evaluation.auditor import run_weekly_audit
+            print("[WATCH] Running weekly deep audit...")
+            weekly = run_weekly_audit(days=7)
+            print(f"[WATCH] Weekly audit: {weekly.get('overall_assessment', 'n/a')}")
+        except Exception as e:
+            logger.error("[WATCH] Weekly audit failed: %s", e)
+            print(f"[WATCH] Weekly audit failed: {e}")
 
         # CTO performance report
         try:

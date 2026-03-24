@@ -120,6 +120,18 @@ def initialize_database(db_path: str = "ai_research_desk.sqlite3") -> None:
         except sqlite3.OperationalError:
             pass  # Column already exists
 
+        # Migration: add llm_conviction columns
+        try:
+            conn.execute("ALTER TABLE recommendations ADD COLUMN llm_conviction INTEGER")
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass
+        try:
+            conn.execute("ALTER TABLE recommendations ADD COLUMN llm_conviction_reason TEXT")
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass
+
 
 def log_recommendation(
     packet: TradePacket,
@@ -129,6 +141,8 @@ def log_recommendation(
     db_path: str = "ai_research_desk.sqlite3",
     model_version: str = "base",
     enriched_prompt: str | None = None,
+    llm_conviction: int | None = None,
+    llm_conviction_reason: str | None = None,
 ) -> str:
     """Write a recommendation row to the journal and return the recommendation_id."""
     initialize_database(db_path)
@@ -188,6 +202,8 @@ def log_recommendation(
         "packet_sent": 0,
         "model_version": model_version,
         "enriched_prompt": enriched_prompt,
+        "llm_conviction": llm_conviction,
+        "llm_conviction_reason": llm_conviction_reason,
     }
 
     columns = ", ".join(row.keys())
