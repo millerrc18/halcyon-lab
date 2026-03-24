@@ -1,4 +1,5 @@
 from src.models import PositionSizing, TradePacket
+from src.universe.company_names import get_company_name
 
 
 def build_packet_from_features(ticker: str, features: dict, config: dict) -> TradePacket:
@@ -62,7 +63,7 @@ def build_packet_from_features(ticker: str, features: dict, config: dict) -> Tra
 
     return TradePacket(
         ticker=ticker,
-        company_name=ticker,
+        company_name=get_company_name(ticker),
         recommendation="Buy",
         setup_type="Pullback in strong trend / relative strength continuation",
         why_now=why_now,
