@@ -70,6 +70,27 @@ def build_packet_from_features(ticker: str, features: dict, config: dict) -> Tra
         f"RS vs SPY — 1m: {features.get('rs_vs_spy_1m', 0):.1f}%, "
         f"3m: {features.get('rs_vs_spy_3m', 0):.1f}%, "
         f"6m: {features.get('rs_vs_spy_6m', 0):.1f}%.\n"
+    )
+
+    # Market context
+    regime = features.get("regime_label")
+    if regime:
+        deeper_analysis += (
+            f"Market regime: {regime.replace('_', ' ')} | "
+            f"Breadth: {features.get('market_breadth_label', 'n/a')} | "
+            f"SPY RSI: {features.get('spy_rsi_14', 'n/a')}.\n"
+        )
+
+    # Fundamental and insider context
+    fund_summary = features.get("fundamental_summary")
+    if fund_summary and fund_summary != "No fundamental data available":
+        deeper_analysis += f"Fundamentals: {fund_summary}\n"
+
+    insider_summary = features.get("insider_summary")
+    if insider_summary and insider_summary != "No insider data available":
+        deeper_analysis += f"{insider_summary}\n"
+
+    deeper_analysis += (
         f"Pullback quality: {pullback:.1f}% decline from 50-day high. "
         f"ATR(14): ${atr:.2f} ({features.get('atr_pct', 0):.1f}% of price). "
         f"Volume ratio: {features.get('volume_ratio_20d', 0):.2f}x 20-day average.\n"

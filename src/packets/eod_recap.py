@@ -26,6 +26,33 @@ def build_eod_recap(packet_worthy: list[dict], watchlist: list[dict],
     lines.append(f"[TRADE DESK] EOD Recap - {date_str}")
     lines.append("")
 
+    # Market context (from first available candidate with regime data)
+    regime_source = None
+    for candidates in [packet_worthy, watchlist]:
+        for c in candidates:
+            feat = c.get("features", {})
+            if feat.get("regime_label"):
+                regime_source = feat
+                break
+        if regime_source:
+            break
+
+    if regime_source:
+        lines.append("MARKET CONTEXT:")
+        lines.append(
+            f"  Regime: {regime_source.get('regime_label', 'n/a').replace('_', ' ').title()} | "
+            f"Volatility: {regime_source.get('volatility_regime', 'n/a').title()} "
+            f"({regime_source.get('vix_proxy', 0):.1f}%)"
+        )
+        lines.append(
+            f"  SPY: {regime_source.get('spy_20d_return', 0):+.1f}% (20d) | "
+            f"{regime_source.get('spy_drawdown_from_high', 0):.1f}% from high | "
+            f"RSI: {regime_source.get('spy_rsi_14', 'n/a')} | "
+            f"Breadth: {regime_source.get('market_breadth_label', 'n/a').title()} "
+            f"({regime_source.get('market_breadth_pct', 0):.0f}%)"
+        )
+        lines.append("")
+
     # Activity summary
     lines.append("ACTIVITY SUMMARY:")
     lines.append(f"  - Packets sent today: {len(journal_entries)}")
