@@ -384,6 +384,26 @@ def cmd_compare_models(args):
     print(json.dumps(compare_models(args.model_a, args.model_b,
                                      months=getattr(args, "months", 3)), indent=2, default=str))
 
+def cmd_check_leakage(args):
+    from src.training.leakage_detector import check_outcome_leakage
+    result = check_outcome_leakage()
+    print("\n=== OUTCOME LEAKAGE TEST ===")
+    if result.get("test_accuracy") is None:
+        print(f"  {result.get('note', 'Insufficient data')}")
+    else:
+        status = "LEAKING" if result["is_leaking"] else "CLEAN"
+        print(f"  Status:   {status}")
+        print(f"  Accuracy: {result['test_accuracy']:.1%} (should be <= 55%)")
+        print(f"  Examples: {result['n_examples']}")
+        if result.get("feature_importance"):
+            fi = result["feature_importance"]
+            print(f"  Win predictors:  {', '.join(fi['win_predictors'][:3])}")
+            print(f"  Loss predictors: {', '.join(fi['loss_predictors'][:3])}")
+        if result["is_leaking"]:
+            print("\n  ACTION: Commentary text predicts outcomes — iterate on prompts before fine-tuning.")
+        else:
+            print("\n  Commentary is outcome-independent. Safe to fine-tune.")
+
 
 # ── Operations ────────────────────────────────────────────────────────
 
@@ -478,6 +498,7 @@ def build_parser() -> argparse.ArgumentParser:
     _p = sp.add_parser("feature-importance"); _p.add_argument("--days", type=int, default=30); _p.set_defaults(func=cmd_feature_importance)
     _p = sp.add_parser("backtest"); _p.add_argument("--model", default="halcyon-latest"); _p.add_argument("--months", type=int, default=6); _p.set_defaults(func=cmd_backtest)
     _p = sp.add_parser("compare-models"); _p.add_argument("--model-a", required=True); _p.add_argument("--model-b", required=True); _p.add_argument("--months", type=int, default=3); _p.set_defaults(func=cmd_compare_models)
+    sp.add_parser("check-leakage").set_defaults(func=cmd_check_leakage)
 
     # Operations
     sp.add_parser("halt-trading").set_defaults(func=cmd_halt_trading)
