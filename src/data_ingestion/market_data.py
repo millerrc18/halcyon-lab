@@ -5,6 +5,12 @@ import sys
 import pandas as pd
 import yfinance as yf
 
+# Tickers that need translation for yfinance compatibility
+TICKER_MAP = {
+    "BRK.B": "BRK-B",
+}
+REVERSE_TICKER_MAP = {v: k for k, v in TICKER_MAP.items()}
+
 
 def fetch_ohlcv(tickers: list[str], period: str = "1y") -> dict[str, pd.DataFrame]:
     """Fetch daily OHLCV data for a list of tickers.
@@ -16,26 +22,30 @@ def fetch_ohlcv(tickers: list[str], period: str = "1y") -> dict[str, pd.DataFram
     if not tickers:
         return {}
 
+    # Translate tickers for yfinance compatibility
+    download_tickers = [TICKER_MAP.get(t, t) for t in tickers]
+
     result = {}
 
-    if len(tickers) == 1:
-        ticker = tickers[0]
+    if len(download_tickers) == 1:
+        dl_ticker = download_tickers[0]
+        orig_ticker = REVERSE_TICKER_MAP.get(dl_ticker, dl_ticker)
         try:
-            df = yf.download(ticker, period=period, progress=False, auto_adjust=False)
+            df = yf.download(dl_ticker, period=period, progress=False, auto_adjust=False)
             if df is not None and not df.empty:
                 # Flatten MultiIndex columns if present
                 if isinstance(df.columns, pd.MultiIndex):
                     df.columns = df.columns.get_level_values(0)
                 df = df[["Open", "High", "Low", "Close", "Volume"]]
-                result[ticker] = df
+                result[orig_ticker] = df
             else:
-                print(f"WARNING: No data returned for {ticker}", file=sys.stderr)
+                print(f"WARNING: No data returned for {orig_ticker}", file=sys.stderr)
         except Exception as e:
-            print(f"WARNING: Failed to fetch {ticker}: {e}", file=sys.stderr)
+            print(f"WARNING: Failed to fetch {orig_ticker}: {e}", file=sys.stderr)
         return result
 
     try:
-        raw = yf.download(tickers, period=period, progress=False, auto_adjust=False, group_by="ticker")
+        raw = yf.download(download_tickers, period=period, progress=False, auto_adjust=False, group_by="ticker")
     except Exception as e:
         print(f"WARNING: Batch download failed: {e}", file=sys.stderr)
         return result
@@ -44,19 +54,20 @@ def fetch_ohlcv(tickers: list[str], period: str = "1y") -> dict[str, pd.DataFram
         print("WARNING: No data returned from batch download", file=sys.stderr)
         return result
 
-    for ticker in tickers:
+    for dl_ticker in download_tickers:
+        orig_ticker = REVERSE_TICKER_MAP.get(dl_ticker, dl_ticker)
         try:
             if isinstance(raw.columns, pd.MultiIndex):
-                df = raw[ticker][["Open", "High", "Low", "Close", "Volume"]].copy()
+                df = raw[dl_ticker][["Open", "High", "Low", "Close", "Volume"]].copy()
             else:
                 df = raw[["Open", "High", "Low", "Close", "Volume"]].copy()
             df = df.dropna(how="all")
             if not df.empty:
-                result[ticker] = df
+                result[orig_ticker] = df
             else:
-                print(f"WARNING: No data for {ticker}", file=sys.stderr)
+                print(f"WARNING: No data for {orig_ticker}", file=sys.stderr)
         except Exception as e:
-            print(f"WARNING: Failed to extract data for {ticker}: {e}", file=sys.stderr)
+            print(f"WARNING: Failed to extract data for {orig_ticker}: {e}", file=sys.stderr)
 
     return result
 
