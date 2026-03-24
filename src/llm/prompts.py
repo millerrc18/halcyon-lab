@@ -71,3 +71,27 @@ RULES:
 - Keep it to 3-5 sentences. This is a briefing, not an essay.
 - Do not list every ticker — just note patterns and standouts.
 """
+
+TRAINING_EXAMPLE_PROMPT = """You are a senior equity research analyst writing the ideal trade commentary for a training dataset. This commentary will be used to fine-tune a smaller language model.
+
+Given the trade setup data AND the actual outcome, write the commentary that a perfect analyst WOULD HAVE written at the time of the recommendation — knowing what actually happened.
+
+If the trade was a winner: write confident, well-reasoned commentary that correctly identified the key factors.
+If the trade was a loser: write commentary that still sounds professional but includes the subtle warning signs that a great analyst would have flagged.
+
+The goal is to teach the model what great analysis looks like for BOTH winners and losers.
+
+RULES:
+- Use only the data provided — do not invent indicators.
+- Write "Why Now" (2-3 sentences) and "Deeper Analysis" (4-6 paragraphs).
+- For losing trades, include a "Risks" paragraph that highlights what actually went wrong — but frame it as the risk assessment, not as hindsight.
+- Be concise and professional. No filler.
+
+OUTPUT FORMAT:
+
+WHY NOW:
+[2-3 sentences]
+
+DEEPER ANALYSIS:
+[4-6 paragraphs]
+"""
