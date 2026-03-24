@@ -39,7 +39,7 @@ If a change does not clearly help answer that question, it is probably out of sc
 - Margin-dependent strategies
 - Multi-asset expansion
 - Heavy dashboard/UI work before the core loop is validated
-- Fine-tuning the LLM during MVP
+- Fine-tuning the LLM before bootcamp phase (authorized during M6 bootcamp — see Bootcamp specification)
 - Feature creep that increases noise or operational burden
 
 ## Product philosophy
@@ -213,6 +213,50 @@ Only after these gates should the project consider:
 - Intraday expansion
 - Broader universes
 - Fine-tuning or additional model layers
+
+## Bootcamp specification (Milestone 6)
+
+The 30-day bootcamp is an intensive calibration phase, not a passive observation period. The system should trade aggressively on paper to maximize data collection and learning.
+
+### Bootcamp operating mode
+- **No position limits** — the system may hold as many simultaneous shadow positions as it wants
+- **Loose qualification thresholds** — lower the bar to generate high trade volume for statistical learning
+- **All trades are shadow/paper only** — no live execution during bootcamp under any circumstances
+- **Every trade is logged** — full journal entry for every recommendation, entry, exit, and outcome
+
+### Three-phase learning arc
+
+**Phase 1 — Data collection (Days 1–10):**
+- Run with loose filters and high volume
+- Prioritize breadth of data over precision
+- Begin threshold tuning based on early outcome patterns
+- Goal: accumulate a large, diverse dataset of trade outcomes
+
+**Phase 2 — Statistical optimization (Days 11–20):**
+- Analyze Phase 1 results
+- Auto-propose adjusted scoring weights and qualification cutoffs based on measured outcomes
+- Test revised rules against the Phase 1 dataset
+- Goal: find scoring parameters that would have filtered for the best outcomes
+
+**Phase 3 — ML/LLM learning (Days 21–30):**
+- Use accumulated outcome data to train or fine-tune ranking models
+- Compare learned model performance against deterministic rules
+- Evaluate whether learned weights meaningfully outperform the rule-based ranker
+- Goal: decide whether to promote learned ranking to production or stay with tuned deterministic rules
+
+### Bootcamp email modes (configurable)
+Ryan can toggle between these modes at any time during bootcamp:
+- **Silent** — log everything, no emails sent, review after
+- **Daily summary** — one email per day summarizing all activity
+- **Full stream** — send every packet in real time
+
+### Bootcamp exit criteria
+At the end of 30 days, evaluate:
+1. Shadow performance metrics (expectancy, win rate, avg gain vs avg loss, max drawdown)
+2. Whether statistical optimization improved outcomes vs Phase 1 baseline
+3. Whether ML/LLM ranking outperformed tuned deterministic rules
+4. Overall trade quality and false positive rate
+5. Whether the system is ready for promotion to approval-gated live execution
 
 ## Guidance for future LLM agents
 

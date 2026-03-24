@@ -29,8 +29,10 @@
 - Add Ryan review flow for taken trades
 - Add scorecard output for 30-day bootcamp
 
-## Milestone 6 - Bootcamp
-- Run 30-day paper-only bootcamp
-- Review weekly output quality
-- Assess fit with workday
-- Decide whether to promote to next phase
+## Milestone 6 - Bootcamp (30-day intensive calibration)
+- Operates in aggressive paper-trading mode — no position limits, loose thresholds, maximum data collection
+- Phase 1 (Days 1–10): High-volume data collection, early threshold tuning
+- Phase 2 (Days 11–20): Statistical optimization of scoring weights and cutoffs based on Phase 1 outcomes
+- Phase 3 (Days 21–30): ML/LLM learning — train or fine-tune ranking models on accumulated outcome data
+- Email mode configurable: silent / daily summary / full stream (toggled by Ryan at any time)
+- Exit evaluation: shadow performance metrics, optimization lift, ML vs deterministic comparison, promotion readiness
