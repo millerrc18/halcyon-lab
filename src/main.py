@@ -1111,6 +1111,15 @@ def cmd_preflight(args):
     print("")
 
 
+def cmd_dashboard(args):
+    """Start the FastAPI dashboard server."""
+    import uvicorn
+    port = getattr(args, "port", 8000)
+    print(f"Starting Halcyon Lab dashboard at http://localhost:{port}")
+    print(f"API docs at http://localhost:{port}/docs")
+    uvicorn.run("src.api.app:app", host="0.0.0.0", port=port, reload=False)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="AI Research Desk MVP skeleton")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -1221,6 +1230,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     preflight = subparsers.add_parser("preflight", help="Run system preflight checks")
     preflight.set_defaults(func=cmd_preflight)
+
+    dashboard = subparsers.add_parser("dashboard", help="Start the web dashboard")
+    dashboard.add_argument("--port", type=int, default=8000, help="Port for the dashboard server")
+    dashboard.set_defaults(func=cmd_dashboard)
 
     return parser
 
