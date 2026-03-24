@@ -403,10 +403,11 @@ class TestDatasetBalancing:
 class TestCostEstimation:
     def test_cost_estimation(self):
         cost = estimate_backfill_cost(1000)
-        # 1000 * 600 * 1.0 / 1M = 0.60 input
-        # 1000 * 800 * 5.0 / 1M = 4.00 output
-        # Total = 4.60
-        assert cost == 4.6
+        # Self-blinding pipeline: 2 API calls per example
+        # Stage 1: 1000 * 600 * 1.0 / 1M = 0.60 input + 1000 * 800 * 5.0 / 1M = 4.00 output
+        # Stage 2: 1000 * 1400 * 1.0 / 1M = 1.40 input + 1000 * 800 * 5.0 / 1M = 4.00 output
+        # Total = 0.60 + 4.00 + 1.40 + 4.00 = 10.0
+        assert cost == 10.0
 
     def test_zero_examples(self):
         assert estimate_backfill_cost(0) == 0.0
@@ -460,7 +461,9 @@ class TestGenerateBackfillExample:
 
         assert example["output_text"] is None
         assert "AAPL" in example["input_text"]
-        assert "target_1_hit" in example["input_text"]
+        # Self-blinding: outcome should NOT be in input_text
+        assert "target_1_hit" not in example["input_text"]
+        assert "ACTUAL OUTCOME" not in example["input_text"]
         assert example["metadata"]["ticker"] == "AAPL"
         assert example["metadata"]["pnl_pct"] == 3.66
         assert example["metadata"]["outcome_quality"] == "clean_win"
@@ -517,4 +520,5 @@ class TestGenerateBackfillExample:
         assert "ATR(14):" in text
         assert "Volume Ratio:" in text
         assert "Score:" in text
-        assert "=== ACTUAL OUTCOME ===" in text
+        # Self-blinding: outcome should NOT be in input_text
+        assert "=== ACTUAL OUTCOME ===" not in text

@@ -17,7 +17,7 @@ from zoneinfo import ZoneInfo
 
 import pandas as pd
 
-from src.llm.prompts import HISTORICAL_TRAINING_PROMPT
+from src.llm.prompts import BLINDED_ANALYSIS_PROMPT, QUALITY_ENHANCEMENT_PROMPT
 from src.training.claude_client import generate_training_example
 from src.training.historical_data import fetch_historical_universe
 from src.training.historical_scanner import (
@@ -35,12 +35,18 @@ ET = ZoneInfo("America/New_York")
 def estimate_backfill_cost(n_examples: int) -> float:
     """Estimate Claude API cost for generating N backfill examples.
 
-    Each example: ~600 input tokens (features + outcome) + ~800 output tokens (commentary)
+    Self-blinding pipeline uses 2 API calls per example:
+      Stage 1 (Blinded): ~600 input tokens + ~800 output tokens
+      Stage 2 (Enhancement): ~1400 input tokens + ~800 output tokens
     Haiku 4.5: $1/MTok input, $5/MTok output
     """
-    input_cost = n_examples * 600 * 1.0 / 1_000_000
-    output_cost = n_examples * 800 * 5.0 / 1_000_000
-    return round(input_cost + output_cost, 2)
+    # Stage 1: blinded generation
+    s1_input_cost = n_examples * 600 * 1.0 / 1_000_000
+    s1_output_cost = n_examples * 800 * 5.0 / 1_000_000
+    # Stage 2: quality enhancement
+    s2_input_cost = n_examples * 1400 * 1.0 / 1_000_000
+    s2_output_cost = n_examples * 800 * 5.0 / 1_000_000
+    return round(s1_input_cost + s1_output_cost + s2_input_cost + s2_output_cost, 2)
 
 
 def _get_trading_days(spy_df: pd.DataFrame, start_date: str, end_date: str) -> list[str]:
@@ -305,25 +311,43 @@ def run_historical_backfill(
             examples_skipped += 1
             continue
 
-        # Build training example
+        # Build feature input (NO outcome data)
         training_ex = generate_backfill_example(candidate, outcome)
+        feature_input = training_ex["input_text"]
 
-        # Call Claude API
-        response = generate_training_example(
-            training_ex["instruction"],
-            training_ex["input_text"],
-        )
+        # Remove any outcome section from the feature input for blinding
+        outcome_marker = "=== ACTUAL OUTCOME ==="
+        if outcome_marker in feature_input:
+            feature_input = feature_input[:feature_input.index(outcome_marker)].rstrip()
 
-        if response is None:
-            logger.warning("[BACKFILL] Claude API failed for %s on %s, skipping",
+        # ═══ STAGE 1: BLINDED GENERATION ═══
+        # Claude sees ONLY the setup data — ZERO outcome information
+        blinded_prompt = BLINDED_ANALYSIS_PROMPT.format(date=scan_date)
+        stage1_response = generate_training_example(blinded_prompt, feature_input)
+
+        if stage1_response is None:
+            logger.warning("[BACKFILL] Stage 1 failed for %s on %s, skipping",
                            ticker, scan_date)
+            examples_skipped += 1
             continue
+
+        # ═══ STAGE 2: QUALITY ENHANCEMENT ═══
+        # Claude sees ONLY the Stage 1 output — still no outcome
+        enhancement_input = f"ORIGINAL INPUT DATA:\n{feature_input}\n\nDRAFT ANALYSIS:\n{stage1_response}"
+        stage2_response = generate_training_example(QUALITY_ENHANCEMENT_PROMPT, enhancement_input)
+
+        final_output = stage2_response if stage2_response else stage1_response
+
+        # Store outcome separately for metadata only
+        outcome_text = f"Exit: {outcome['exit_reason']} | P&L: {outcome['pnl_pct']:.1f}% | Duration: {outcome['duration_days']}d"
 
         # Store in database
         example_id = str(uuid.uuid4())
         created_at = datetime.now(ET).isoformat()
 
-        metadata = training_ex["metadata"]
+        pnl = outcome.get("pnl_dollars", 0) or 0
+        source = "blinded_win" if pnl > 0 else "blinded_loss"
+
         feature_snapshot = json.dumps({
             "scan_date": scan_date,
             "features": candidate["features"],
@@ -341,10 +365,9 @@ def run_historical_backfill(
                    (example_id, created_at, source, ticker, recommendation_id,
                     feature_snapshot, trade_outcome, instruction, input_text, output_text)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (example_id, created_at, "historical_backfill", ticker, None,
+                (example_id, created_at, source, ticker, None,
                  feature_snapshot, trade_outcome,
-                 HISTORICAL_TRAINING_PROMPT,
-                 training_ex["input_text"], response),
+                 blinded_prompt, feature_input, final_output),
             )
             conn.commit()
 
@@ -359,8 +382,8 @@ def run_historical_backfill(
             print(f"[BACKFILL] Generated {examples_generated}/{total_target} "
                   f"examples ({pct:.1f}%) — est. ${spent:.2f} spent")
 
-        # Rate limiting
-        time.sleep(0.5)
+        # Rate limiting (doubled for 2-stage pipeline)
+        time.sleep(1.0)
 
     # Step 10: Report results
     elapsed = (time.time() - start_time) / 60
