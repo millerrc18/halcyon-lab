@@ -237,6 +237,60 @@ def cmd_morning_watchlist(args):
         print("\n[DRY RUN] No journal entries written, no emails sent.")
 
 
+def cmd_eod_recap(args):
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    from src.config import load_config
+    from src.data_ingestion.market_data import fetch_ohlcv, fetch_spy_benchmark
+    from src.features.engine import compute_all_features
+    from src.journal.store import get_todays_recommendations
+    from src.packets.eod_recap import build_eod_recap
+    from src.ranking.ranker import rank_universe, get_top_candidates
+
+    dry_run = getattr(args, "dry_run", False)
+    send_via_email = getattr(args, "email", False)
+
+    et = ZoneInfo("America/New_York")
+    date_str = datetime.now(et).strftime("%Y-%m-%d")
+
+    # Run full scan pipeline to get current watchlist state
+    universe = get_sp100_universe()
+    print(f"Running EOD scan for {len(universe)} tickers...")
+
+    ohlcv = fetch_ohlcv(universe)
+    spy = fetch_spy_benchmark()
+
+    if spy.empty:
+        print("ERROR: Could not fetch SPY benchmark. Aborting.")
+        return
+
+    features = compute_all_features(ohlcv, spy)
+    ranked = rank_universe(features)
+    candidates = get_top_candidates(ranked)
+
+    packet_worthy = candidates["packet_worthy"]
+    watchlist = candidates["watchlist"]
+
+    # Query journal for today's entries
+    journal_entries = get_todays_recommendations()
+
+    # Build and print the EOD recap
+    body = build_eod_recap(packet_worthy, watchlist, journal_entries, date_str)
+    print(body)
+
+    if send_via_email and not dry_run:
+        subject = f"[TRADE DESK] EOD Recap - {date_str}"
+        success = send_email(subject, body)
+        if success:
+            print("\n  -> EOD recap email sent.")
+        else:
+            print("\n  -> Failed to send EOD recap email.")
+
+    if dry_run:
+        print("\n[DRY RUN] No emails sent.")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="AI Research Desk MVP skeleton")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -264,6 +318,11 @@ def build_parser() -> argparse.ArgumentParser:
     mw.add_argument("--email", action="store_true", help="Send watchlist and action packets via email")
     mw.add_argument("--dry-run", action="store_true", help="Print only, no email or journal writes")
     mw.set_defaults(func=cmd_morning_watchlist)
+
+    eod = subparsers.add_parser("eod-recap", help="Generate and send EOD recap")
+    eod.add_argument("--email", action="store_true", help="Send EOD recap via email")
+    eod.add_argument("--dry-run", action="store_true", help="Print only, no email")
+    eod.set_defaults(func=cmd_eod_recap)
 
     return parser
 

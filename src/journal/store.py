@@ -143,3 +143,30 @@ def log_recommendation(
         conn.commit()
 
     return rec_id
+
+
+def get_todays_recommendations(db_path: str = "ai_research_desk.sqlite3") -> list[dict]:
+    """Query recommendations created today (ET timezone).
+
+    Returns a list of dicts with key fields for each recommendation.
+    """
+    initialize_database(db_path)
+
+    et = ZoneInfo("America/New_York")
+    today_str = datetime.now(et).strftime("%Y-%m-%d")
+
+    fields = [
+        "recommendation_id", "ticker", "company_name", "recommendation",
+        "entry_zone", "stop_level", "target_1", "target_2",
+        "confidence_score", "priority_score",
+    ]
+    columns_sql = ", ".join(fields)
+
+    with sqlite3.connect(db_path) as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            f"SELECT {columns_sql} FROM recommendations WHERE created_at LIKE ?",
+            (f"{today_str}%",),
+        ).fetchall()
+
+    return [dict(row) for row in rows]
