@@ -4,8 +4,23 @@ from src.config import load_config
 
 
 def _load_thresholds() -> dict:
-    """Load scoring thresholds from config, with defaults."""
+    """Load scoring thresholds from config, with defaults.
+
+    If bootcamp is enabled, uses bootcamp-specific thresholds.
+    """
     config = load_config()
+    bootcamp_cfg = config.get("bootcamp", {})
+
+    if bootcamp_cfg.get("enabled", False):
+        thresholds = {
+            "packet_worthy": bootcamp_cfg.get("qualification_threshold", 40),
+            "watchlist": bootcamp_cfg.get("watchlist_threshold", 25),
+        }
+        print(f"  [BOOTCAMP] Using bootcamp thresholds: "
+              f"packet_worthy={thresholds['packet_worthy']}, "
+              f"watchlist={thresholds['watchlist']}")
+        return thresholds
+
     ranking_cfg = config.get("ranking", {})
     return {
         "packet_worthy": ranking_cfg.get("packet_worthy_threshold", 70),
@@ -100,6 +115,13 @@ def get_top_candidates(ranked: list[dict], max_packets: int = 5,
     Returns:
         {"packet_worthy": [...], "watchlist": [...]} sorted by score descending.
     """
+    # Bootcamp overrides: raise caps for high-volume data collection
+    config = load_config()
+    bootcamp_cfg = config.get("bootcamp", {})
+    if bootcamp_cfg.get("enabled", False):
+        max_packets = 20
+        max_watchlist = 30
+
     # Include earnings_risk_packet in packet_worthy list with a flag
     packet_worthy = []
     for r in ranked:

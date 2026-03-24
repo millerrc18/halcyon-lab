@@ -37,3 +37,27 @@ shadow_trading:
 automation:
   morning_watchlist_hour_et: 8
   eod_recap_hour_et: 16
+  scan_interval_minutes: 30
+  market_open_hour_et: 9
+  market_open_minute_et: 30
+  market_close_hour_et: 16
+
+llm:
+  enabled: true
+  model: "qwen3:8b"
+  base_url: "http://localhost:11434"
+  temperature: 0.7
+  max_tokens: 1500
+  timeout_seconds: 60
+
+bootcamp:
+  enabled: false
+  phase: 1                          # 1 = data collection, 2 = optimization, 3 = ML/LLM learning
+  # Override thresholds for high-volume data collection
+  qualification_threshold: 40       # Normal: 70 — lowered to capture more trades
+  watchlist_threshold: 25           # Normal: 45 — lowered for broader watchlist
+  # Override position limits
+  max_positions: 50                 # No practical limit during bootcamp
+  # Email preferences
+  email_mode: full_stream           # full_stream / daily_summary / silent
+  scan_interval_minutes: 30         # How often to re-scan during market hours

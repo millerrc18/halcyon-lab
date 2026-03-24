@@ -1,6 +1,22 @@
 """Tests for deterministic ranking and qualification."""
 
+from unittest.mock import patch
+
 from src.ranking.ranker import rank_universe, get_top_candidates
+
+
+# Mock config that disables bootcamp so tests use default thresholds
+_TEST_CONFIG = {
+    "ranking": {
+        "packet_worthy_threshold": 70,
+        "watchlist_threshold": 45,
+    },
+    "bootcamp": {"enabled": False},
+}
+
+
+def _mock_load_config():
+    return _TEST_CONFIG
 
 
 def _make_strong_features() -> dict:
@@ -48,6 +64,7 @@ def _make_watchlist_features() -> dict:
     }
 
 
+@patch("src.ranking.ranker.load_config", _mock_load_config)
 def test_packet_worthy_score():
     features = {"STRONG": _make_strong_features()}
     ranked = rank_universe(features)
@@ -56,6 +73,7 @@ def test_packet_worthy_score():
     assert ranked[0]["score"] >= 70
 
 
+@patch("src.ranking.ranker.load_config", _mock_load_config)
 def test_not_interesting_score():
     features = {"WEAK": _make_weak_features()}
     ranked = rank_universe(features)
@@ -64,6 +82,7 @@ def test_not_interesting_score():
     assert ranked[0]["score"] < 45
 
 
+@patch("src.ranking.ranker.load_config", _mock_load_config)
 def test_watchlist_score():
     features = {"MID": _make_watchlist_features()}
     ranked = rank_universe(features)
@@ -71,6 +90,7 @@ def test_watchlist_score():
     assert ranked[0]["qualification"] == "watchlist"
 
 
+@patch("src.ranking.ranker.load_config", _mock_load_config)
 def test_deterministic():
     features = {
         "A": _make_strong_features(),
@@ -83,6 +103,7 @@ def test_deterministic():
     assert [r["ticker"] for r in ranked_1] == [r["ticker"] for r in ranked_2]
 
 
+@patch("src.ranking.ranker.load_config", _mock_load_config)
 def test_sorted_by_score_descending():
     features = {
         "A": _make_strong_features(),
@@ -94,6 +115,7 @@ def test_sorted_by_score_descending():
     assert scores == sorted(scores, reverse=True)
 
 
+@patch("src.ranking.ranker.load_config", _mock_load_config)
 def test_get_top_candidates_limits():
     features = {}
     for i in range(10):
