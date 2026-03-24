@@ -5,6 +5,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 
 from src.api.routes import system, scan, shadow, training, review, packets
+from src.api.websocket import manager
 
 app = FastAPI(title="Halcyon Lab", version="1.0.0")
 
@@ -32,28 +33,14 @@ def startup():
     initialize_database()
 
 
-# WebSocket for live updates
-class ConnectionManager:
-    def __init__(self):
-        self.active_connections: list[WebSocket] = []
-
-    async def connect(self, websocket: WebSocket):
-        await websocket.accept()
-        self.active_connections.append(websocket)
-
-    def disconnect(self, websocket: WebSocket):
-        self.active_connections.remove(websocket)
-
-    async def broadcast(self, message: dict):
-        for connection in self.active_connections:
-            try:
-                await connection.send_json(message)
-            except Exception:
-                pass
-
-manager = ConnectionManager()
+# CTO Report API endpoint
+@app.get("/api/cto-report")
+def api_cto_report(days: int = 7):
+    from src.evaluation.cto_report import generate_cto_report
+    return generate_cto_report(days=days)
 
 
+# WebSocket for live updates (uses shared manager from websocket.py)
 @app.websocket("/ws/live")
 async def websocket_endpoint(websocket: WebSocket):
     await manager.connect(websocket)
