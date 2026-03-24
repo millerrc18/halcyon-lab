@@ -82,7 +82,8 @@ def generate_training_report(db_path: str = "ai_research_desk.sqlite3") -> str:
     lines.append(f"  {'Source':<24s} {'Count':>6s}  {'% of total':>10s}")
     lines.append("  " + "-" * 42)
 
-    for source, label in [("synthetic_claude", "Synthetic (Claude)"),
+    for source, label in [("historical_backfill", "Historical backfill"),
+                          ("synthetic_claude", "Synthetic (Claude)"),
                           ("outcome_win", "Closed trades (wins)"),
                           ("outcome_loss", "Closed trades (losses)")]:
         c = counts.get(source, 0)

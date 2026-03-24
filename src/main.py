@@ -830,10 +830,11 @@ def cmd_training_status(args):
         print("Active model:      base (no fine-tuned model)")
 
     syn = counts.get("synthetic_claude", 0)
+    backfill = counts.get("historical_backfill", 0)
     wins = counts.get("outcome_win", 0)
     losses = counts.get("outcome_loss", 0)
     total = counts["total"]
-    print(f"Dataset size:      {total} examples ({syn} synthetic, {wins} wins, {losses} losses)")
+    print(f"Dataset size:      {total} examples ({backfill} backfill, {syn} synthetic, {wins} wins, {losses} losses)")
 
     new_since = 0
     if active:
@@ -924,6 +925,70 @@ def cmd_bootstrap_training(args):
     created = generate_synthetic_training_data(count)
     actual_cost = estimate_bootstrap_cost(created)
     print(f"\n[TRAINING] Bootstrap complete: {created} examples created (est. cost: ${actual_cost:.2f})")
+
+
+def cmd_backfill_training(args):
+    from src.training.backfill import estimate_backfill_cost, run_historical_backfill
+
+    months = getattr(args, "months", 12)
+    max_examples = getattr(args, "max_examples", 2000)
+    min_score = getattr(args, "min_score", 70)
+    include_messy = getattr(args, "include_messy", False)
+    yes = getattr(args, "yes", False)
+
+    quality_filter = ["clean_win", "clean_loss"]
+    quality_label = "clean_win, clean_loss only"
+    if include_messy:
+        quality_filter = ["clean_win", "clean_loss", "messy", "timeout"]
+        quality_label = "all (including messy and timeout)"
+
+    low_cost = estimate_backfill_cost(max_examples // 2)
+    high_cost = estimate_backfill_cost(max_examples)
+
+    from datetime import datetime, timedelta
+    end_date = datetime.now() - timedelta(days=20)
+    start_date = end_date - timedelta(days=months * 30)
+
+    print(f"\nHistorical Backfill Training Data")
+    print(f"{'=' * 33}")
+    print(f"Period:          {start_date.strftime('%b %Y')} — {end_date.strftime('%b %Y')}")
+    print(f"Scan dates:      ~{months * 21} trading days")
+    print(f"Score threshold: {min_score:.0f}+ (normal, not bootcamp)")
+    print(f"Quality filter:  {quality_label}")
+    print(f"Max examples:    {max_examples:,}")
+    print(f"Estimated cost:  ${low_cost:.2f} — ${high_cost:.2f} (Haiku 4.5)")
+    print(f"Estimated time:  60-120 minutes")
+
+    if not yes:
+        confirm = input("\nProceed? [y/N] ").strip().lower()
+        if confirm != "y":
+            print("Aborted.")
+            return
+
+    print("")
+    stats = run_historical_backfill(
+        months=months,
+        min_score=min_score,
+        quality_filter=quality_filter,
+        max_examples=max_examples,
+    )
+
+    wins = stats["examples_by_outcome"].get("clean_win", 0)
+    losses = stats["examples_by_outcome"].get("clean_loss", 0)
+
+    print(f"\nBackfill Complete")
+    print(f"{'=' * 16}")
+    print(f"Dates scanned:     {stats['total_dates_scanned']}")
+    print(f"Candidates found:  {stats['total_candidates_found']:,}")
+    print(f"With outcomes:     {stats['total_with_outcomes']:,}")
+    print(f"Quality filtered:  {stats['quality_filtered']:,}")
+    print(f"Examples generated: {stats['examples_generated']:,} ({wins} wins, {losses} losses)")
+    if stats['examples_skipped'] > 0:
+        print(f"Examples skipped:  {stats['examples_skipped']:,} (already in DB)")
+    print(f"Tickers covered:   {stats['tickers_represented']}")
+    print(f"Actual cost:       ${stats['estimated_cost']:.2f}")
+    print(f"Time elapsed:      {stats['elapsed_minutes']:.0f} minutes")
+    print(f"\nTraining data is ready. Run 'python -m src.main train --force' to fine-tune.")
 
 
 def cmd_train(args):
@@ -1215,6 +1280,14 @@ def build_parser() -> argparse.ArgumentParser:
     bootstrap.add_argument("--count", type=int, default=500, help="Number of examples to generate")
     bootstrap.add_argument("--yes", action="store_true", help="Skip confirmation")
     bootstrap.set_defaults(func=cmd_bootstrap_training)
+
+    backfill = subparsers.add_parser("backfill-training", help="Generate training data from real historical outcomes")
+    backfill.add_argument("--months", type=int, default=12, help="How far back to scan (default 12)")
+    backfill.add_argument("--max-examples", type=int, default=2000, help="Max examples to generate (default 2000)")
+    backfill.add_argument("--min-score", type=float, default=70, help="Minimum score threshold (default 70)")
+    backfill.add_argument("--include-messy", action="store_true", help="Include messy and timeout outcomes")
+    backfill.add_argument("--yes", action="store_true", help="Skip confirmation prompt")
+    backfill.set_defaults(func=cmd_backfill_training)
 
     train = subparsers.add_parser("train", help="Fine-tune model or manage versions")
     train.add_argument("--force", action="store_true", help="Force training even if threshold not met")

@@ -72,6 +72,37 @@ RULES:
 - Do not list every ticker — just note patterns and standouts.
 """
 
+HISTORICAL_TRAINING_PROMPT = """You are a senior equity research analyst writing the ideal trade commentary for a training dataset. This commentary will be used to fine-tune a smaller language model to write institutional-quality trade analysis.
+
+You are given:
+1. The structured feature data for a stock ON THE DATE OF THE RECOMMENDATION (this is what the analyst saw)
+2. The actual outcome of the trade (this is what happened afterward)
+
+Your job: Write the commentary that a PERFECT analyst would have written on the recommendation date. You know the outcome, so use that knowledge to craft commentary that:
+
+- For WINNING trades: Write confident, well-reasoned analysis that correctly identifies the factors that led to the win. Emphasize the signals that mattered most. Sound like an analyst who saw this clearly.
+
+- For LOSING trades: Write professional analysis that includes subtle but specific risk warnings. A great analyst doesn't predict losses — but they flag the exact risks that materialized. The "Risks" paragraph should contain the real reason the trade failed, framed as a forward-looking risk assessment rather than hindsight.
+
+- For TIMEOUT trades: Write measured analysis that acknowledges the setup was inconclusive. Note what would need to change for conviction to increase.
+
+RULES:
+- Use ONLY the data provided. Do not invent indicators, price levels, or events.
+- Do not mention the outcome explicitly. This should read like a recommendation written BEFORE the trade, not after.
+- Write "Why Now" (2-3 sentences) and "Deeper Analysis" (4-6 paragraphs).
+- For losing trades, the risk paragraph must specifically address what actually went wrong — but frame it as "the risk here is..." not "what happened was..."
+- Match the confidence level to the outcome: winners get decisive language, losers get more hedged language with prominent risk flags, timeouts get neutral/watchful language.
+- Be concise and professional. No filler.
+
+OUTPUT FORMAT:
+
+WHY NOW:
+[2-3 sentences]
+
+DEEPER ANALYSIS:
+[4-6 paragraphs]
+"""
+
 TRAINING_EXAMPLE_PROMPT = """You are a senior equity research analyst writing the ideal trade commentary for a training dataset. This commentary will be used to fine-tune a smaller language model.
 
 Given the trade setup data AND the actual outcome, write the commentary that a perfect analyst WOULD HAVE written at the time of the recommendation — knowing what actually happened.

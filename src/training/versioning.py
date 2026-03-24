@@ -176,7 +176,7 @@ def get_training_example_counts(db_path: str = "ai_research_desk.sqlite3") -> di
             "SELECT source, COUNT(*) as count FROM training_examples GROUP BY source"
         ).fetchall()
 
-    counts = {"total": 0, "synthetic_claude": 0, "outcome_win": 0, "outcome_loss": 0}
+    counts = {"total": 0, "historical_backfill": 0, "synthetic_claude": 0, "outcome_win": 0, "outcome_loss": 0}
     for row in rows:
         counts[row["source"]] = row["count"]
         counts["total"] += row["count"]
