@@ -28,6 +28,12 @@ risk:
   planned_risk_pct_max: 0.01
   max_open_positions: 2
 
+shadow_trading:
+  enabled: false  # Set to true to enable paper trading
+  max_positions: 10
+  default_order_type: market
+  timeout_days: 15  # Auto-close after this many days
+
 automation:
   morning_watchlist_hour_et: 8
   eod_recap_hour_et: 16

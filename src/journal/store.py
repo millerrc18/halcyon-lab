@@ -1,6 +1,6 @@
 import sqlite3
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -62,6 +62,34 @@ CREATE TABLE IF NOT EXISTS recommendations (
     lesson_tag TEXT,
     user_grade TEXT,
     repeatable_setup INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS shadow_trades (
+    trade_id TEXT PRIMARY KEY,
+    recommendation_id TEXT,
+    ticker TEXT NOT NULL,
+    direction TEXT DEFAULT 'long',
+    status TEXT DEFAULT 'pending',
+    entry_price REAL,
+    stop_price REAL,
+    target_1 REAL,
+    target_2 REAL,
+    planned_shares INTEGER,
+    planned_allocation REAL,
+    actual_entry_price REAL,
+    actual_entry_time TEXT,
+    actual_exit_price REAL,
+    actual_exit_time TEXT,
+    exit_reason TEXT,
+    pnl_dollars REAL,
+    pnl_pct REAL,
+    max_favorable_excursion REAL,
+    max_adverse_excursion REAL,
+    duration_days INTEGER,
+    earnings_adjacent INTEGER DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    alpaca_order_id TEXT
 );
 """
 
@@ -150,10 +178,7 @@ def log_recommendation(
 
 
 def get_todays_recommendations(db_path: str = "ai_research_desk.sqlite3") -> list[dict]:
-    """Query recommendations created today (ET timezone).
-
-    Returns a list of dicts with key fields for each recommendation.
-    """
+    """Query recommendations created today (ET timezone)."""
     initialize_database(db_path)
 
     et = ZoneInfo("America/New_York")
@@ -173,4 +198,224 @@ def get_todays_recommendations(db_path: str = "ai_research_desk.sqlite3") -> lis
             (f"{today_str}%",),
         ).fetchall()
 
+    return [dict(row) for row in rows]
+
+
+# ── Shadow trade CRUD ─────────────────────────────────────────────────
+
+
+def insert_shadow_trade(trade: dict, db_path: str = "ai_research_desk.sqlite3") -> str:
+    """Insert a shadow trade record and return the trade_id."""
+    initialize_database(db_path)
+    trade_id = trade.get("trade_id", str(uuid.uuid4()))
+    trade["trade_id"] = trade_id
+
+    columns = ", ".join(trade.keys())
+    placeholders = ", ".join("?" for _ in trade)
+    values = list(trade.values())
+
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            f"INSERT INTO shadow_trades ({columns}) VALUES ({placeholders})", values
+        )
+        conn.commit()
+    return trade_id
+
+
+def update_shadow_trade(
+    trade_id: str, updates: dict, db_path: str = "ai_research_desk.sqlite3"
+) -> None:
+    """Update fields on an existing shadow trade."""
+    if not updates:
+        return
+    et = ZoneInfo("America/New_York")
+    updates["updated_at"] = datetime.now(et).isoformat()
+    set_clause = ", ".join(f"{k} = ?" for k in updates)
+    values = list(updates.values()) + [trade_id]
+
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            f"UPDATE shadow_trades SET {set_clause} WHERE trade_id = ?", values
+        )
+        conn.commit()
+
+
+def get_open_shadow_trades(db_path: str = "ai_research_desk.sqlite3") -> list[dict]:
+    """Return all shadow trades with status 'open'."""
+    initialize_database(db_path)
+    with sqlite3.connect(db_path) as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            "SELECT * FROM shadow_trades WHERE status = 'open' ORDER BY created_at DESC"
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def get_shadow_trade(
+    trade_id: str, db_path: str = "ai_research_desk.sqlite3"
+) -> dict | None:
+    """Return a single shadow trade by ID, or None."""
+    initialize_database(db_path)
+    with sqlite3.connect(db_path) as conn:
+        conn.row_factory = sqlite3.Row
+        row = conn.execute(
+            "SELECT * FROM shadow_trades WHERE trade_id = ?", (trade_id,)
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def get_closed_shadow_trades(
+    days: int = 30, db_path: str = "ai_research_desk.sqlite3"
+) -> list[dict]:
+    """Return closed shadow trades from the last N days."""
+    initialize_database(db_path)
+    et = ZoneInfo("America/New_York")
+    cutoff = (datetime.now(et) - timedelta(days=days)).isoformat()
+
+    with sqlite3.connect(db_path) as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            "SELECT * FROM shadow_trades WHERE status = 'closed' AND actual_exit_time >= ? ORDER BY actual_exit_time DESC",
+            (cutoff,),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def close_shadow_trade(
+    trade_id: str,
+    exit_price: float,
+    exit_time: str,
+    exit_reason: str,
+    pnl_dollars: float,
+    pnl_pct: float,
+    db_path: str = "ai_research_desk.sqlite3",
+) -> None:
+    """Close a shadow trade with exit details."""
+    update_shadow_trade(
+        trade_id,
+        {
+            "status": "closed",
+            "actual_exit_price": exit_price,
+            "actual_exit_time": exit_time,
+            "exit_reason": exit_reason,
+            "pnl_dollars": pnl_dollars,
+            "pnl_pct": pnl_pct,
+        },
+        db_path,
+    )
+
+
+def get_open_shadow_trade_for_ticker(
+    ticker: str, db_path: str = "ai_research_desk.sqlite3"
+) -> dict | None:
+    """Return an open shadow trade for a given ticker, or None."""
+    initialize_database(db_path)
+    with sqlite3.connect(db_path) as conn:
+        conn.row_factory = sqlite3.Row
+        row = conn.execute(
+            "SELECT * FROM shadow_trades WHERE ticker = ? AND status IN ('pending', 'open') ORDER BY created_at DESC LIMIT 1",
+            (ticker,),
+        ).fetchone()
+    return dict(row) if row else None
+
+
+# ── Recommendation queries for review loop ────────────────────────────
+
+
+def get_recommendation_by_id(
+    recommendation_id: str, db_path: str = "ai_research_desk.sqlite3"
+) -> dict | None:
+    """Return a single recommendation by ID."""
+    initialize_database(db_path)
+    with sqlite3.connect(db_path) as conn:
+        conn.row_factory = sqlite3.Row
+        row = conn.execute(
+            "SELECT * FROM recommendations WHERE recommendation_id = ?",
+            (recommendation_id,),
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def get_recommendations_by_ticker(
+    ticker: str, limit: int = 10, db_path: str = "ai_research_desk.sqlite3"
+) -> list[dict]:
+    """Return recent recommendations for a ticker."""
+    initialize_database(db_path)
+    with sqlite3.connect(db_path) as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            "SELECT * FROM recommendations WHERE ticker = ? ORDER BY created_at DESC LIMIT ?",
+            (ticker, limit),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def get_recommendations_pending_review(
+    db_path: str = "ai_research_desk.sqlite3",
+) -> list[dict]:
+    """Return recommendations where ryan_executed=1 and user_grade is null."""
+    initialize_database(db_path)
+    with sqlite3.connect(db_path) as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            "SELECT * FROM recommendations WHERE ryan_executed = 1 AND user_grade IS NULL ORDER BY created_at DESC"
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def update_recommendation(
+    recommendation_id: str, updates: dict, db_path: str = "ai_research_desk.sqlite3"
+) -> None:
+    """Update fields on an existing recommendation."""
+    if not updates:
+        return
+    set_clause = ", ".join(f"{k} = ?" for k in updates)
+    values = list(updates.values()) + [recommendation_id]
+
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            f"UPDATE recommendations SET {set_clause} WHERE recommendation_id = ?",
+            values,
+        )
+        conn.commit()
+
+
+def update_recommendation_review(
+    recommendation_id: str, review_data: dict, db_path: str = "ai_research_desk.sqlite3"
+) -> None:
+    """Save review data for a recommendation."""
+    update_recommendation(recommendation_id, review_data, db_path)
+
+
+def get_all_shadow_trades(
+    days: int = 30, db_path: str = "ai_research_desk.sqlite3"
+) -> list[dict]:
+    """Return all shadow trades (any status) from the last N days."""
+    initialize_database(db_path)
+    et = ZoneInfo("America/New_York")
+    cutoff = (datetime.now(et) - timedelta(days=days)).isoformat()
+
+    with sqlite3.connect(db_path) as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            "SELECT * FROM shadow_trades WHERE created_at >= ? ORDER BY created_at DESC",
+            (cutoff,),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def get_recommendations_in_period(
+    days: int = 7, db_path: str = "ai_research_desk.sqlite3"
+) -> list[dict]:
+    """Return all recommendations from the last N days."""
+    initialize_database(db_path)
+    et = ZoneInfo("America/New_York")
+    cutoff = (datetime.now(et) - timedelta(days=days)).isoformat()
+
+    with sqlite3.connect(db_path) as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            "SELECT * FROM recommendations WHERE created_at >= ? ORDER BY created_at DESC",
+            (cutoff,),
+        ).fetchall()
     return [dict(row) for row in rows]

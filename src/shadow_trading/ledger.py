@@ -1,9 +1,5 @@
-"""Shadow trading placeholder.
+"""Shadow trading ledger — re-exports from executor for backwards compatibility."""
 
-Future implementation should map qualified recommendations to simulated entries/exits
-through Alpaca paper or an internal execution model.
-"""
+from src.shadow_trading.executor import open_shadow_trade, check_and_manage_open_trades
 
-
-def open_shadow_trade(recommendation_id: str) -> None:
-    print(f"Opening shadow trade for recommendation {recommendation_id}")
+__all__ = ["open_shadow_trade", "check_and_manage_open_trades"]
