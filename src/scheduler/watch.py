@@ -57,6 +57,7 @@ class WatchLoop:
         self._training_collection_done = False
         self._training_run_done = False
         self._saturday_reports_done = False
+        self._consecutive_errors = 0
 
     def _reset_daily_state(self):
         """Reset daily flags at midnight ET."""
@@ -284,45 +285,45 @@ class WatchLoop:
 
                 # 1. Morning watchlist
                 if hour == self.morning_hour and not self._morning_done:
-                    self._run_morning_watchlist()
+                    self._safe_run("morning watchlist", self._run_morning_watchlist)
                     self._morning_done = True
 
                 # 2. Market hours scan
                 elif self._should_scan(now):
-                    print(f"[WATCH] {time_str} ET — market open, scanning...")
-                    self._run_scan()
+                    print(f"[WATCH] {time_str} ET -- market open, scanning...")
+                    self._safe_run("scan", self._run_scan)
                     self._last_scan_time = now
 
                 # 3. EOD recap
                 elif hour == self.eod_hour and not self._eod_done:
-                    self._run_eod_recap()
+                    self._safe_run("EOD recap", self._run_eod_recap)
                     self._eod_done = True
 
                 # 4. Training data collection (4:30 PM ET)
                 elif (self.training_enabled and hour == 16 and now.minute >= 30
                       and not self._training_collection_done):
-                    self._run_training_collection()
+                    self._safe_run("training collection", self._run_training_collection)
                     self._training_collection_done = True
 
                 # 5. Overnight training trigger (5:00 PM ET)
                 elif (self.training_enabled and hour == 17
                       and not self._training_run_done):
-                    self._run_training_check()
+                    self._safe_run("training check", self._run_training_check)
                     self._training_run_done = True
 
                 # 6. Saturday training report (9 AM ET)
                 elif (self.training_enabled and now.weekday() == 5
                       and hour == 9 and not self._saturday_reports_done):
-                    self._run_saturday_reports()
+                    self._safe_run("Saturday reports", self._run_saturday_reports)
                     self._saturday_reports_done = True
 
                 # 7. Status log
                 else:
                     if self._is_market_open(now):
-                        print(f"[WATCH] {time_str} ET — market open, next scan in "
+                        print(f"[WATCH] {time_str} ET -- market open, next scan in "
                               f"{self._minutes_until_next_scan(now):.0f} min")
                     else:
-                        print(f"[WATCH] {time_str} ET — market closed")
+                        print(f"[WATCH] {time_str} ET -- market closed")
 
                 time.sleep(60)
 
@@ -331,6 +332,22 @@ class WatchLoop:
             print(f"Final shadow status:")
             print(f"  {self._trades_managed_today} trades managed today")
             print("Goodbye.")
+
+    def _safe_run(self, name: str, func):
+        """Run a function with error recovery."""
+        import traceback
+        try:
+            if self._consecutive_errors >= 3:
+                print(f"[WATCH] Cooldown: 3 consecutive errors, waiting 5 minutes...")
+                time.sleep(300)
+                self._consecutive_errors = 0
+            func()
+            self._consecutive_errors = 0
+        except Exception as e:
+            self._consecutive_errors += 1
+            logger.error("[WATCH] Error in %s: %s", name, e)
+            logger.error(traceback.format_exc())
+            print(f"[WATCH] ERROR in {name}: {e} (error {self._consecutive_errors}/3)")
 
     def _run_training_collection(self):
         """Collect training data from closed trades."""

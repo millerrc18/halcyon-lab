@@ -1,0 +1,108 @@
+"""System service for preflight checks and config management."""
+import logging
+import sqlite3
+from pathlib import Path
+
+logger = logging.getLogger(__name__)
+
+
+def get_system_status(config: dict) -> dict:
+    """Run preflight checks and return system status."""
+    from src.llm.client import is_llm_available
+    from src.training.versioning import get_active_model_name, get_training_example_counts
+
+    # Config
+    config_loaded = bool(config)
+
+    # Email
+    email_cfg = config.get("email", {})
+    email_configured = bool(
+        email_cfg.get("smtp_server") and
+        email_cfg.get("username") and
+        email_cfg.get("password") and
+        email_cfg.get("username") != "your-assistant-email@gmail.com"
+    )
+
+    # Alpaca
+    alpaca_connected = False
+    alpaca_equity = None
+    try:
+        import requests
+        alpaca_cfg = config.get("alpaca", {})
+        api_key = alpaca_cfg.get("api_key", "")
+        api_secret = alpaca_cfg.get("api_secret", "")
+        base_url = alpaca_cfg.get("base_url", "https://paper-api.alpaca.markets")
+        if api_key and api_key != "YOUR_PAPER_API_KEY":
+            resp = requests.get(
+                f"{base_url}/v2/account",
+                headers={
+                    "APCA-API-KEY-ID": api_key,
+                    "APCA-API-SECRET-KEY": api_secret,
+                },
+                timeout=10,
+            )
+            if resp.status_code == 200:
+                acct = resp.json()
+                alpaca_connected = True
+                alpaca_equity = float(acct.get("equity", 0))
+    except Exception:
+        pass
+
+    # Shadow trading
+    shadow_trading_enabled = config.get("shadow_trading", {}).get("enabled", False)
+
+    # Ollama/LLM
+    ollama_available = is_llm_available()
+    llm_cfg = config.get("llm", {})
+    llm_enabled = llm_cfg.get("enabled", False)
+    llm_model = llm_cfg.get("model", "qwen3:8b")
+
+    # Model version
+    model_version = get_active_model_name()
+
+    # Journal
+    journal_recs = 0
+    journal_trades = 0
+    try:
+        db_path = Path("ai_research_desk.sqlite3")
+        if db_path.exists():
+            conn = sqlite3.connect(str(db_path))
+            journal_recs = conn.execute("SELECT COUNT(*) FROM recommendations").fetchone()[0]
+            journal_trades = conn.execute("SELECT COUNT(*) FROM shadow_trades").fetchone()[0]
+            conn.close()
+    except Exception:
+        pass
+
+    # Training
+    training_cfg = config.get("training", {})
+    training_enabled = training_cfg.get("enabled", False)
+    training_examples = 0
+    if training_enabled:
+        try:
+            t_counts = get_training_example_counts()
+            training_examples = t_counts["total"]
+        except Exception:
+            pass
+
+    # Bootcamp
+    bootcamp_cfg = config.get("bootcamp", {})
+    bootcamp_enabled = bootcamp_cfg.get("enabled", False)
+    bootcamp_phase = bootcamp_cfg.get("phase", 1) if bootcamp_enabled else None
+
+    return {
+        "config_loaded": config_loaded,
+        "email_configured": email_configured,
+        "alpaca_connected": alpaca_connected,
+        "alpaca_equity": alpaca_equity,
+        "shadow_trading_enabled": shadow_trading_enabled,
+        "ollama_available": ollama_available,
+        "llm_enabled": llm_enabled,
+        "llm_model": llm_model,
+        "model_version": model_version,
+        "journal_recommendations": journal_recs,
+        "journal_shadow_trades": journal_trades,
+        "training_enabled": training_enabled,
+        "training_examples": training_examples,
+        "bootcamp_enabled": bootcamp_enabled,
+        "bootcamp_phase": bootcamp_phase,
+    }

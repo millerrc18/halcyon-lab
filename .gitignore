@@ -28,3 +28,11 @@ Thumbs.db
 
 # Runtime data
 *.sqlite3
+logs/
+
+# Claude Code
+.claude/
+
+# Frontend build
+frontend/dist/
+frontend/node_modules/

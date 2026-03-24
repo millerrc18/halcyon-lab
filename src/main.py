@@ -1226,6 +1226,10 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main():
+    from src.log_config import setup_logging
+    setup_logging()
+    initialize_database()
+
     parser = build_parser()
     args = parser.parse_args()
     args.func(args)
