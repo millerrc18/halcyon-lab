@@ -49,6 +49,20 @@ def open_shadow_trade(
         logger.info("Shadow trading disabled, skipping")
         return None
 
+    # Position limit check (bootcamp overrides)
+    bootcamp_cfg = config.get("bootcamp", {})
+    if bootcamp_cfg.get("enabled", False):
+        max_positions = bootcamp_cfg.get("max_positions", 50)
+        logger.info(f"[BOOTCAMP] Position limit: {max_positions}")
+    else:
+        max_positions = shadow_cfg.get("max_positions", 10)
+
+    open_trades = get_open_shadow_trades(db_path)
+    if len(open_trades) >= max_positions:
+        logger.info(f"[SHADOW] At position limit ({max_positions}), skipping")
+        print(f"[SHADOW] At position limit ({max_positions}), skipping")
+        return None
+
     ticker = packet.ticker
 
     # Check for duplicate open trade
@@ -277,9 +291,11 @@ def check_and_manage_open_trades(
                     trade_for_postmortem["thesis_text"] = rec.get("thesis_text", "")
                     trade_for_postmortem["atr"] = rec.get("atr", 0)
 
-                # Generate postmortem
+                # Generate postmortem (rule-based, then LLM-enhanced)
                 from src.evaluation.postmortem import generate_postmortem, determine_lesson_tag
-                postmortem_text = generate_postmortem(trade_for_postmortem)
+                from src.llm.postmortem_writer import enhance_postmortem_with_llm
+                rule_based_postmortem = generate_postmortem(trade_for_postmortem)
+                postmortem_text = enhance_postmortem_with_llm(trade_for_postmortem, rule_based_postmortem)
                 lesson_tag = determine_lesson_tag(trade_for_postmortem)
 
                 update_recommendation(
