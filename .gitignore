@@ -24,3 +24,6 @@ env/
 # OS
 .DS_Store
 Thumbs.db
+
+# Runtime data
+*.sqlite3
