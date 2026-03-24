@@ -56,7 +56,7 @@ def cmd_scan(args):
     from src.data_ingestion.market_data import fetch_ohlcv, fetch_spy_benchmark
     from src.features.engine import compute_all_features
     from src.journal.store import log_recommendation
-    from src.llm.packet_writer import enhance_packet_with_llm
+    from src.llm.packet_writer import enhance_packet_with_llm, _build_feature_prompt
     from src.packets.template import build_packet_from_features, render_packet
     from src.ranking.ranker import rank_universe, get_top_candidates
     from src.training.versioning import get_active_model_name
@@ -147,6 +147,7 @@ def cmd_scan(args):
 
             packet = build_packet_from_features(ticker, feat, config)
             packet = enhance_packet_with_llm(packet, feat, config)
+            enriched_prompt = _build_feature_prompt(packet, feat)
             rendered = render_packet(packet)
             print(rendered)
 
@@ -156,6 +157,7 @@ def cmd_scan(args):
                 rec_id = log_recommendation(
                     packet, feat, candidate["score"], candidate["qualification"],
                     model_version=model_ver,
+                    enriched_prompt=enriched_prompt,
                 )
                 print(f"  -> Logged to journal: {rec_id}")
 
@@ -233,7 +235,7 @@ def cmd_morning_watchlist(args):
     from src.data_ingestion.market_data import fetch_ohlcv, fetch_spy_benchmark
     from src.features.engine import compute_all_features
     from src.journal.store import log_recommendation
-    from src.llm.packet_writer import enhance_packet_with_llm
+    from src.llm.packet_writer import enhance_packet_with_llm, _build_feature_prompt
     from src.llm.watchlist_writer import generate_watchlist_narrative
     from src.packets.template import build_packet_from_features, render_packet
     from src.packets.watchlist import build_morning_watchlist
@@ -289,12 +291,14 @@ def cmd_morning_watchlist(args):
 
             packet = build_packet_from_features(ticker, feat, config)
             packet = enhance_packet_with_llm(packet, feat, config)
+            enriched_prompt = _build_feature_prompt(packet, feat)
             rendered = render_packet(packet)
 
             model_ver = get_active_model_name()
             rec_id = log_recommendation(
                 packet, feat, candidate["score"], candidate["qualification"],
                 model_version=model_ver,
+                enriched_prompt=enriched_prompt,
             )
             print(f"  -> Logged {ticker} to journal: {rec_id}")
 

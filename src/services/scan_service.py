@@ -18,7 +18,7 @@ def run_scan(config: dict, dry_run: bool = False, send_email_flag: bool = False,
     from src.data_ingestion.market_data import fetch_ohlcv, fetch_spy_benchmark
     from src.features.engine import compute_all_features
     from src.journal.store import log_recommendation
-    from src.llm.packet_writer import enhance_packet_with_llm
+    from src.llm.packet_writer import enhance_packet_with_llm, _build_feature_prompt
     from src.packets.template import build_packet_from_features, render_packet
     from src.ranking.ranker import rank_universe, get_top_candidates
     from src.training.versioning import get_active_model_name
@@ -80,6 +80,7 @@ def run_scan(config: dict, dry_run: bool = False, send_email_flag: bool = False,
 
         packet = build_packet_from_features(ticker, feat, config)
         packet = enhance_packet_with_llm(packet, feat, config)
+        enriched_prompt = _build_feature_prompt(packet, feat)
         rendered = render_packet(packet)
 
         rec_id = None
@@ -88,6 +89,7 @@ def run_scan(config: dict, dry_run: bool = False, send_email_flag: bool = False,
             rec_id = log_recommendation(
                 packet, feat, candidate["score"], candidate["qualification"],
                 model_version=model_ver,
+                enriched_prompt=enriched_prompt,
             )
 
         if send_email_flag and not dry_run:

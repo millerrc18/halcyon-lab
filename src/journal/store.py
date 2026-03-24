@@ -113,6 +113,13 @@ def initialize_database(db_path: str = "ai_research_desk.sqlite3") -> None:
         except sqlite3.OperationalError:
             pass  # Column already exists
 
+        # Migration: add enriched_prompt column to recommendations if missing
+        try:
+            conn.execute("ALTER TABLE recommendations ADD COLUMN enriched_prompt TEXT")
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+
 
 def log_recommendation(
     packet: TradePacket,
@@ -121,6 +128,7 @@ def log_recommendation(
     qualification: str,
     db_path: str = "ai_research_desk.sqlite3",
     model_version: str = "base",
+    enriched_prompt: str | None = None,
 ) -> str:
     """Write a recommendation row to the journal and return the recommendation_id."""
     initialize_database(db_path)
@@ -179,6 +187,7 @@ def log_recommendation(
         "conservative_sizing_applied": 1 if features.get("event_risk_level") in ("elevated", "imminent") else 0,
         "packet_sent": 0,
         "model_version": model_version,
+        "enriched_prompt": enriched_prompt,
     }
 
     columns = ", ".join(row.keys())

@@ -73,7 +73,12 @@ def collect_training_examples_from_closed_trades(
     count = 0
     for row in rows:
         trade = dict(row)
-        feature_input = _build_feature_input(trade)
+        # Use the full enriched prompt if available, fall back to basic rebuild
+        enriched = trade.get("enriched_prompt")
+        if enriched:
+            feature_input = enriched
+        else:
+            feature_input = _build_feature_input(trade)
         outcome_text = _build_outcome_text(trade)
         full_prompt = feature_input + "\n" + outcome_text
 

@@ -181,7 +181,7 @@ class WatchLoop:
         from src.data_ingestion.market_data import fetch_ohlcv, fetch_spy_benchmark
         from src.features.engine import compute_all_features
         from src.journal.store import log_recommendation
-        from src.llm.packet_writer import enhance_packet_with_llm
+        from src.llm.packet_writer import enhance_packet_with_llm, _build_feature_prompt
         from src.packets.template import build_packet_from_features, render_packet
         from src.training.versioning import get_active_model_name
         from src.ranking.ranker import rank_universe, get_top_candidates
@@ -223,12 +223,14 @@ class WatchLoop:
 
             packet = build_packet_from_features(ticker, feat, self.config)
             packet = enhance_packet_with_llm(packet, feat, self.config)
+            enriched_prompt = _build_feature_prompt(packet, feat)
             rendered = render_packet(packet)
 
             model_ver = get_active_model_name()
             rec_id = log_recommendation(
                 packet, feat, candidate["score"], candidate["qualification"],
                 model_version=model_ver,
+                enriched_prompt=enriched_prompt,
             )
             print(f"  -> Logged {ticker}: {rec_id}")
             self._trades_managed_today += 1
