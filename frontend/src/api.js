@@ -34,4 +34,10 @@ export const api = {
   markExecuted: (ticker) => fetchApi(`/review/mark-executed/${ticker}`, { method: 'POST' }),
   getScorecard: (weeks = 1) => fetchApi(`/review/scorecard?weeks=${weeks}`),
   getPostmortems: (params) => fetchApi(`/review/postmortems?${new URLSearchParams(params)}`),
+  getHaltStatus: () => fetchApi('/halt-status'),
+  haltTrading: () => fetchApi('/halt-trading', { method: 'POST' }),
+  resumeTrading: () => fetchApi('/resume-trading', { method: 'POST' }),
+  getLatestAudit: () => fetchApi('/audit/latest'),
+  getAuditHistory: (days = 7) => fetchApi(`/audit/history?days=${days}`),
+  getCtoReport: (days = 7) => fetchApi(`/cto-report?days=${days}`),
 }

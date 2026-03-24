@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../api'
 import MetricCard from '../components/MetricCard'
 import DataTable from '../components/DataTable'
@@ -8,11 +8,23 @@ import StatusBadge from '../components/StatusBadge'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Area, AreaChart } from 'recharts'
 
 export default function Dashboard() {
+  const queryClient = useQueryClient()
   const { data: status, isLoading: statusLoading } = useQuery({ queryKey: ['status'], queryFn: api.getStatus })
   const { data: openTrades } = useQuery({ queryKey: ['shadow-open'], queryFn: api.getOpenTrades })
   const { data: closedData } = useQuery({ queryKey: ['shadow-closed'], queryFn: () => api.getClosedTrades(30) })
   const { data: training } = useQuery({ queryKey: ['training-status'], queryFn: api.getTrainingStatus })
   const { data: packets } = useQuery({ queryKey: ['packets'], queryFn: () => api.getPackets({ days: 1 }) })
+  const { data: haltData } = useQuery({ queryKey: ['halt-status'], queryFn: api.getHaltStatus, refetchInterval: 30000 })
+  const { data: auditData } = useQuery({ queryKey: ['audit-latest'], queryFn: api.getLatestAudit })
+
+  const haltMutation = useMutation({
+    mutationFn: () => haltData?.halted ? api.resumeTrading() : api.haltTrading(),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['halt-status'] }),
+  })
+
+  const isHalted = haltData?.halted || false
+  const auditAssessment = auditData?.overall_assessment || auditData?.audit?.overall_assessment
+  const auditSummary = auditData?.summary || auditData?.audit?.summary
 
   if (statusLoading) return <LoadingSpinner />
 
@@ -41,7 +53,42 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      <h2 className="text-xl font-medium">Dashboard</h2>
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-medium">Dashboard</h2>
+        <button
+          onClick={() => {
+            if (isHalted || confirm('Are you sure? This stops all new trades.')) {
+              haltMutation.mutate()
+            }
+          }}
+          className={`px-4 py-2 rounded-lg font-medium text-sm ${
+            isHalted
+              ? 'bg-green-600 hover:bg-green-700 text-white'
+              : 'bg-red-600 hover:bg-red-700 text-white'
+          }`}
+        >
+          {isHalted ? 'RESUME TRADING' : 'HALT TRADING'}
+        </button>
+      </div>
+
+      {/* Halt warning banner */}
+      {isHalted && (
+        <div className="bg-red-900/30 border border-red-500/50 rounded-lg p-3 text-red-300 text-sm">
+          Trading is HALTED. No new positions will be opened. Click "Resume Trading" to resume.
+        </div>
+      )}
+
+      {/* Audit warning banner */}
+      {auditAssessment && auditAssessment !== 'green' && (
+        <div className={`border rounded-lg p-3 text-sm ${
+          auditAssessment === 'red'
+            ? 'bg-red-900/30 border-red-500/50 text-red-300'
+            : 'bg-yellow-900/30 border-yellow-500/50 text-yellow-300'
+        }`}>
+          <span className="font-medium uppercase">Audit: {auditAssessment}</span>
+          {auditSummary && <span className="ml-2">— {auditSummary.slice(0, 200)}</span>}
+        </div>
+      )}
 
       {/* Metric cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">

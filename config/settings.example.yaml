@@ -67,6 +67,15 @@ data_enrichment:
   cache_hours: 24                            # Cache fundamental/macro data
   insider_lookback_days: 90
 
+risk_governor:
+  enabled: true
+  max_daily_loss_pct: 0.03       # Halt all trading if portfolio drops 3% in a day
+  max_position_pct: 0.10          # No single position > 10% of equity
+  max_open_positions: 10          # Maximum simultaneous positions
+  max_sector_pct: 0.30            # No sector > 30% of portfolio
+  max_correlated: 3               # Max positions in same sector
+  vol_halt_pct: 35.0              # Halt new longs if VIX proxy > 35%
+
 bootcamp:
   enabled: false
   phase: 1                          # 1 = data collection, 2 = optimization, 3 = ML/LLM learning

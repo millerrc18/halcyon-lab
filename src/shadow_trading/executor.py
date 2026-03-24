@@ -49,6 +49,27 @@ def open_shadow_trade(
         logger.info("Shadow trading disabled, skipping")
         return None
 
+    # Risk governor check
+    try:
+        from src.risk.governor import RiskGovernor, get_portfolio_state
+        governor = RiskGovernor(config)
+        portfolio = get_portfolio_state(db_path)
+        check = governor.check_trade(
+            packet.ticker,
+            packet.position_sizing.allocation_dollars,
+            features,
+            portfolio,
+        )
+        if not check["approved"]:
+            reason = check.get("rejection_reason", "Risk check failed")
+            logger.warning("[RISK] Trade rejected for %s: %s", packet.ticker, reason)
+            print(f"[RISK] BLOCKED: {packet.ticker} — {reason}")
+            return None
+    except ImportError:
+        pass  # Risk module not available, continue without
+    except Exception as e:
+        logger.warning("[RISK] Governor check failed: %s — continuing", e)
+
     # Position limit check (bootcamp overrides)
     bootcamp_cfg = config.get("bootcamp", {})
     if bootcamp_cfg.get("enabled", False):
