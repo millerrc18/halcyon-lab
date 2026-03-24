@@ -99,6 +99,12 @@ def initialize_database(db_path: str = "ai_research_desk.sqlite3") -> None:
     with sqlite3.connect(path) as conn:
         conn.executescript(SCHEMA)
         conn.commit()
+        # Migration: add model_version column if missing
+        try:
+            conn.execute("ALTER TABLE recommendations ADD COLUMN model_version TEXT")
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass  # Column already exists
 
 
 def log_recommendation(
@@ -107,6 +113,7 @@ def log_recommendation(
     score: float,
     qualification: str,
     db_path: str = "ai_research_desk.sqlite3",
+    model_version: str = "base",
 ) -> str:
     """Write a recommendation row to the journal and return the recommendation_id."""
     initialize_database(db_path)
@@ -164,6 +171,7 @@ def log_recommendation(
         "event_risk_warning_text": packet.event_risk if packet.event_risk != "Normal" else None,
         "conservative_sizing_applied": 1 if features.get("event_risk_level") in ("elevated", "imminent") else 0,
         "packet_sent": 0,
+        "model_version": model_version,
     }
 
     columns = ", ".join(row.keys())

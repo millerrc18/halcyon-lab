@@ -43,6 +43,10 @@ class WatchLoop:
         self.bootcamp_enabled = bootcamp_enabled
         self.bootcamp_phase = bootcamp_cfg.get("phase", 1) if bootcamp_enabled else None
 
+        # Training config
+        training_cfg = config.get("training", {})
+        self.training_enabled = training_cfg.get("enabled", False)
+
         # Daily state (in-memory, resets on restart)
         self._morning_done = False
         self._eod_done = False
@@ -50,6 +54,9 @@ class WatchLoop:
         self._daily_packets: list = []
         self._today: date | None = None
         self._trades_managed_today = 0
+        self._training_collection_done = False
+        self._training_run_done = False
+        self._saturday_reports_done = False
 
     def _reset_daily_state(self):
         """Reset daily flags at midnight ET."""
@@ -58,6 +65,9 @@ class WatchLoop:
         self._last_scan_time = None
         self._daily_packets = []
         self._trades_managed_today = 0
+        self._training_collection_done = False
+        self._training_run_done = False
+        self._saturday_reports_done = False
 
     def _is_market_open(self, now: datetime) -> bool:
         """Check if market is currently open (weekday, between open and close)."""
@@ -88,15 +98,25 @@ class WatchLoop:
         bootcamp_str = (f"enabled (Phase {self.bootcamp_phase})"
                         if self.bootcamp_enabled else "disabled")
 
+        from src.training.versioning import get_active_model_name, get_training_example_counts
+        model_name = get_active_model_name()
+        if self.training_enabled:
+            t_counts = get_training_example_counts()
+            training_str = f"enabled ({t_counts['total']} examples)"
+        else:
+            training_str = "disabled"
+
         print(f"""
 {'='*45}
  HALCYON LAB - WATCH MODE
 {'='*45}
  Time: {now.strftime('%Y-%m-%d %H:%M:%S')} ET
  LLM: {llm_status}
+ Model Version: {model_name}
  Shadow Trading: {shadow_status}
  Email Mode: {self.email_mode}
  Bootcamp: {bootcamp_str}
+ Training: {training_str}
 
  Schedule:
    Morning watchlist: {self.morning_hour}:00 ET
@@ -154,6 +174,7 @@ class WatchLoop:
         from src.journal.store import log_recommendation
         from src.llm.packet_writer import enhance_packet_with_llm
         from src.packets.template import build_packet_from_features, render_packet
+        from src.training.versioning import get_active_model_name
         from src.ranking.ranker import rank_universe, get_top_candidates
         from src.universe.sp100 import get_sp100_universe
         from src.email.notifier import send_email
@@ -187,8 +208,10 @@ class WatchLoop:
             packet = enhance_packet_with_llm(packet, feat, self.config)
             rendered = render_packet(packet)
 
+            model_ver = get_active_model_name()
             rec_id = log_recommendation(
-                packet, feat, candidate["score"], candidate["qualification"]
+                packet, feat, candidate["score"], candidate["qualification"],
+                model_version=model_ver,
             )
             print(f"  -> Logged {ticker}: {rec_id}")
             self._trades_managed_today += 1
@@ -275,7 +298,25 @@ class WatchLoop:
                     self._run_eod_recap()
                     self._eod_done = True
 
-                # 4. Status log
+                # 4. Training data collection (4:30 PM ET)
+                elif (self.training_enabled and hour == 16 and now.minute >= 30
+                      and not self._training_collection_done):
+                    self._run_training_collection()
+                    self._training_collection_done = True
+
+                # 5. Overnight training trigger (5:00 PM ET)
+                elif (self.training_enabled and hour == 17
+                      and not self._training_run_done):
+                    self._run_training_check()
+                    self._training_run_done = True
+
+                # 6. Saturday training report (9 AM ET)
+                elif (self.training_enabled and now.weekday() == 5
+                      and hour == 9 and not self._saturday_reports_done):
+                    self._run_saturday_reports()
+                    self._saturday_reports_done = True
+
+                # 7. Status log
                 else:
                     if self._is_market_open(now):
                         print(f"[WATCH] {time_str} ET — market open, next scan in "
@@ -290,6 +331,38 @@ class WatchLoop:
             print(f"Final shadow status:")
             print(f"  {self._trades_managed_today} trades managed today")
             print("Goodbye.")
+
+    def _run_training_collection(self):
+        """Collect training data from closed trades."""
+        from src.training.data_collector import collect_training_examples_from_closed_trades
+        print("[WATCH] Running training data collection...")
+        count = collect_training_examples_from_closed_trades()
+        print(f"[WATCH] Training data collection: {count} new examples generated")
+
+    def _run_training_check(self):
+        """Check if fine-tuning should be triggered."""
+        from src.training.trainer import should_train, run_fine_tune
+        trigger, reason = should_train()
+        if trigger:
+            print(f"[WATCH] Training triggered: {reason}")
+            result = run_fine_tune()
+            if result:
+                print(f"[WATCH] Training complete: {result['version_name']}")
+            else:
+                print("[WATCH] Training failed. Check logs.")
+        else:
+            print(f"[WATCH] Training not needed: {reason}")
+
+    def _run_saturday_reports(self):
+        """Generate and send Saturday training report."""
+        from src.training.report import generate_training_report
+        from src.email.notifier import send_email
+        print("[WATCH] Generating Saturday training report...")
+        report = generate_training_report()
+        print(report)
+        subject = "[TRADE DESK] Weekly Training Report"
+        send_email(subject, report)
+        print("[WATCH] Training report email sent.")
 
     def _minutes_until_next_scan(self, now: datetime) -> float:
         """Calculate minutes until next scan is due."""

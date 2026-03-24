@@ -59,6 +59,7 @@ def cmd_scan(args):
     from src.llm.packet_writer import enhance_packet_with_llm
     from src.packets.template import build_packet_from_features, render_packet
     from src.ranking.ranker import rank_universe, get_top_candidates
+    from src.training.versioning import get_active_model_name
 
     verbose = getattr(args, "verbose", False)
     dry_run = getattr(args, "dry_run", False)
@@ -151,8 +152,10 @@ def cmd_scan(args):
 
             rec_id = None
             if not dry_run:
+                model_ver = get_active_model_name()
                 rec_id = log_recommendation(
-                    packet, feat, candidate["score"], candidate["qualification"]
+                    packet, feat, candidate["score"], candidate["qualification"],
+                    model_version=model_ver,
                 )
                 print(f"  -> Logged to journal: {rec_id}")
 
@@ -235,6 +238,7 @@ def cmd_morning_watchlist(args):
     from src.packets.template import build_packet_from_features, render_packet
     from src.packets.watchlist import build_morning_watchlist
     from src.ranking.ranker import rank_universe, get_top_candidates
+    from src.training.versioning import get_active_model_name
 
     dry_run = getattr(args, "dry_run", False)
     send_via_email = getattr(args, "email", False)
@@ -287,8 +291,10 @@ def cmd_morning_watchlist(args):
             packet = enhance_packet_with_llm(packet, feat, config)
             rendered = render_packet(packet)
 
+            model_ver = get_active_model_name()
             rec_id = log_recommendation(
-                packet, feat, candidate["score"], candidate["qualification"]
+                packet, feat, candidate["score"], candidate["qualification"],
+                model_version=model_ver,
             )
             print(f"  -> Logged {ticker} to journal: {rec_id}")
 
@@ -799,6 +805,181 @@ def cmd_postmortem_detail(args):
         print(f"    Repeatable: {'Yes' if rec.get('repeatable_setup') == 1 else 'No' if rec.get('repeatable_setup') == 0 else 'n/a'}")
 
 
+# ── Training Pipeline Commands ─────────────────────────────────────────
+
+
+def cmd_training_status(args):
+    from src.training.versioning import (
+        get_active_model_version, get_training_example_counts,
+        get_new_examples_since,
+    )
+    from src.training.trainer import should_train, check_model_performance
+
+    active = get_active_model_version()
+    counts = get_training_example_counts()
+    trigger, trigger_reason = should_train()
+
+    print("")
+    print("TRAINING STATUS")
+    print("=" * 15)
+
+    if active:
+        trained_date = active["created_at"][:10]
+        print(f"Active model:      {active['version_name']} (trained {trained_date})")
+    else:
+        print("Active model:      base (no fine-tuned model)")
+
+    syn = counts.get("synthetic_claude", 0)
+    wins = counts.get("outcome_win", 0)
+    losses = counts.get("outcome_loss", 0)
+    total = counts["total"]
+    print(f"Dataset size:      {total} examples ({syn} synthetic, {wins} wins, {losses} losses)")
+
+    new_since = 0
+    if active:
+        new_since = get_new_examples_since(active["created_at"])
+    else:
+        new_since = total
+    print(f"Since last train:  {new_since} new examples")
+
+    if trigger:
+        print(f"Next train:        Queued ({trigger_reason})")
+    else:
+        print(f"Next train:        {trigger_reason}")
+
+    perf_check = check_model_performance()
+    if perf_check["action"] == "waiting":
+        print(f"Auto-rollback:     Watching (need {perf_check.get('trades_needed', '?')} more trades for evaluation)")
+    elif perf_check["action"] == "none":
+        print(f"Auto-rollback:     Passing -- {perf_check.get('status', 'ok')}")
+    print("")
+
+
+def cmd_training_history(args):
+    from src.training.versioning import get_model_history, get_performance_by_version
+
+    history = get_model_history()
+    perf_data = get_performance_by_version()
+    perf_map = {p["version_name"]: p for p in perf_data}
+
+    print("")
+    print("MODEL VERSION HISTORY")
+    print("=" * 21)
+    print(f"{'Version':<14s} {'Status':<12s} {'Trained':<12s} {'Examples':>8s}  {'Trades':>6s}  {'Win Rate':>8s}  {'Expectancy':>10s}")
+    print("-" * 76)
+
+    for v in history:
+        name = v["version_name"]
+        status = v["status"]
+        trained = v["created_at"][:10]
+        examples = v.get("training_examples_count") or 0
+        p = perf_map.get(name, {})
+        trades = p.get("trade_count", 0)
+        wr = f"{p['win_rate']:.1f}%" if trades > 0 else "n/a"
+        exp = f"${p['expectancy']:+.2f}" if trades > 0 and p.get("expectancy") is not None else "n/a"
+        print(f"{name:<14s} {status:<12s} {trained:<12s} {examples:>8d}  {trades:>6d}  {wr:>8s}  {exp:>10s}")
+
+    # Base model row
+    base_perf = perf_map.get("base", {})
+    base_trades = base_perf.get("trade_count", 0)
+    base_wr = f"{base_perf['win_rate']:.1f}%" if base_trades > 0 else "n/a"
+    base_exp = f"${base_perf['expectancy']:+.2f}" if base_trades > 0 and base_perf.get("expectancy") is not None else "n/a"
+    print(f"{'base':<14s} {'--':<12s} {'--':<12s} {'--':>8s}  {base_trades:>6d}  {base_wr:>8s}  {base_exp:>10s}")
+    print("")
+
+
+def cmd_training_report(args):
+    from src.training.report import generate_training_report
+
+    report = generate_training_report()
+    print(report)
+
+    if getattr(args, "email", False):
+        subject = "[TRADE DESK] Training Progress Report"
+        success = send_email(subject, report)
+        if success:
+            print("  -> Training report email sent.")
+        else:
+            print("  -> Failed to send training report email.")
+
+
+def cmd_bootstrap_training(args):
+    from src.training.bootstrap import estimate_bootstrap_cost, generate_synthetic_training_data
+
+    count = getattr(args, "count", 500)
+    yes = getattr(args, "yes", False)
+
+    cost = estimate_bootstrap_cost(count)
+    print(f"\nBootstrap Training")
+    print(f"  Examples to generate: {count}")
+    print(f"  Estimated cost: ${cost:.2f} (Haiku 4.5)")
+
+    if not yes:
+        confirm = input("  Proceed? [y/N] ").strip().lower()
+        if confirm != "y":
+            print("  Aborted.")
+            return
+
+    print("")
+    created = generate_synthetic_training_data(count)
+    actual_cost = estimate_bootstrap_cost(created)
+    print(f"\n[TRAINING] Bootstrap complete: {created} examples created (est. cost: ${actual_cost:.2f})")
+
+
+def cmd_train(args):
+    from src.config import load_config
+    from src.training.trainer import run_fine_tune, export_training_data, should_train
+    from src.training.versioning import (
+        get_active_model_version, rollback_model, get_model_history,
+    )
+
+    if getattr(args, "rollback", False):
+        active = get_active_model_version()
+        history = get_model_history()
+        retired = [v for v in history if v["status"] == "retired"]
+
+        if not active:
+            print("No active model to roll back from.")
+            return
+        if not retired:
+            print("No previous version to roll back to.")
+            return
+
+        print(f"  Current: {active['version_name']}")
+        print(f"  Previous: {retired[0]['version_name']}")
+        confirm = input(f"  Rollback from {active['version_name']} to {retired[0]['version_name']}? [y/N] ").strip().lower()
+        if confirm != "y":
+            print("  Aborted.")
+            return
+
+        restored = rollback_model()
+        if restored:
+            print(f"  Rolled back to {restored['version_name']}")
+        else:
+            print("  Rollback failed — no previous version found.")
+        return
+
+    if getattr(args, "export", False):
+        file_path, count = export_training_data()
+        print(f"Exported {count} examples to {file_path}")
+        return
+
+    # Default: run fine-tuning
+    force = getattr(args, "force", False)
+    if not force:
+        trigger, reason = should_train()
+        if not trigger:
+            print(f"Training not needed: {reason}")
+            print("Use --force to train anyway.")
+            return
+
+    result = run_fine_tune()
+    if result:
+        print(f"Training complete: {result['version_name']} ({result['examples_count']} examples)")
+    else:
+        print("Training failed. Check logs for details.")
+
+
 def cmd_watch(args):
     from src.config import load_config
     from src.scheduler.watch import WatchLoop
@@ -915,6 +1096,16 @@ def cmd_preflight(args):
     else:
         print("Bootcamp:         [WARN] Disabled")
 
+    # 9. Training
+    from src.training.versioning import get_active_model_name, get_training_example_counts
+    training_cfg = config.get("training", {})
+    if training_cfg.get("enabled", False):
+        model_name = get_active_model_name()
+        t_counts = get_training_example_counts()
+        print(f"Training:         [OK] Enabled (model: {model_name}, {t_counts['total']} examples)")
+    else:
+        print("Training:         [WARN] Disabled")
+
     print("")
     print("All checks complete. Run 'python -m src.main watch' to start.")
     print("")
@@ -999,6 +1190,28 @@ def build_parser() -> argparse.ArgumentParser:
     postmortem = subparsers.add_parser("postmortem", help="View full postmortem for a trade")
     postmortem.add_argument("recommendation_id", help="Recommendation ID to view")
     postmortem.set_defaults(func=cmd_postmortem_detail)
+
+    # Training commands
+    t_status = subparsers.add_parser("training-status", help="Show training pipeline status")
+    t_status.set_defaults(func=cmd_training_status)
+
+    t_history = subparsers.add_parser("training-history", help="Show model version history")
+    t_history.set_defaults(func=cmd_training_history)
+
+    t_report = subparsers.add_parser("training-report", help="Generate training progress report")
+    t_report.add_argument("--email", action="store_true", help="Send report via email")
+    t_report.set_defaults(func=cmd_training_report)
+
+    bootstrap = subparsers.add_parser("bootstrap-training", help="Generate synthetic training data")
+    bootstrap.add_argument("--count", type=int, default=500, help="Number of examples to generate")
+    bootstrap.add_argument("--yes", action="store_true", help="Skip confirmation")
+    bootstrap.set_defaults(func=cmd_bootstrap_training)
+
+    train = subparsers.add_parser("train", help="Fine-tune model or manage versions")
+    train.add_argument("--force", action="store_true", help="Force training even if threshold not met")
+    train.add_argument("--rollback", action="store_true", help="Rollback to previous model version")
+    train.add_argument("--export", action="store_true", help="Export training data to JSONL only")
+    train.set_defaults(func=cmd_train)
 
     # Watch loop and preflight
     watch = subparsers.add_parser("watch", help="Run automated daily cadence loop")
