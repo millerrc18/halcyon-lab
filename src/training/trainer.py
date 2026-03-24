@@ -160,32 +160,220 @@ def should_train(db_path: str = "ai_research_desk.sqlite3") -> tuple[bool, str]:
 
 def export_training_data(
     output_dir: str = "training_data",
+    holdout_pct: float = 0.15,
     db_path: str = "ai_research_desk.sqlite3",
-) -> tuple[str, int]:
-    """Export all training examples to JSONL.
+) -> tuple[dict, int]:
+    """Export training data with chronological train/validation split.
 
-    Returns (file_path, example_count).
+    The most recent holdout_pct of examples (by date) are held out for validation.
+    The model NEVER trains on holdout examples. After training, inference on
+    the holdout measures generalization quality.
+
+    Creates:
+        training_data/dataset.jsonl            (training split only)
+        training_data/holdout.jsonl            (validation split — never trained on)
+        training_data/split_info.json          (metadata about the split)
+
+    Returns:
+        ({"training": N, "holdout": N}, total_count)
     """
     init_training_tables(db_path)
     Path(output_dir).mkdir(parents=True, exist_ok=True)
-    file_path = str(Path(output_dir) / "dataset.jsonl")
 
     import sqlite3
     with sqlite3.connect(db_path) as conn:
         conn.row_factory = sqlite3.Row
         rows = conn.execute(
-            "SELECT instruction, input_text, output_text FROM training_examples ORDER BY created_at"
+            "SELECT instruction, input_text, output_text, created_at, quality_score "
+            "FROM training_examples ORDER BY created_at ASC"
         ).fetchall()
 
-    with open(file_path, "w") as f:
-        for row in rows:
+    if not rows:
+        # Write empty files
+        for fname in ("dataset.jsonl", "holdout.jsonl"):
+            open(str(Path(output_dir) / fname), "w").close()
+        split_info = {"total_examples": 0, "training_examples": 0, "holdout_examples": 0}
+        with open(str(Path(output_dir) / "split_info.json"), "w") as f:
+            json.dump(split_info, f, indent=2)
+        return {"training": 0, "holdout": 0}, 0
+
+    examples = [dict(row) for row in rows]
+    total = len(examples)
+
+    # Calculate split point with 5-day temporal gap
+    split_idx = int(total * (1 - holdout_pct))
+    if split_idx >= total:
+        split_idx = total - 1
+
+    # Find the date at the split point and add 5-day gap
+    split_date = examples[split_idx]["created_at"][:10] if split_idx < total else ""
+
+    # Apply temporal gap: find first holdout example that's >= 5 trading days after last train
+    from datetime import datetime, timedelta
+    if split_date:
+        try:
+            split_dt = datetime.fromisoformat(split_date)
+            gap_dt = split_dt + timedelta(days=7)  # ~5 trading days
+            gap_date = gap_dt.strftime("%Y-%m-%d")
+
+            # Adjust holdout start to after the gap
+            holdout_start_idx = split_idx
+            for i in range(split_idx, total):
+                if examples[i]["created_at"][:10] >= gap_date:
+                    holdout_start_idx = i
+                    break
+            else:
+                holdout_start_idx = total  # No examples after gap
+        except (ValueError, TypeError):
+            holdout_start_idx = split_idx
+    else:
+        holdout_start_idx = split_idx
+
+    train_examples = examples[:split_idx]
+    holdout_examples = examples[holdout_start_idx:]
+
+    # Write training data
+    dataset_path = str(Path(output_dir) / "dataset.jsonl")
+    with open(dataset_path, "w") as f:
+        for ex in train_examples:
             f.write(json.dumps({
-                "instruction": row["instruction"],
-                "input": row["input_text"],
-                "output": row["output_text"],
+                "instruction": ex["instruction"],
+                "input": ex["input_text"],
+                "output": ex["output_text"],
             }) + "\n")
 
-    return file_path, len(rows)
+    # Write holdout data
+    holdout_path = str(Path(output_dir) / "holdout.jsonl")
+    with open(holdout_path, "w") as f:
+        for ex in holdout_examples:
+            f.write(json.dumps({
+                "instruction": ex["instruction"],
+                "input": ex["input_text"],
+                "output": ex["output_text"],
+                "created_at": ex["created_at"],
+            }) + "\n")
+
+    # Write split metadata
+    train_dates = [e["created_at"][:10] for e in train_examples] if train_examples else []
+    holdout_dates = [e["created_at"][:10] for e in holdout_examples] if holdout_examples else []
+
+    gap_days = 0
+    if train_dates and holdout_dates:
+        try:
+            last_train = datetime.fromisoformat(train_dates[-1])
+            first_holdout = datetime.fromisoformat(holdout_dates[0])
+            gap_days = (first_holdout - last_train).days
+        except (ValueError, TypeError):
+            pass
+
+    split_info = {
+        "total_examples": total,
+        "training_examples": len(train_examples),
+        "holdout_examples": len(holdout_examples),
+        "training_date_range": {
+            "start": train_dates[0] if train_dates else None,
+            "end": train_dates[-1] if train_dates else None,
+        },
+        "holdout_date_range": {
+            "start": holdout_dates[0] if holdout_dates else None,
+            "end": holdout_dates[-1] if holdout_dates else None,
+        },
+        "temporal_gap_days": gap_days,
+    }
+    with open(str(Path(output_dir) / "split_info.json"), "w") as f:
+        json.dump(split_info, f, indent=2)
+
+    return {"training": len(train_examples), "holdout": len(holdout_examples)}, total
+
+
+def evaluate_on_holdout(model_name: str = "halcyon-latest",
+                        db_path: str = "ai_research_desk.sqlite3") -> dict:
+    """Run the trained model on holdout examples and measure quality.
+
+    For each holdout example:
+    1. Feed the input to the trained model (via Ollama)
+    2. Score the model's output with the LLM-as-judge (Claude)
+    3. Compare model output quality against the gold-standard output
+
+    Returns a dict with holdout evaluation metrics.
+    """
+    holdout_path = Path("training_data") / "holdout.jsonl"
+    if not holdout_path.exists():
+        return {"holdout_count": 0, "avg_quality_score": 0, "error": "No holdout file found"}
+
+    examples = []
+    with open(holdout_path) as f:
+        for line in f:
+            if line.strip():
+                examples.append(json.loads(line))
+
+    if not examples:
+        return {"holdout_count": 0, "avg_quality_score": 0}
+
+    from src.llm.client import generate
+    from src.training.claude_client import generate_training_example
+
+    scores = []
+    gold_scores = []
+    format_passes = 0
+
+    JUDGE_PROMPT = """Rate this trade analysis on a 1-5 scale for overall quality.
+Consider: thesis clarity, evidence quality, risk assessment, technical accuracy, and actionability.
+Return ONLY a JSON object: {"score": N, "thesis_clarity": N, "evidence_quality": N, "risk_assessment": N, "technical_accuracy": N, "actionability": N}
+where each N is 1-5."""
+
+    for ex in examples:
+        # Generate from the trained model
+        model_output = generate(ex["input"], ex["instruction"])
+        if not model_output:
+            continue
+
+        # Check format compliance
+        upper = model_output.upper()
+        if "WHY NOW" in upper and "DEEPER ANALYSIS" in upper:
+            format_passes += 1
+
+        # Score model output
+        judge_input = f"ANALYSIS TO RATE:\n{model_output}"
+        score_text = generate_training_example(JUDGE_PROMPT, judge_input)
+        if score_text:
+            try:
+                # Try to parse JSON from response
+                import re
+                json_match = re.search(r'\{[^}]+\}', score_text)
+                if json_match:
+                    score_data = json.loads(json_match.group())
+                    scores.append(score_data.get("score", 3))
+            except (json.JSONDecodeError, AttributeError):
+                pass
+
+        # Score gold standard output
+        gold_input = f"ANALYSIS TO RATE:\n{ex['output']}"
+        gold_text = generate_training_example(JUDGE_PROMPT, gold_input)
+        if gold_text:
+            try:
+                json_match = re.search(r'\{[^}]+\}', gold_text)
+                if json_match:
+                    gold_data = json.loads(json_match.group())
+                    gold_scores.append(gold_data.get("score", 3))
+            except (json.JSONDecodeError, AttributeError):
+                pass
+
+    avg_score = sum(scores) / len(scores) if scores else 0
+    avg_gold = sum(gold_scores) / len(gold_scores) if gold_scores else 0
+
+    result = {
+        "holdout_count": len(examples),
+        "evaluated_count": len(scores),
+        "avg_quality_score": round(avg_score, 2),
+        "avg_gold_standard_score": round(avg_gold, 2),
+        "quality_gap": round(avg_gold - avg_score, 2),
+        "format_compliance": round(format_passes / len(examples), 2) if examples else 0,
+    }
+
+    logger.info("[TRAINING] Holdout evaluation: avg_score=%.2f gold=%.2f gap=%.2f",
+                avg_score, avg_gold, avg_gold - avg_score)
+    return result
 
 
 def run_fine_tune(db_path: str = "ai_research_desk.sqlite3") -> dict | None:
@@ -193,13 +381,15 @@ def run_fine_tune(db_path: str = "ai_research_desk.sqlite3") -> dict | None:
 
     Returns the new model version record on success, or None on failure.
     """
-    # Step 1: Export training data
-    file_path, example_count = export_training_data(db_path=db_path)
+    # Step 1: Export training data with holdout split
+    split_counts, example_count = export_training_data(db_path=db_path)
     if example_count == 0:
         print("[TRAINING] No training examples to fine-tune on.")
         return None
 
-    print(f"[TRAINING] Exported {example_count} examples to {file_path}")
+    train_count = split_counts.get("training", example_count)
+    holdout_count = split_counts.get("holdout", 0)
+    print(f"[TRAINING] Exported {train_count} training + {holdout_count} holdout examples")
 
     # Step 2: Write training script
     script_path = Path("training_data") / "train.py"
@@ -255,7 +445,51 @@ def run_fine_tune(db_path: str = "ai_research_desk.sqlite3") -> dict | None:
         print(f"[TRAINING] ERROR: Failed to register model in Ollama: {e}")
         return None
 
-    # Step 5: Determine version name and register
+    # Step 5: Run holdout evaluation (if holdout exists)
+    holdout_eval = None
+    holdout_score = None
+    holdout_json = None
+    holdout_path = Path("training_data") / "holdout.jsonl"
+    if holdout_path.exists() and holdout_path.stat().st_size > 0:
+        try:
+            print("[TRAINING] Running holdout evaluation...")
+            holdout_eval = evaluate_on_holdout(model_name="halcyon-latest", db_path=db_path)
+            holdout_score = holdout_eval.get("avg_quality_score")
+            holdout_json = json.dumps(holdout_eval)
+
+            # Check for regression against previous version
+            active = get_active_model_version(db_path)
+            if active and active.get("holdout_score"):
+                prev_score = active["holdout_score"]
+                if holdout_score and holdout_score < prev_score - 0.3:
+                    print(f"[TRAINING] WARNING: Holdout score {holdout_score:.2f} < previous {prev_score:.2f} - 0.3. "
+                          f"Possible overfitting. Registering as evaluation (not active).")
+                    # Register as evaluation instead of active
+                    history = get_model_history(db_path)
+                    version_num = len(history) + 1
+                    version_name = f"halcyon-v{version_num}"
+                    version_id = register_model_version(
+                        version_name=version_name,
+                        examples_count=example_count,
+                        synthetic_count=get_training_example_counts(db_path).get("synthetic_claude", 0),
+                        outcome_count=get_training_example_counts(db_path).get("outcome_win", 0) + get_training_example_counts(db_path).get("outcome_loss", 0),
+                        model_file_path=str(gguf_path),
+                        db_path=db_path,
+                        holdout_score=holdout_score,
+                        holdout_details=holdout_json,
+                        status="evaluation",
+                    )
+                    return {"version_id": version_id, "version_name": version_name,
+                            "examples_count": example_count, "holdout_regression": True}
+
+                print(f"[TRAINING] Holdout evaluation: {holdout_score:.2f} (previous: {prev_score:.2f})")
+            elif holdout_score:
+                print(f"[TRAINING] Holdout evaluation: {holdout_score:.2f}")
+        except Exception as e:
+            logger.warning("[TRAINING] Holdout evaluation failed: %s", e)
+            print(f"[TRAINING] Holdout evaluation failed: {e} — continuing without")
+
+    # Step 6: Determine version name and register
     history = get_model_history(db_path)
     version_num = len(history) + 1
     version_name = f"halcyon-v{version_num}"
@@ -269,6 +503,8 @@ def run_fine_tune(db_path: str = "ai_research_desk.sqlite3") -> dict | None:
         outcome_count=counts.get("outcome_win", 0) + counts.get("outcome_loss", 0),
         model_file_path=str(gguf_path),
         db_path=db_path,
+        holdout_score=holdout_score,
+        holdout_details=holdout_json,
     )
 
     print(f"[TRAINING] Fine-tune complete. Registered {version_name} ({example_count} examples)")
@@ -277,6 +513,7 @@ def run_fine_tune(db_path: str = "ai_research_desk.sqlite3") -> dict | None:
         "version_id": version_id,
         "version_name": version_name,
         "examples_count": example_count,
+        "holdout_score": holdout_score,
     }
 
 

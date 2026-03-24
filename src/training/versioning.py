@@ -42,6 +42,56 @@ def init_training_tables(db_path: str = "ai_research_desk.sqlite3") -> None:
         conn.executescript(TRAINING_SCHEMA)
         conn.commit()
 
+        # Migration: add holdout_score to model_versions
+        try:
+            conn.execute("ALTER TABLE model_versions ADD COLUMN holdout_score REAL")
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass
+
+        # Migration: add holdout_details (JSON blob) to model_versions
+        try:
+            conn.execute("ALTER TABLE model_versions ADD COLUMN holdout_details TEXT")
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass
+
+        # Model evaluations table for A/B testing
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS model_evaluations (
+                evaluation_id TEXT PRIMARY KEY,
+                created_at TEXT NOT NULL,
+                recommendation_id TEXT,
+                ticker TEXT,
+                input_text TEXT NOT NULL,
+                current_model TEXT NOT NULL,
+                current_output TEXT,
+                current_score REAL,
+                new_model TEXT NOT NULL,
+                new_output TEXT,
+                new_score REAL,
+                winner TEXT,
+                score_delta REAL
+            )
+        """)
+        conn.commit()
+
+        # Audit reports table
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS audit_reports (
+                audit_id TEXT PRIMARY KEY,
+                created_at TEXT NOT NULL,
+                audit_date TEXT NOT NULL,
+                overall_assessment TEXT NOT NULL,
+                summary TEXT,
+                flags TEXT,
+                metrics_to_watch TEXT,
+                model_health TEXT,
+                full_report TEXT
+            )
+        """)
+        conn.commit()
+
 
 def get_active_model_version(db_path: str = "ai_research_desk.sqlite3") -> dict | None:
     """Return the currently active model version, or None if using base."""
@@ -61,6 +111,9 @@ def register_model_version(
     outcome_count: int,
     model_file_path: str,
     db_path: str = "ai_research_desk.sqlite3",
+    holdout_score: float | None = None,
+    holdout_details: str | None = None,
+    status: str = "active",
 ) -> str:
     """Retire current active version and register new one. Returns version_id."""
     init_training_tables(db_path)
@@ -68,22 +121,68 @@ def register_model_version(
     created_at = datetime.now(ET).isoformat()
 
     with sqlite3.connect(db_path) as conn:
-        # Retire current active version
-        conn.execute(
-            "UPDATE model_versions SET status = 'retired' WHERE status = 'active'"
-        )
-        # Insert new active version
+        if status == "active":
+            # Retire current active version
+            conn.execute(
+                "UPDATE model_versions SET status = 'retired' WHERE status = 'active'"
+            )
+        # Insert new version
         conn.execute(
             """INSERT INTO model_versions
                (version_id, version_name, created_at, training_examples_count,
                 synthetic_examples_count, outcome_examples_count,
-                model_file_path, status)
-               VALUES (?, ?, ?, ?, ?, ?, ?, 'active')""",
+                model_file_path, status, holdout_score, holdout_details)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (version_id, version_name, created_at, examples_count,
-             synthetic_count, outcome_count, model_file_path),
+             synthetic_count, outcome_count, model_file_path, status,
+             holdout_score, holdout_details),
         )
         conn.commit()
     return version_id
+
+
+def get_evaluation_model(db_path: str = "ai_research_desk.sqlite3") -> dict | None:
+    """Return a model in 'evaluation' status, or None."""
+    init_training_tables(db_path)
+    with sqlite3.connect(db_path) as conn:
+        conn.row_factory = sqlite3.Row
+        row = conn.execute(
+            "SELECT * FROM model_versions WHERE status = 'evaluation' ORDER BY created_at DESC LIMIT 1"
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def promote_evaluation_model(db_path: str = "ai_research_desk.sqlite3") -> dict | None:
+    """Promote the evaluation model to active status."""
+    init_training_tables(db_path)
+    with sqlite3.connect(db_path) as conn:
+        conn.row_factory = sqlite3.Row
+        eval_model = conn.execute(
+            "SELECT * FROM model_versions WHERE status = 'evaluation' ORDER BY created_at DESC LIMIT 1"
+        ).fetchone()
+        if not eval_model:
+            return None
+        conn.execute("UPDATE model_versions SET status = 'retired' WHERE status = 'active'")
+        conn.execute("UPDATE model_versions SET status = 'active' WHERE version_id = ?",
+                     (eval_model["version_id"],))
+        conn.commit()
+    return dict(eval_model)
+
+
+def reject_evaluation_model(db_path: str = "ai_research_desk.sqlite3") -> dict | None:
+    """Reject the evaluation model (set to rejected status)."""
+    init_training_tables(db_path)
+    with sqlite3.connect(db_path) as conn:
+        conn.row_factory = sqlite3.Row
+        eval_model = conn.execute(
+            "SELECT * FROM model_versions WHERE status = 'evaluation' ORDER BY created_at DESC LIMIT 1"
+        ).fetchone()
+        if not eval_model:
+            return None
+        conn.execute("UPDATE model_versions SET status = 'rejected' WHERE version_id = ?",
+                     (eval_model["version_id"],))
+        conn.commit()
+    return dict(eval_model)
 
 
 def rollback_model(db_path: str = "ai_research_desk.sqlite3") -> dict | None:

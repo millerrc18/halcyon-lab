@@ -158,6 +158,7 @@ def cmd_scan(args):
                     packet, feat, candidate["score"], candidate["qualification"],
                     model_version=model_ver,
                     enriched_prompt=enriched_prompt,
+                    llm_conviction=getattr(packet, 'llm_conviction', None),
                 )
                 print(f"  -> Logged to journal: {rec_id}")
 
@@ -1029,8 +1030,8 @@ def cmd_train(args):
         return
 
     if getattr(args, "export", False):
-        file_path, count = export_training_data()
-        print(f"Exported {count} examples to {file_path}")
+        split_counts, count = export_training_data()
+        print(f"Exported {count} examples ({split_counts.get('training', 0)} train, {split_counts.get('holdout', 0)} holdout)")
         return
 
     # Default: run fine-tuning
@@ -1165,7 +1166,20 @@ def cmd_preflight(args):
     else:
         print("Bootcamp:         [WARN] Disabled")
 
-    # 9. Training
+    # 9. Risk Governor
+    risk_cfg = config.get("risk_governor", {})
+    if risk_cfg.get("enabled", True):
+        from src.risk.governor import _is_halted
+        halted = _is_halted()
+        if halted:
+            print("Risk Governor:    [WARN] Trading is HALTED via kill switch")
+        else:
+            print(f"Risk Governor:    [OK] Enabled (max {risk_cfg.get('max_open_positions', 10)} positions, "
+                  f"{risk_cfg.get('max_sector_pct', 0.30):.0%} sector cap)")
+    else:
+        print("Risk Governor:    [WARN] Disabled")
+
+    # 10. Training
     from src.training.versioning import get_active_model_name, get_training_example_counts
     training_cfg = config.get("training", {})
     if training_cfg.get("enabled", False):
@@ -1206,6 +1220,121 @@ def cmd_cto_report(args):
             print("  -> CTO report email sent.")
         else:
             print("  -> Failed to send CTO report email.")
+
+
+def cmd_evaluate_holdout(args):
+    """Run holdout evaluation on a specific model."""
+    from src.training.trainer import evaluate_on_holdout
+    model = getattr(args, "model", "halcyon-latest")
+    print(f"Running holdout evaluation on {model}...")
+    result = evaluate_on_holdout(model_name=model)
+    import json
+    print(json.dumps(result, indent=2))
+
+
+def cmd_model_evaluation_status(args):
+    """Show current A/B evaluation progress."""
+    from src.training.ab_evaluation import get_evaluation_status
+    status = get_evaluation_status()
+    if not status:
+        print("No model currently in A/B evaluation.")
+        return
+    print(f"\nA/B MODEL EVALUATION")
+    print(f"  Model: {status['model_name']}")
+    print(f"  Evaluations: {status['evaluations']}")
+    print(f"  Win rate: {status['win_rate']:.0%}")
+    print(f"  Avg score delta: {status.get('avg_score_delta', 0):+.2f}")
+    print(f"  Recommendation: {status['recommendation']}")
+
+
+def cmd_promote_model(args):
+    """Promote the evaluation model to active."""
+    from src.training.ab_evaluation import check_promotion_ready, get_evaluation_status
+    from src.training.versioning import get_evaluation_model, promote_evaluation_model
+
+    eval_model = get_evaluation_model()
+    if not eval_model:
+        print("No model in evaluation status.")
+        return
+
+    force = getattr(args, "force", False)
+    status = check_promotion_ready(eval_model["version_name"])
+
+    if not force and not status["ready"]:
+        print(f"Model not ready for promotion: {status['recommendation']}")
+        print(f"  Win rate: {status['win_rate']:.0%} (need >= 60%)")
+        print(f"  Evaluations: {status['evaluations']} (need >= 20)")
+        print("Use --force to override.")
+        return
+
+    promoted = promote_evaluation_model()
+    if promoted:
+        print(f"Promoted {promoted['version_name']} to active.")
+    else:
+        print("Promotion failed.")
+
+
+def cmd_halt_trading(args):
+    """Halt all trading immediately."""
+    from src.risk.governor import _global_halt
+    _global_halt(True)
+    print("[RISK] All trading halted. No new positions will be opened.")
+    print("Use 'resume-trading' to resume.")
+
+
+def cmd_resume_trading(args):
+    """Resume trading."""
+    from src.risk.governor import _global_halt
+    _global_halt(False)
+    print("[RISK] Trading resumed.")
+
+
+def cmd_feature_importance(args):
+    """Compute and display feature importance ranking."""
+    from src.evaluation.feature_importance import compute_feature_importance
+    days = getattr(args, "days", 30)
+    result = compute_feature_importance(days=days)
+
+    print(f"\nFEATURE IMPORTANCE (last {days} days, {result['closed_trades']} trades)")
+    print("=" * 60)
+
+    for f in result.get("features", []):
+        print(f"  {f['name']:25s}  corr={f['correlation_with_pnl']:+.3f}  [{f['predictive_power']}]  "
+              f"WR in range: {f['win_rate_in_range']:.0%} vs {f['win_rate_outside']:.0%}")
+
+    if result.get("regime_importance"):
+        print("\nREGIME / CATEGORICAL:")
+        for name, data in result["regime_importance"].items():
+            print(f"  {name}: best={data['best']} ({data['best_win_rate']:.0%}), "
+                  f"worst={data['worst']} ({data['worst_win_rate']:.0%})")
+
+    if result.get("declining_features"):
+        print("\nDECLINING:")
+        for d in result["declining_features"]:
+            print(f"  - {d}")
+    if result.get("emerging_features"):
+        print("\nEMERGING:")
+        for e in result["emerging_features"]:
+            print(f"  - {e}")
+
+
+def cmd_backtest(args):
+    """Run a walk-forward backtest."""
+    from src.evaluation.backtester import backtest_model
+    model = getattr(args, "model", "halcyon-latest")
+    months = getattr(args, "months", 6)
+    print(f"Running backtest for {model} over {months} months...")
+    result = backtest_model(model, months=months)
+    import json
+    print(json.dumps(result, indent=2, default=str))
+
+
+def cmd_compare_models(args):
+    """Compare two models via backtest."""
+    from src.evaluation.backtester import compare_models
+    result = compare_models(args.model_a, args.model_b, months=getattr(args, "months", 3))
+    import json
+    print(json.dumps(result, indent=2, default=str))
 
 
 def cmd_dashboard(args):
@@ -1333,6 +1462,43 @@ def build_parser() -> argparse.ArgumentParser:
     cto.add_argument("--json", action="store_true", help="Output raw JSON")
     cto.add_argument("--email", action="store_true", help="Send report via email")
     cto.set_defaults(func=cmd_cto_report)
+
+    # Holdout evaluation
+    eval_holdout = subparsers.add_parser("evaluate-holdout", help="Run holdout evaluation on a model")
+    eval_holdout.add_argument("--model", default="halcyon-latest", help="Model name to evaluate")
+    eval_holdout.set_defaults(func=cmd_evaluate_holdout)
+
+    # A/B evaluation
+    eval_status = subparsers.add_parser("model-evaluation-status", help="Show A/B evaluation progress")
+    eval_status.set_defaults(func=cmd_model_evaluation_status)
+
+    promote = subparsers.add_parser("promote-model", help="Promote evaluation model to active")
+    promote.add_argument("--force", action="store_true", help="Force promotion without criteria check")
+    promote.set_defaults(func=cmd_promote_model)
+
+    # Kill switch
+    halt = subparsers.add_parser("halt-trading", help="Emergency halt — stop all new trades")
+    halt.set_defaults(func=cmd_halt_trading)
+
+    resume = subparsers.add_parser("resume-trading", help="Resume trading after halt")
+    resume.set_defaults(func=cmd_resume_trading)
+
+    # Feature importance
+    fi = subparsers.add_parser("feature-importance", help="Compute feature importance ranking")
+    fi.add_argument("--days", type=int, default=30, help="Lookback period")
+    fi.set_defaults(func=cmd_feature_importance)
+
+    # Backtesting
+    bt = subparsers.add_parser("backtest", help="Run walk-forward model backtest")
+    bt.add_argument("--model", default="halcyon-latest", help="Model to test")
+    bt.add_argument("--months", type=int, default=6, help="Test period in months")
+    bt.set_defaults(func=cmd_backtest)
+
+    compare = subparsers.add_parser("compare-models", help="Compare two models via backtest")
+    compare.add_argument("--model-a", required=True, help="First model")
+    compare.add_argument("--model-b", required=True, help="Second model")
+    compare.add_argument("--months", type=int, default=3, help="Test period")
+    compare.set_defaults(func=cmd_compare_models)
 
     # Watch loop and preflight
     watch = subparsers.add_parser("watch", help="Run automated daily cadence loop")
