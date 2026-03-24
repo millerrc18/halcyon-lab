@@ -106,38 +106,56 @@ def open_shadow_trade(
 
     trade_data = trade.to_dict()
 
-    # Try to place paper buy via Alpaca
+    # Try bracket order first, fall back to simple market order
     try:
-        from src.shadow_trading.alpaca_adapter import place_paper_entry
-
-        order = place_paper_entry(ticker, planned_shares)
+        from src.shadow_trading.alpaca_adapter import place_bracket_order
+        order = place_bracket_order(
+            ticker,
+            planned_shares,
+            take_profit_price=target_1,
+            stop_loss_price=stop_price,
+        )
         trade_data["alpaca_order_id"] = order.get("order_id")
+        trade_data["order_type"] = "bracket"
 
-        # If filled immediately (market order), update entry details
         fill_price = order.get("filled_avg_price")
         if fill_price:
             trade_data["actual_entry_price"] = fill_price
-            trade_data["actual_entry_time"] = now.isoformat()
-            trade_data["status"] = "open"
-            trade_data["max_favorable_excursion"] = 0.0
-            trade_data["max_adverse_excursion"] = 0.0
         else:
-            # Market orders usually fill quickly; set as open with entry price as estimate
             trade_data["actual_entry_price"] = entry_price
-            trade_data["actual_entry_time"] = now.isoformat()
-            trade_data["status"] = "open"
-            trade_data["max_favorable_excursion"] = 0.0
-            trade_data["max_adverse_excursion"] = 0.0
-
-    except Exception as e:
-        logger.warning(f"[SHADOW] Alpaca order failed for {ticker}: {e}")
-        print(f"[SHADOW] Alpaca order failed for {ticker}: {e}, recording trade without Alpaca")
-        # Still record the trade locally even if Alpaca fails
-        trade_data["actual_entry_price"] = entry_price
         trade_data["actual_entry_time"] = now.isoformat()
         trade_data["status"] = "open"
         trade_data["max_favorable_excursion"] = 0.0
         trade_data["max_adverse_excursion"] = 0.0
+
+    except Exception as e:
+        logger.warning(f"[SHADOW] Bracket order failed for {ticker}: {e}, falling back to market")
+        # Fall back to simple market order
+        try:
+            from src.shadow_trading.alpaca_adapter import place_paper_entry
+            order = place_paper_entry(ticker, planned_shares)
+            trade_data["alpaca_order_id"] = order.get("order_id")
+            trade_data["order_type"] = "simple"
+
+            fill_price = order.get("filled_avg_price")
+            if fill_price:
+                trade_data["actual_entry_price"] = fill_price
+            else:
+                trade_data["actual_entry_price"] = entry_price
+            trade_data["actual_entry_time"] = now.isoformat()
+            trade_data["status"] = "open"
+            trade_data["max_favorable_excursion"] = 0.0
+            trade_data["max_adverse_excursion"] = 0.0
+
+        except Exception as e2:
+            logger.warning(f"[SHADOW] Alpaca order failed for {ticker}: {e2}")
+            print(f"[SHADOW] Alpaca order failed for {ticker}: {e2}, recording trade without Alpaca")
+            trade_data["actual_entry_price"] = entry_price
+            trade_data["actual_entry_time"] = now.isoformat()
+            trade_data["status"] = "open"
+            trade_data["order_type"] = "simple"
+            trade_data["max_favorable_excursion"] = 0.0
+            trade_data["max_adverse_excursion"] = 0.0
 
     trade_id = insert_shadow_trade(trade_data, db_path)
 
@@ -226,6 +244,21 @@ def check_and_manage_open_trades(
             },
             db_path,
         )
+
+        # For bracket orders, check Alpaca for exit fills
+        bracket_exit = False
+        if trade.get("order_type") == "bracket" and trade.get("alpaca_order_id"):
+            try:
+                from src.shadow_trading.alpaca_adapter import get_order_status
+                order_status = get_order_status(trade["alpaca_order_id"])
+                if order_status.get("status") in ("filled", "partially_filled"):
+                    # Bracket order exited — determine which leg fired
+                    exit_price = order_status.get("filled_avg_price")
+                    if exit_price:
+                        current_price = exit_price
+                        bracket_exit = True
+            except Exception:
+                pass  # Fall through to polling logic
 
         # Check exit conditions
         exit_reason = None

@@ -106,6 +106,13 @@ def initialize_database(db_path: str = "ai_research_desk.sqlite3") -> None:
         except sqlite3.OperationalError:
             pass  # Column already exists
 
+        # Migration: add order_type column to shadow_trades if missing
+        try:
+            conn.execute("ALTER TABLE shadow_trades ADD COLUMN order_type TEXT")
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+
 
 def log_recommendation(
     packet: TradePacket,

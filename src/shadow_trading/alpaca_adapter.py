@@ -168,6 +168,69 @@ def place_paper_exit(
     }
 
 
+def place_bracket_order(
+    ticker: str,
+    shares: int,
+    take_profit_price: float,
+    stop_loss_price: float,
+    limit_price: float | None = None,
+) -> dict:
+    """Place a bracket order: entry + take-profit + stop-loss as one atomic order.
+
+    When the entry fills, Alpaca automatically places:
+    - A limit sell at take_profit_price
+    - A stop sell at stop_loss_price
+    When one exit triggers, the other auto-cancels.
+    """
+    _check_enabled()
+
+    logger.info("[SHADOW] Placing BRACKET order: %d shares of %s "
+                "(TP=$%.2f, SL=$%.2f)", shares, ticker,
+                take_profit_price, stop_loss_price)
+    print(f"[SHADOW] Placing BRACKET order: {shares} shares of {ticker}")
+
+    client = _get_trading_client()
+
+    from alpaca.trading.requests import MarketOrderRequest, LimitOrderRequest
+    from alpaca.trading.enums import OrderSide, TimeInForce, OrderClass
+
+    if limit_price:
+        request = LimitOrderRequest(
+            symbol=ticker,
+            qty=shares,
+            side=OrderSide.BUY,
+            time_in_force=TimeInForce.DAY,
+            order_class=OrderClass.BRACKET,
+            limit_price=round(limit_price, 2),
+            take_profit={"limit_price": round(take_profit_price, 2)},
+            stop_loss={"stop_price": round(stop_loss_price, 2)},
+        )
+    else:
+        request = MarketOrderRequest(
+            symbol=ticker,
+            qty=shares,
+            side=OrderSide.BUY,
+            time_in_force=TimeInForce.DAY,
+            order_class=OrderClass.BRACKET,
+            take_profit={"limit_price": round(take_profit_price, 2)},
+            stop_loss={"stop_price": round(stop_loss_price, 2)},
+        )
+
+    order = client.submit_order(request)
+
+    return {
+        "order_id": str(order.id),
+        "symbol": str(order.symbol),
+        "qty": int(order.qty) if order.qty else shares,
+        "side": str(order.side),
+        "type": str(order.type),
+        "order_class": "bracket",
+        "status": str(order.status),
+        "filled_avg_price": float(order.filled_avg_price) if order.filled_avg_price else None,
+        "legs": [str(leg.id) for leg in order.legs] if order.legs else [],
+    }
+
+
 def get_position(ticker: str) -> dict | None:
     """Get current position details for a ticker, or None if no position."""
     client = _get_trading_client()
