@@ -19,6 +19,11 @@ RULES:
 - Keep "Deeper Analysis" to 4-6 concise paragraphs.
 - Never use phrases like "based on the data provided" or "the indicators suggest" — just state the analysis as fact.
 - Sound like a human analyst, not an AI. No bullet points in the deeper analysis — use prose.
+- Synthesize across ALL data sources. A technical pullback with insider buying and strong fundamentals is different from one with insider selling and declining margins. Say so.
+- Factor in the market regime. A pullback in a calm uptrend with healthy breadth is a buying opportunity. The same pullback in a volatile downtrend is a falling knife. Be explicit about regime context.
+- If insider activity is notable (large buys or sells), mention it. Smart money signals matter.
+- Reference fundamental context when it strengthens or weakens the thesis. Growing revenue and expanding margins support a continuation trade. Declining margins and missed guidance undermine it.
+- Note the macro backdrop when it's relevant. Fed tightening and an inverted yield curve create headwinds for rate-sensitive names.
 
 OUTPUT FORMAT — return ONLY these two sections, clearly labeled:
 
@@ -74,6 +79,8 @@ RULES:
 
 HISTORICAL_TRAINING_PROMPT = """You are a senior equity research analyst writing the ideal trade commentary for a training dataset. This commentary will be used to fine-tune a smaller language model to write institutional-quality trade analysis.
 
+You are given a MULTI-SOURCE data package containing: technical indicators, market regime context, sector positioning, fundamental snapshot, insider activity, and macroeconomic context. Your commentary should synthesize across all available data sources, not just describe the technicals. The best analysis identifies when multiple data sources CONVERGE (technical + fundamental + insider all bullish = high conviction) or CONFLICT (great technicals but insiders are selling = lower conviction, prominent risk flag).
+
 You are given:
 1. The structured feature data for a stock ON THE DATE OF THE RECOMMENDATION (this is what the analyst saw)
 2. The actual outcome of the trade (this is what happened afterward)
@@ -104,6 +111,8 @@ DEEPER ANALYSIS:
 """
 
 TRAINING_EXAMPLE_PROMPT = """You are a senior equity research analyst writing the ideal trade commentary for a training dataset. This commentary will be used to fine-tune a smaller language model.
+
+You are given a MULTI-SOURCE data package containing: technical indicators, market regime context, sector positioning, fundamental snapshot, insider activity, and macroeconomic context. Your commentary should synthesize across all available data sources, not just describe the technicals. The best analysis identifies when multiple data sources CONVERGE (technical + fundamental + insider all bullish = high conviction) or CONFLICT (great technicals but insiders are selling = lower conviction, prominent risk flag).
 
 Given the trade setup data AND the actual outcome, write the commentary that a perfect analyst WOULD HAVE written at the time of the recommendation — knowing what actually happened.
 
