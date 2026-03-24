@@ -163,6 +163,80 @@ def cmd_scan(args):
         print("\n[DRY RUN] No journal entries written, no emails sent.")
 
 
+def cmd_morning_watchlist(args):
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    from src.config import load_config
+    from src.data_ingestion.market_data import fetch_ohlcv, fetch_spy_benchmark
+    from src.features.engine import compute_all_features
+    from src.journal.store import log_recommendation
+    from src.packets.template import build_packet_from_features, render_packet
+    from src.packets.watchlist import build_morning_watchlist
+    from src.ranking.ranker import rank_universe, get_top_candidates
+
+    dry_run = getattr(args, "dry_run", False)
+    send_via_email = getattr(args, "email", False)
+
+    config = load_config()
+    et = ZoneInfo("America/New_York")
+    date_str = datetime.now(et).strftime("%Y-%m-%d")
+
+    # Run full scan pipeline
+    universe = get_sp100_universe()
+    print(f"Running morning scan for {len(universe)} tickers...")
+
+    ohlcv = fetch_ohlcv(universe)
+    spy = fetch_spy_benchmark()
+
+    if spy.empty:
+        print("ERROR: Could not fetch SPY benchmark. Aborting.")
+        return
+
+    features = compute_all_features(ohlcv, spy)
+    ranked = rank_universe(features)
+    candidates = get_top_candidates(ranked)
+
+    packet_worthy = candidates["packet_worthy"]
+    watchlist = candidates["watchlist"]
+
+    # Build and print the watchlist email
+    body = build_morning_watchlist(watchlist, packet_worthy, date_str)
+    print(body)
+
+    if send_via_email and not dry_run:
+        subject = f"[TRADE DESK] Morning Watchlist - {date_str}"
+        success = send_email(subject, body)
+        if success:
+            print("\n  -> Morning watchlist email sent.")
+        else:
+            print("\n  -> Failed to send morning watchlist email.")
+
+        # Send individual action packet emails for packet-worthy names
+        for candidate in packet_worthy:
+            ticker = candidate["ticker"]
+            feat = candidate["features"]
+            feat["_score"] = candidate["score"]
+
+            packet = build_packet_from_features(ticker, feat, config)
+            rendered = render_packet(packet)
+
+            rec_id = log_recommendation(
+                packet, feat, candidate["score"], candidate["qualification"]
+            )
+            print(f"  -> Logged {ticker} to journal: {rec_id}")
+
+            pkt_subject = f"[TRADE DESK] Action Packet - {ticker}"
+            success = send_email(pkt_subject, rendered)
+            if success:
+                print(f"  -> Action packet email sent for {ticker}")
+            else:
+                print(f"  -> Failed to send action packet email for {ticker}")
+
+    if dry_run:
+        print("\n[DRY RUN] No journal entries written, no emails sent.")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="AI Research Desk MVP skeleton")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -185,6 +259,11 @@ def build_parser() -> argparse.ArgumentParser:
     scan.add_argument("--email", action="store_true", help="Send packets via email")
     scan.add_argument("--dry-run", action="store_true", help="Run pipeline without writing journal or sending email")
     scan.set_defaults(func=cmd_scan)
+
+    mw = subparsers.add_parser("morning-watchlist", help="Generate and send morning watchlist")
+    mw.add_argument("--email", action="store_true", help="Send watchlist and action packets via email")
+    mw.add_argument("--dry-run", action="store_true", help="Print only, no email or journal writes")
+    mw.set_defaults(func=cmd_morning_watchlist)
 
     return parser
 
