@@ -41,6 +41,12 @@ def get_config():
     return safe
 
 
+@router.get("/cto-report")
+def cto_report(days: int = 7):
+    from src.evaluation.cto_report import generate_cto_report
+    return generate_cto_report(days=days)
+
+
 @router.put("/config")
 def update_config(updates: dict):
     import yaml

@@ -1176,6 +1176,34 @@ def cmd_preflight(args):
     print("")
 
 
+def cmd_cto_report(args):
+    """Generate CTO performance report."""
+    import json
+    from src.evaluation.cto_report import generate_cto_report, format_cto_report
+
+    days = getattr(args, "days", 7)
+    output_json = getattr(args, "json", False)
+
+    report = generate_cto_report(days=days)
+
+    if output_json:
+        print(json.dumps(report, indent=2, default=str))
+    else:
+        print(format_cto_report(report))
+
+    if getattr(args, "email", False):
+        if output_json:
+            body = json.dumps(report, indent=2, default=str)
+        else:
+            body = format_cto_report(report)
+        subject = f"[TRADE DESK] CTO Performance Report ({report['report_period']['start']} to {report['report_period']['end']})"
+        success = send_email(subject, body)
+        if success:
+            print("  -> CTO report email sent.")
+        else:
+            print("  -> Failed to send CTO report email.")
+
+
 def cmd_dashboard(args):
     """Start the FastAPI dashboard server."""
     import uvicorn
@@ -1294,6 +1322,13 @@ def build_parser() -> argparse.ArgumentParser:
     train.add_argument("--rollback", action="store_true", help="Rollback to previous model version")
     train.add_argument("--export", action="store_true", help="Export training data to JSONL only")
     train.set_defaults(func=cmd_train)
+
+    # CTO report
+    cto = subparsers.add_parser("cto-report", help="Generate CTO performance report")
+    cto.add_argument("--days", type=int, default=7, help="Report period in days (default 7)")
+    cto.add_argument("--json", action="store_true", help="Output raw JSON")
+    cto.add_argument("--email", action="store_true", help="Send report via email")
+    cto.set_defaults(func=cmd_cto_report)
 
     # Watch loop and preflight
     watch = subparsers.add_parser("watch", help="Run automated daily cadence loop")
