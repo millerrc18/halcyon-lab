@@ -160,9 +160,17 @@ def compute_all_features(ohlcv_data: dict[str, pd.DataFrame],
     """Compute features for all tickers in the OHLCV data dict.
 
     Skips tickers with fewer than 200 rows of data.
-    Adds earnings date and event-risk classification for each ticker.
+    Adds earnings date, event-risk classification, and market regime for each ticker.
     """
     from src.features.earnings import get_next_earnings_date, check_earnings_overlap
+    from src.features.regime import compute_market_regime
+
+    # Compute market regime ONCE for all tickers
+    try:
+        regime = compute_market_regime(spy, ohlcv_data)
+    except Exception as e:
+        print(f"WARNING: Failed to compute market regime: {e}", file=sys.stderr)
+        regime = {}
 
     results = {}
     for ticker, df in ohlcv_data.items():
@@ -179,6 +187,9 @@ def compute_all_features(ohlcv_data: dict[str, pd.DataFrame],
             feat["hold_overlaps_earnings"] = earnings_info["hold_overlaps_earnings"]
             feat["days_to_earnings"] = earnings_info["days_to_earnings"]
             feat["event_risk_level"] = earnings_info["event_risk_level"]
+
+            # Merge market regime into every ticker's features
+            feat.update(regime)
 
             results[ticker] = feat
         except Exception as e:
