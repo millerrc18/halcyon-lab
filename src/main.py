@@ -56,6 +56,7 @@ def cmd_scan(args):
     from src.data_ingestion.market_data import fetch_ohlcv, fetch_spy_benchmark
     from src.features.engine import compute_all_features
     from src.journal.store import log_recommendation
+    from src.llm.packet_writer import enhance_packet_with_llm
     from src.packets.template import build_packet_from_features, render_packet
     from src.ranking.ranker import rank_universe, get_top_candidates
 
@@ -144,6 +145,7 @@ def cmd_scan(args):
                 print(f"  *** {ticker} — EARNINGS RISK PACKET ***")
 
             packet = build_packet_from_features(ticker, feat, config)
+            packet = enhance_packet_with_llm(packet, feat, config)
             rendered = render_packet(packet)
             print(rendered)
 
@@ -228,6 +230,8 @@ def cmd_morning_watchlist(args):
     from src.data_ingestion.market_data import fetch_ohlcv, fetch_spy_benchmark
     from src.features.engine import compute_all_features
     from src.journal.store import log_recommendation
+    from src.llm.packet_writer import enhance_packet_with_llm
+    from src.llm.watchlist_writer import generate_watchlist_narrative
     from src.packets.template import build_packet_from_features, render_packet
     from src.packets.watchlist import build_morning_watchlist
     from src.ranking.ranker import rank_universe, get_top_candidates
@@ -257,8 +261,12 @@ def cmd_morning_watchlist(args):
     packet_worthy = candidates["packet_worthy"]
     watchlist = candidates["watchlist"]
 
+    # Generate LLM narrative for the watchlist (if available)
+    narrative = generate_watchlist_narrative(packet_worthy, watchlist, config)
+
     # Build and print the watchlist email
-    body = build_morning_watchlist(watchlist, packet_worthy, date_str)
+    body = build_morning_watchlist(watchlist, packet_worthy, date_str,
+                                  narrative=narrative)
     print(body)
 
     if send_via_email and not dry_run:
@@ -276,6 +284,7 @@ def cmd_morning_watchlist(args):
             feat["_score"] = candidate["score"]
 
             packet = build_packet_from_features(ticker, feat, config)
+            packet = enhance_packet_with_llm(packet, feat, config)
             rendered = render_packet(packet)
 
             rec_id = log_recommendation(
@@ -790,6 +799,127 @@ def cmd_postmortem_detail(args):
         print(f"    Repeatable: {'Yes' if rec.get('repeatable_setup') == 1 else 'No' if rec.get('repeatable_setup') == 0 else 'n/a'}")
 
 
+def cmd_watch(args):
+    from src.config import load_config
+    from src.scheduler.watch import WatchLoop
+
+    config = load_config()
+    email_mode = getattr(args, "email_mode", None)
+    loop = WatchLoop(config, email_mode=email_mode)
+    loop.run()
+
+
+def cmd_preflight(args):
+    from src.config import load_config
+    from src.llm.client import is_llm_available, generate
+
+    config = load_config()
+
+    print("")
+    print("HALCYON LAB - PREFLIGHT CHECK")
+    print("=" * 30)
+
+    # 1. Config
+    if config:
+        print("Config:           [OK] settings.local.yaml loaded")
+    else:
+        print("Config:           [FAIL] No config file found")
+
+    # 2. Email
+    email_cfg = config.get("email", {})
+    smtp_ok = (email_cfg.get("smtp_server") and
+               email_cfg.get("username") and
+               email_cfg.get("password") and
+               email_cfg.get("username") != "your-assistant-email@gmail.com")
+    if smtp_ok:
+        print("Email:            [OK] SMTP credentials present")
+    else:
+        print("Email:            [FAIL] SMTP credentials missing or placeholder")
+
+    # 3. Alpaca
+    try:
+        import requests
+        alpaca_cfg = config.get("alpaca", {})
+        api_key = alpaca_cfg.get("api_key", "")
+        api_secret = alpaca_cfg.get("api_secret", "")
+        base_url = alpaca_cfg.get("base_url", "https://paper-api.alpaca.markets")
+        if api_key and api_key != "YOUR_PAPER_API_KEY":
+            resp = requests.get(
+                f"{base_url}/v2/account",
+                headers={
+                    "APCA-API-KEY-ID": api_key,
+                    "APCA-API-SECRET-KEY": api_secret,
+                },
+                timeout=10,
+            )
+            if resp.status_code == 200:
+                acct = resp.json()
+                equity = acct.get("equity", "?")
+                print(f"Alpaca:           [OK] Paper account connected (equity: ${float(equity):,.0f})")
+            else:
+                print(f"Alpaca:           [FAIL] API returned {resp.status_code}")
+        else:
+            print("Alpaca:           [FAIL] API key is placeholder")
+    except Exception as e:
+        print(f"Alpaca:           [FAIL] {e}")
+
+    # 4. Shadow trading
+    shadow_cfg = config.get("shadow_trading", {})
+    if shadow_cfg.get("enabled", False):
+        print("Shadow Trading:   [OK] Enabled")
+    else:
+        print("Shadow Trading:   [WARN] Disabled")
+
+    # 5. Ollama
+    ollama_available = is_llm_available()
+    llm_cfg = config.get("llm", {})
+    model = llm_cfg.get("model", "qwen3:8b")
+    if ollama_available:
+        print(f"Ollama:           [OK] Running (model: {model})")
+    else:
+        print("Ollama:           [FAIL] Not reachable at localhost:11434")
+
+    # 6. LLM test
+    if ollama_available and llm_cfg.get("enabled", False):
+        test_result = generate("Say hello in one sentence.", "You are a helpful assistant.")
+        if test_result:
+            print("LLM:              [OK] Enabled, test generation OK")
+        else:
+            print("LLM:              [WARN] Enabled but test generation failed")
+    elif not llm_cfg.get("enabled", False):
+        print("LLM:              [WARN] Disabled (will use template fallback)")
+    else:
+        print("LLM:              [WARN] Disabled (Ollama not available, will use template fallback)")
+
+    # 7. Journal DB
+    try:
+        import sqlite3
+        from pathlib import Path
+        db_path = Path("ai_research_desk.sqlite3")
+        if db_path.exists():
+            conn = sqlite3.connect(str(db_path))
+            cursor = conn.execute("SELECT COUNT(*) FROM recommendations")
+            count = cursor.fetchone()[0]
+            conn.close()
+            print(f"Journal DB:       [OK] Initialized ({count} recommendations)")
+        else:
+            print("Journal DB:       [WARN] Not initialized (run init-db)")
+    except Exception as e:
+        print(f"Journal DB:       [FAIL] {e}")
+
+    # 8. Bootcamp
+    bootcamp_cfg = config.get("bootcamp", {})
+    if bootcamp_cfg.get("enabled", False):
+        phase = bootcamp_cfg.get("phase", 1)
+        print(f"Bootcamp:         [OK] Enabled (Phase {phase})")
+    else:
+        print("Bootcamp:         [WARN] Disabled")
+
+    print("")
+    print("All checks complete. Run 'python -m src.main watch' to start.")
+    print("")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="AI Research Desk MVP skeleton")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -869,6 +999,15 @@ def build_parser() -> argparse.ArgumentParser:
     postmortem = subparsers.add_parser("postmortem", help="View full postmortem for a trade")
     postmortem.add_argument("recommendation_id", help="Recommendation ID to view")
     postmortem.set_defaults(func=cmd_postmortem_detail)
+
+    # Watch loop and preflight
+    watch = subparsers.add_parser("watch", help="Run automated daily cadence loop")
+    watch.add_argument("--email-mode", choices=["full_stream", "daily_summary", "silent"],
+                       default=None, help="Email delivery mode (default from config)")
+    watch.set_defaults(func=cmd_watch)
+
+    preflight = subparsers.add_parser("preflight", help="Run system preflight checks")
+    preflight.set_defaults(func=cmd_preflight)
 
     return parser
 
