@@ -1,0 +1,299 @@
+"""Watch loop for automated daily cadence.
+
+Simple Python loop — no APScheduler or cron dependencies.
+"""
+
+import time
+import logging
+from datetime import datetime, date
+from zoneinfo import ZoneInfo
+
+from src.config import load_config
+from src.llm.client import is_llm_available
+
+logger = logging.getLogger(__name__)
+
+ET = ZoneInfo("America/New_York")
+
+
+class WatchLoop:
+    """Automated daily cadence loop for the AI Research Desk."""
+
+    def __init__(self, config: dict, email_mode: str | None = None):
+        self.config = config
+        auto_cfg = config.get("automation", {})
+        bootcamp_cfg = config.get("bootcamp", {})
+        bootcamp_enabled = bootcamp_cfg.get("enabled", False)
+
+        self.morning_hour = auto_cfg.get("morning_watchlist_hour_et", 8)
+        self.eod_hour = auto_cfg.get("eod_recap_hour_et", 16)
+        self.market_open_hour = auto_cfg.get("market_open_hour_et", 9)
+        self.market_open_minute = auto_cfg.get("market_open_minute_et", 30)
+        self.market_close_hour = auto_cfg.get("market_close_hour_et", 16)
+
+        # Bootcamp overrides
+        if bootcamp_enabled:
+            self.scan_interval = bootcamp_cfg.get("scan_interval_minutes", 30)
+            default_email_mode = bootcamp_cfg.get("email_mode", "full_stream")
+        else:
+            self.scan_interval = auto_cfg.get("scan_interval_minutes", 30)
+            default_email_mode = "full_stream"
+
+        self.email_mode = email_mode or default_email_mode
+        self.bootcamp_enabled = bootcamp_enabled
+        self.bootcamp_phase = bootcamp_cfg.get("phase", 1) if bootcamp_enabled else None
+
+        # Daily state (in-memory, resets on restart)
+        self._morning_done = False
+        self._eod_done = False
+        self._last_scan_time: datetime | None = None
+        self._daily_packets: list = []
+        self._today: date | None = None
+        self._trades_managed_today = 0
+
+    def _reset_daily_state(self):
+        """Reset daily flags at midnight ET."""
+        self._morning_done = False
+        self._eod_done = False
+        self._last_scan_time = None
+        self._daily_packets = []
+        self._trades_managed_today = 0
+
+    def _is_market_open(self, now: datetime) -> bool:
+        """Check if market is currently open (weekday, between open and close)."""
+        if now.weekday() >= 5:  # Saturday=5, Sunday=6
+            return False
+        market_open = now.replace(hour=self.market_open_hour,
+                                  minute=self.market_open_minute, second=0)
+        market_close = now.replace(hour=self.market_close_hour,
+                                   minute=0, second=0)
+        return market_open <= now < market_close
+
+    def _should_scan(self, now: datetime) -> bool:
+        """Check if enough time has passed since last scan."""
+        if not self._is_market_open(now):
+            return False
+        if self._last_scan_time is None:
+            return True
+        elapsed = (now - self._last_scan_time).total_seconds() / 60
+        return elapsed >= self.scan_interval
+
+    def _print_banner(self):
+        """Print the startup banner."""
+        now = datetime.now(ET)
+        llm_status = "connected" if is_llm_available() else "not available"
+        shadow_cfg = self.config.get("shadow_trading", {})
+        shadow_status = "enabled" if shadow_cfg.get("enabled", False) else "disabled"
+
+        bootcamp_str = (f"enabled (Phase {self.bootcamp_phase})"
+                        if self.bootcamp_enabled else "disabled")
+
+        print(f"""
+{'='*45}
+ HALCYON LAB - WATCH MODE
+{'='*45}
+ Time: {now.strftime('%Y-%m-%d %H:%M:%S')} ET
+ LLM: {llm_status}
+ Shadow Trading: {shadow_status}
+ Email Mode: {self.email_mode}
+ Bootcamp: {bootcamp_str}
+
+ Schedule:
+   Morning watchlist: {self.morning_hour}:00 ET
+   Market scans: every {self.scan_interval} min ({self.market_open_hour}:{self.market_open_minute:02d}-{self.market_close_hour}:00 ET)
+   EOD recap: {self.eod_hour}:00 ET
+
+ Press Ctrl+C to stop.
+{'='*45}
+""")
+
+    def _run_morning_watchlist(self):
+        """Execute the morning watchlist pipeline."""
+        from src.data_ingestion.market_data import fetch_ohlcv, fetch_spy_benchmark
+        from src.features.engine import compute_all_features
+        from src.llm.packet_writer import enhance_packet_with_llm
+        from src.llm.watchlist_writer import generate_watchlist_narrative
+        from src.packets.template import build_packet_from_features, render_packet
+        from src.packets.watchlist import build_morning_watchlist
+        from src.ranking.ranker import rank_universe, get_top_candidates
+        from src.universe.sp100 import get_sp100_universe
+        from src.email.notifier import send_email
+
+        print("[WATCH] Running morning watchlist pipeline...")
+        universe = get_sp100_universe()
+        ohlcv = fetch_ohlcv(universe)
+        spy = fetch_spy_benchmark()
+
+        if spy.empty:
+            print("[WATCH] ERROR: Could not fetch SPY benchmark. Skipping morning watchlist.")
+            return
+
+        features = compute_all_features(ohlcv, spy)
+        ranked = rank_universe(features)
+        candidates = get_top_candidates(ranked)
+        packet_worthy = candidates["packet_worthy"]
+        watchlist = candidates["watchlist"]
+
+        now = datetime.now(ET)
+        date_str = now.strftime("%Y-%m-%d")
+
+        narrative = generate_watchlist_narrative(packet_worthy, watchlist, self.config)
+        body = build_morning_watchlist(watchlist, packet_worthy, date_str,
+                                       narrative=narrative)
+        print(body)
+
+        if self.email_mode in ("full_stream", "daily_summary"):
+            subject = f"[TRADE DESK] Morning Watchlist - {date_str}"
+            send_email(subject, body)
+            print("[WATCH] Morning watchlist email sent.")
+
+    def _run_scan(self):
+        """Execute a market-hours scan cycle."""
+        from src.data_ingestion.market_data import fetch_ohlcv, fetch_spy_benchmark
+        from src.features.engine import compute_all_features
+        from src.journal.store import log_recommendation
+        from src.llm.packet_writer import enhance_packet_with_llm
+        from src.packets.template import build_packet_from_features, render_packet
+        from src.ranking.ranker import rank_universe, get_top_candidates
+        from src.universe.sp100 import get_sp100_universe
+        from src.email.notifier import send_email
+
+        print("[WATCH] Running market scan...")
+        universe = get_sp100_universe()
+        ohlcv = fetch_ohlcv(universe)
+        spy = fetch_spy_benchmark()
+
+        if spy.empty:
+            print("[WATCH] ERROR: Could not fetch SPY benchmark. Skipping scan.")
+            return
+
+        features = compute_all_features(ohlcv, spy)
+        ranked = rank_universe(features)
+        candidates = get_top_candidates(ranked)
+        packet_worthy = candidates["packet_worthy"]
+
+        if not packet_worthy:
+            print(f"[WATCH] No packet-worthy setups. {len(candidates['watchlist'])} on watchlist.")
+            return
+
+        print(f"[WATCH] Found {len(packet_worthy)} packet-worthy names.")
+
+        for candidate in packet_worthy:
+            ticker = candidate["ticker"]
+            feat = candidate["features"]
+            feat["_score"] = candidate["score"]
+
+            packet = build_packet_from_features(ticker, feat, self.config)
+            packet = enhance_packet_with_llm(packet, feat, self.config)
+            rendered = render_packet(packet)
+
+            rec_id = log_recommendation(
+                packet, feat, candidate["score"], candidate["qualification"]
+            )
+            print(f"  -> Logged {ticker}: {rec_id}")
+            self._trades_managed_today += 1
+
+            if self.email_mode == "full_stream":
+                subject = f"[TRADE DESK] Action Packet - {ticker}"
+                send_email(subject, rendered)
+                print(f"  -> Email sent for {ticker}")
+            elif self.email_mode == "daily_summary":
+                self._daily_packets.append(rendered)
+
+    def _run_eod_recap(self):
+        """Execute the EOD recap pipeline."""
+        from src.data_ingestion.market_data import fetch_ohlcv, fetch_spy_benchmark
+        from src.features.engine import compute_all_features
+        from src.journal.store import get_todays_recommendations
+        from src.packets.eod_recap import build_eod_recap
+        from src.ranking.ranker import rank_universe, get_top_candidates
+        from src.universe.sp100 import get_sp100_universe
+        from src.email.notifier import send_email
+
+        print("[WATCH] Running EOD recap pipeline...")
+        universe = get_sp100_universe()
+        ohlcv = fetch_ohlcv(universe)
+        spy = fetch_spy_benchmark()
+
+        if spy.empty:
+            print("[WATCH] ERROR: Could not fetch SPY benchmark. Skipping EOD recap.")
+            return
+
+        features = compute_all_features(ohlcv, spy)
+        ranked = rank_universe(features)
+        candidates = get_top_candidates(ranked)
+        journal_entries = get_todays_recommendations()
+
+        now = datetime.now(ET)
+        date_str = now.strftime("%Y-%m-%d")
+
+        body = build_eod_recap(candidates["packet_worthy"], candidates["watchlist"],
+                               journal_entries, date_str)
+
+        # Append daily summary buffer if in daily_summary mode
+        if self.email_mode == "daily_summary" and self._daily_packets:
+            body += "\n\n" + "=" * 60 + "\nDAILY PACKET SUMMARY\n" + "=" * 60 + "\n"
+            body += "\n\n".join(self._daily_packets)
+
+        print(body)
+
+        subject = f"[TRADE DESK] EOD Recap - {date_str}"
+        send_email(subject, body)
+        print("[WATCH] EOD recap email sent.")
+
+    def run(self):
+        """Main watch loop. Checks every 60 seconds."""
+        self._print_banner()
+
+        try:
+            while True:
+                now = datetime.now(ET)
+
+                # Reset daily state at midnight
+                today = now.date()
+                if self._today is not None and today != self._today:
+                    self._reset_daily_state()
+                    print(f"[WATCH] New day: {today}. Daily state reset.")
+                self._today = today
+
+                hour = now.hour
+                time_str = now.strftime("%H:%M")
+
+                # 1. Morning watchlist
+                if hour == self.morning_hour and not self._morning_done:
+                    self._run_morning_watchlist()
+                    self._morning_done = True
+
+                # 2. Market hours scan
+                elif self._should_scan(now):
+                    print(f"[WATCH] {time_str} ET — market open, scanning...")
+                    self._run_scan()
+                    self._last_scan_time = now
+
+                # 3. EOD recap
+                elif hour == self.eod_hour and not self._eod_done:
+                    self._run_eod_recap()
+                    self._eod_done = True
+
+                # 4. Status log
+                else:
+                    if self._is_market_open(now):
+                        print(f"[WATCH] {time_str} ET — market open, next scan in "
+                              f"{self._minutes_until_next_scan(now):.0f} min")
+                    else:
+                        print(f"[WATCH] {time_str} ET — market closed")
+
+                time.sleep(60)
+
+        except KeyboardInterrupt:
+            print(f"\nShutting down watch mode...")
+            print(f"Final shadow status:")
+            print(f"  {self._trades_managed_today} trades managed today")
+            print("Goodbye.")
+
+    def _minutes_until_next_scan(self, now: datetime) -> float:
+        """Calculate minutes until next scan is due."""
+        if self._last_scan_time is None:
+            return 0
+        elapsed = (now - self._last_scan_time).total_seconds() / 60
+        return max(0, self.scan_interval - elapsed)
