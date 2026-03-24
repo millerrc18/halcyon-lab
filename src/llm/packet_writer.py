@@ -58,14 +58,21 @@ Sector: {features.get('sector', 'n/a')} | Rank: {features.get('sector_rs_rank', 
 === INSIDER ACTIVITY ===
 {insider_text}"""
 
-    # SECTION 6: Macro Context (new)
+    # SECTION 6: Recent News
+    news_text = features.get('news_summary', 'No recent news')
+    prompt += f"""
+
+=== RECENT NEWS ===
+{news_text}"""
+
+    # SECTION 7: Macro Context
     macro_text = features.get('macro_summary', 'No macro data available')
     prompt += f"""
 
 === MACRO CONTEXT ===
 {macro_text}"""
 
-    # SECTION 7: Entry/Stop/Targets (existing)
+    # SECTION 8: Entry/Stop/Targets
     prompt += f"""
 
 === TRADE PARAMETERS ===

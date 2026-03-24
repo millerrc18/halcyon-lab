@@ -66,6 +66,7 @@ data_enrichment:
   fred_api_key: "your-fred-api-key"         # Free at fred.stlouisfed.org
   cache_hours: 24                            # Cache fundamental/macro data
   insider_lookback_days: 90
+  include_news_in_backfill: true         # Include Finnhub news in historical backfill
 
 risk_governor:
   enabled: true

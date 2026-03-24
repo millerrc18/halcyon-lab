@@ -66,6 +66,28 @@ def scan_historical_date(data: dict, scan_date: str) -> list[dict]:
             features["insider_summary"] = "Not available for historical scan"
             features["macro_summary"] = "Not available for historical scan"
 
+            # Fetch historical news if configured
+            try:
+                from src.config import load_config
+                cfg = load_config()
+                enrichment_cfg = cfg.get("data_enrichment", {})
+                if enrichment_cfg.get("include_news_in_backfill", True):
+                    from src.data_enrichment.news import fetch_historical_news, format_news_summary
+                    finnhub_key = enrichment_cfg.get("finnhub_api_key")
+                    news_data = fetch_historical_news(
+                        ticker, as_of_date=scan_date,
+                        finnhub_api_key=finnhub_key,
+                    )
+                    features["news_summary"] = format_news_summary(news_data)
+                    features["news_sentiment"] = (news_data or {}).get("news_sentiment", "no_news")
+                else:
+                    features["news_summary"] = "News data not available for historical scan"
+                    features["news_sentiment"] = "no_news"
+            except Exception as e:
+                features["news_summary"] = "News data not available for historical scan"
+                features["news_sentiment"] = "no_news"
+                logger.debug("Historical news failed for %s on %s: %s", ticker, scan_date, e)
+
             score = _score_ticker(features)
             if score < PACKET_WORTHY_THRESHOLD:
                 continue
@@ -285,6 +307,9 @@ Sector: {features.get('sector', 'n/a')} | Rank: {features.get('sector_rs_rank', 
 
 === INSIDER ACTIVITY ===
 {features.get('insider_summary', 'Not available for historical scan')}
+
+=== RECENT NEWS ===
+{features.get('news_summary', 'News data not available for historical scan')}
 
 === MACRO CONTEXT ===
 {features.get('macro_summary', 'Not available for historical scan')}

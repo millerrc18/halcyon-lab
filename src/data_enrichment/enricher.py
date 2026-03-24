@@ -89,6 +89,24 @@ def enrich_features(features: dict[str, dict], config: dict) -> dict[str, dict]:
             missing_insiders += 1
             logger.debug("[ENRICHMENT] Insiders failed for %s: %s", ticker, e)
 
+        # News data
+        try:
+            from src.data_enrichment.news import (
+                fetch_recent_news,
+                format_news_summary,
+            )
+            news_data = fetch_recent_news(
+                ticker,
+                finnhub_api_key=finnhub_key,
+                cache_hours=min(cache_hours, 6),
+            )
+            feat["news_summary"] = format_news_summary(news_data)
+            feat["news_sentiment"] = (news_data or {}).get("news_sentiment", "no_news")
+        except Exception as e:
+            feat["news_summary"] = "No recent news"
+            feat["news_sentiment"] = "no_news"
+            logger.debug("[ENRICHMENT] News failed for %s: %s", ticker, e)
+
         enriched_count += 1
 
     logger.info(
