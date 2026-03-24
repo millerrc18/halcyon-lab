@@ -11,6 +11,7 @@ import Training from './pages/Training'
 import Review from './pages/Review'
 import CTOReport from './pages/CTOReport'
 import Settings from './pages/Settings'
+import Roadmap from './pages/Roadmap'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -91,6 +92,7 @@ export default function App() {
                 <Route path="/review" element={<Review />} />
                 <Route path="/cto-report" element={<CTOReport />} />
                 <Route path="/settings" element={<Settings />} />
+                <Route path="/roadmap" element={<Roadmap />} />
               </Route>
             </Routes>
           </BrowserRouter>
