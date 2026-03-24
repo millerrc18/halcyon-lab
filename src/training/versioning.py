@@ -56,6 +56,15 @@ def init_training_tables(db_path: str = "ai_research_desk.sqlite3") -> None:
         except sqlite3.OperationalError:
             pass
 
+        # Migration: add curriculum columns to training_examples
+        for col, col_type in [("difficulty", "TEXT"), ("curriculum_stage", "TEXT"),
+                               ("quality_score_auto", "REAL")]:
+            try:
+                conn.execute(f"ALTER TABLE training_examples ADD COLUMN {col} {col_type}")
+                conn.commit()
+            except sqlite3.OperationalError:
+                pass
+
         # Model evaluations table for A/B testing
         conn.execute("""
             CREATE TABLE IF NOT EXISTS model_evaluations (

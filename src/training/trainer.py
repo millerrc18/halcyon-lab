@@ -24,97 +24,145 @@ logger = logging.getLogger(__name__)
 
 ET = ZoneInfo("America/New_York")
 
-TRAIN_SCRIPT = '''# training_data/train.py
-# Auto-generated fine-tuning script for Halcyon Lab
-# Runs on RTX 3060 12GB using Unsloth + QLoRA
-
-import json
-import sys
+TRAIN_SCRIPT = '''# training_data/train.py — legacy single-stage (kept for backward compat)
+import json, sys
 
 def main():
-    # Install check
-    try:
-        from unsloth import FastLanguageModel
-    except ImportError:
-        print("ERROR: Unsloth not installed. Run: pip install unsloth")
-        sys.exit(1)
-
-    # Load base model
-    model, tokenizer = FastLanguageModel.from_pretrained(
-        model_name="unsloth/Qwen3-8B",
-        max_seq_length=2048,
-        dtype=None,  # Auto-detect
-        load_in_4bit=True,
-    )
-
-    # Apply LoRA
-    model = FastLanguageModel.get_peft_model(
-        model,
-        r=16,
-        lora_alpha=32,
-        lora_dropout=0.05,
-        target_modules=["q_proj", "k_proj", "v_proj", "o_proj",
-                        "gate_proj", "up_proj", "down_proj"],
-        bias="none",
-        use_gradient_checkpointing="unsloth",
-    )
-
-    # Load dataset
+    from unsloth import FastLanguageModel
     from datasets import Dataset
-    examples = []
-    with open("training_data/dataset.jsonl", "r") as f:
-        for line in f:
-            examples.append(json.loads(line))
-
-    # Format for chat template
-    def format_example(example):
-        return {
-            "text": tokenizer.apply_chat_template(
-                [
-                    {"role": "system", "content": example["instruction"]},
-                    {"role": "user", "content": example["input"]},
-                    {"role": "assistant", "content": example["output"]},
-                ],
-                tokenize=False,
-            )
-        }
-
-    dataset = Dataset.from_list(examples).map(format_example)
-
-    # Train
     from trl import SFTTrainer
     from transformers import TrainingArguments
 
-    trainer = SFTTrainer(
-        model=model,
-        tokenizer=tokenizer,
-        train_dataset=dataset,
-        dataset_text_field="text",
-        max_seq_length=2048,
-        args=TrainingArguments(
-            per_device_train_batch_size=1,
-            gradient_accumulation_steps=16,
-            num_train_epochs=1,
-            learning_rate=2e-4,
-            fp16=True,
-            logging_steps=10,
-            output_dir="training_data/checkpoints",
-            report_to="none",
-        ),
-    )
+    model, tokenizer = FastLanguageModel.from_pretrained(
+        model_name="unsloth/Qwen3-8B", max_seq_length=2048, dtype=None, load_in_4bit=True)
+    model = FastLanguageModel.get_peft_model(model,
+        r=16, lora_alpha=32, lora_dropout=0.05,
+        target_modules=["q_proj","k_proj","v_proj","o_proj","gate_proj","up_proj","down_proj"],
+        bias="none", use_gradient_checkpointing="unsloth")
+
+    examples = []
+    with open("training_data/dataset.jsonl") as f:
+        for line in f: examples.append(json.loads(line))
+
+    def fmt(ex):
+        return {"text": tokenizer.apply_chat_template(
+            [{"role":"system","content":ex["instruction"]},
+             {"role":"user","content":ex["input"]},
+             {"role":"assistant","content":ex["output"]}], tokenize=False)}
+
+    dataset = Dataset.from_list(examples).map(fmt)
+    trainer = SFTTrainer(model=model, tokenizer=tokenizer,
+        train_dataset=dataset, dataset_text_field="text", max_seq_length=2048,
+        args=TrainingArguments(per_device_train_batch_size=1, gradient_accumulation_steps=16,
+            num_train_epochs=1, learning_rate=2e-4, fp16=True, logging_steps=10,
+            output_dir="training_data/checkpoints", report_to="none"))
     trainer.train()
 
-    # Save and export to GGUF
     model.save_pretrained("training_data/lora_adapter")
     tokenizer.save_pretrained("training_data/lora_adapter")
+    model.save_pretrained_gguf("training_data/halcyon-latest", tokenizer, quantization_method="q5_k_m")
+    print("TRAINING COMPLETE")
 
-    # Merge and export to GGUF Q5_K_M
-    model.save_pretrained_gguf(
-        "training_data/halcyon-latest",
-        tokenizer,
-        quantization_method="q5_k_m",
-    )
-    print("TRAINING COMPLETE: training_data/halcyon-latest-Q5_K_M.gguf")
+if __name__ == "__main__":
+    main()
+'''
+
+CURRICULUM_TRAIN_SCRIPT = '''
+import json, sys
+
+def main():
+    from unsloth import FastLanguageModel
+    from datasets import Dataset
+    from trl import SFTTrainer
+    from transformers import TrainingArguments
+
+    model, tokenizer = FastLanguageModel.from_pretrained(
+        model_name="unsloth/Qwen3-8B", max_seq_length=2048, dtype=None, load_in_4bit=True)
+
+    model = FastLanguageModel.get_peft_model(model,
+        r=16, lora_alpha=32, lora_dropout=0.05,
+        target_modules=["q_proj","k_proj","v_proj","o_proj","gate_proj","up_proj","down_proj"],
+        bias="none", use_gradient_checkpointing="unsloth")
+
+    def load_stage(fn):
+        examples = []
+        with open(fn) as f:
+            for line in f: examples.append(json.loads(line))
+        def fmt(ex):
+            return {"text": tokenizer.apply_chat_template(
+                [{"role":"system","content":ex["instruction"]},
+                 {"role":"user","content":ex["input"]},
+                 {"role":"assistant","content":ex["output"]}], tokenize=False)}
+        return Dataset.from_list(examples).map(fmt)
+
+    stages = [
+        ("STRUCTURE", "training_data/stage1_structure.jsonl", 3e-4),
+        ("EVIDENCE",  "training_data/stage2_evidence.jsonl",  2e-4),
+        ("DECISION",  "training_data/stage3_decision.jsonl",  1e-4),
+    ]
+
+    for name, path, lr in stages:
+        print(f"=== STAGE: {name} ===")
+        try:
+            ds = load_stage(path)
+        except FileNotFoundError:
+            print(f"  No data for {name}, skipping")
+            continue
+        if len(ds) == 0:
+            print(f"  Empty dataset for {name}, skipping")
+            continue
+        trainer = SFTTrainer(model=model, tokenizer=tokenizer,
+            train_dataset=ds, dataset_text_field="text", max_seq_length=2048,
+            args=TrainingArguments(
+                per_device_train_batch_size=1, gradient_accumulation_steps=16,
+                num_train_epochs=1, learning_rate=lr, fp16=True,
+                logging_steps=10, output_dir=f"training_data/checkpoints/{name.lower()}",
+                report_to="none"))
+        trainer.train()
+        print(f"  {name} complete: {len(ds)} examples")
+
+    model.save_pretrained("training_data/lora_adapter")
+    tokenizer.save_pretrained("training_data/lora_adapter")
+    model.save_pretrained_gguf("training_data/halcyon-latest", tokenizer, quantization_method="q5_k_m")
+    print("TRAINING COMPLETE")
+
+if __name__ == "__main__":
+    main()
+'''
+
+DPO_TRAIN_SCRIPT = '''
+import json, sys
+
+def main():
+    from unsloth import FastLanguageModel
+    from trl import DPOTrainer, DPOConfig
+    from datasets import Dataset
+
+    model, tokenizer = FastLanguageModel.from_pretrained(
+        model_name="training_data/lora_adapter", max_seq_length=2048, dtype=None, load_in_4bit=True)
+
+    model = FastLanguageModel.get_peft_model(model,
+        r=8, lora_alpha=16, lora_dropout=0.0,
+        target_modules=["q_proj","k_proj","v_proj","o_proj","gate_proj","up_proj","down_proj"],
+        bias="none", use_gradient_checkpointing="unsloth")
+
+    pairs = []
+    with open("training_data/preference_pairs.jsonl") as f:
+        for line in f: pairs.append(json.loads(line))
+
+    dataset = Dataset.from_list(pairs)
+
+    trainer = DPOTrainer(model=model, tokenizer=tokenizer, train_dataset=dataset,
+        args=DPOConfig(
+            per_device_train_batch_size=1, gradient_accumulation_steps=8,
+            num_train_epochs=3, learning_rate=5e-5, beta=0.1, fp16=True,
+            logging_steps=10, output_dir="training_data/checkpoints/dpo", report_to="none"))
+    trainer.train()
+
+    model.save_pretrained("training_data/lora_adapter_dpo")
+    tokenizer.save_pretrained("training_data/lora_adapter_dpo")
+    model.save_pretrained_gguf("training_data/halcyon-latest", tokenizer, quantization_method="q5_k_m")
+    print("DPO TRAINING COMPLETE")
 
 if __name__ == "__main__":
     main()
@@ -163,16 +211,15 @@ def export_training_data(
     holdout_pct: float = 0.15,
     db_path: str = "ai_research_desk.sqlite3",
 ) -> tuple[dict, int]:
-    """Export training data with chronological train/validation split.
-
-    The most recent holdout_pct of examples (by date) are held out for validation.
-    The model NEVER trains on holdout examples. After training, inference on
-    the holdout measures generalization quality.
+    """Export training data with curriculum split and chronological holdout.
 
     Creates:
-        training_data/dataset.jsonl            (training split only)
-        training_data/holdout.jsonl            (validation split — never trained on)
-        training_data/split_info.json          (metadata about the split)
+        training_data/dataset.jsonl            (combined training — backward compat)
+        training_data/stage1_structure.jsonl    (easy/clean examples)
+        training_data/stage2_evidence.jsonl     (multi-source examples)
+        training_data/stage3_decision.jsonl     (hard/conflicting examples)
+        training_data/holdout.jsonl             (validation split — never trained on)
+        training_data/split_info.json           (metadata about the split)
 
     Returns:
         ({"training": N, "holdout": N}, total_count)
@@ -180,17 +227,25 @@ def export_training_data(
     init_training_tables(db_path)
     Path(output_dir).mkdir(parents=True, exist_ok=True)
 
-    import sqlite3
-    with sqlite3.connect(db_path) as conn:
-        conn.row_factory = sqlite3.Row
+    # Classify untagged examples first
+    try:
+        from src.training.curriculum import classify_all_examples
+        classify_all_examples(db_path)
+    except Exception as e:
+        logger.warning("[TRAINING] Failed to classify examples: %s", e)
+
+    import sqlite3 as _sqlite3
+    with _sqlite3.connect(db_path) as conn:
+        conn.row_factory = _sqlite3.Row
         rows = conn.execute(
-            "SELECT instruction, input_text, output_text, created_at, quality_score "
+            "SELECT instruction, input_text, output_text, created_at, quality_score, "
+            "curriculum_stage, quality_score_auto "
             "FROM training_examples ORDER BY created_at ASC"
         ).fetchall()
 
     if not rows:
-        # Write empty files
-        for fname in ("dataset.jsonl", "holdout.jsonl"):
+        for fname in ("dataset.jsonl", "holdout.jsonl", "stage1_structure.jsonl",
+                       "stage2_evidence.jsonl", "stage3_decision.jsonl"):
             open(str(Path(output_dir) / fname), "w").close()
         split_info = {"total_examples": 0, "training_examples": 0, "holdout_examples": 0}
         with open(str(Path(output_dir) / "split_info.json"), "w") as f:
@@ -200,49 +255,59 @@ def export_training_data(
     examples = [dict(row) for row in rows]
     total = len(examples)
 
+    # Quality filter: only export examples where quality_score_auto >= 3.0 (or NULL)
+    examples = [e for e in examples
+                if e.get("quality_score_auto") is None or e["quality_score_auto"] >= 3.0]
+
     # Calculate split point with 5-day temporal gap
-    split_idx = int(total * (1 - holdout_pct))
-    if split_idx >= total:
-        split_idx = total - 1
+    split_idx = int(len(examples) * (1 - holdout_pct))
+    if split_idx >= len(examples):
+        split_idx = len(examples) - 1
 
-    # Find the date at the split point and add 5-day gap
-    split_date = examples[split_idx]["created_at"][:10] if split_idx < total else ""
+    split_date = examples[split_idx]["created_at"][:10] if split_idx < len(examples) else ""
 
-    # Apply temporal gap: find first holdout example that's >= 5 trading days after last train
-    from datetime import datetime, timedelta
+    from datetime import datetime as _dt, timedelta as _td
+    holdout_start_idx = split_idx
     if split_date:
         try:
-            split_dt = datetime.fromisoformat(split_date)
-            gap_dt = split_dt + timedelta(days=7)  # ~5 trading days
+            split_dt = _dt.fromisoformat(split_date)
+            gap_dt = split_dt + _td(days=7)
             gap_date = gap_dt.strftime("%Y-%m-%d")
-
-            # Adjust holdout start to after the gap
-            holdout_start_idx = split_idx
-            for i in range(split_idx, total):
+            for i in range(split_idx, len(examples)):
                 if examples[i]["created_at"][:10] >= gap_date:
                     holdout_start_idx = i
                     break
             else:
-                holdout_start_idx = total  # No examples after gap
+                holdout_start_idx = len(examples)
         except (ValueError, TypeError):
             holdout_start_idx = split_idx
-    else:
-        holdout_start_idx = split_idx
 
     train_examples = examples[:split_idx]
     holdout_examples = examples[holdout_start_idx:]
 
-    # Write training data
-    dataset_path = str(Path(output_dir) / "dataset.jsonl")
-    with open(dataset_path, "w") as f:
-        for ex in train_examples:
-            f.write(json.dumps({
-                "instruction": ex["instruction"],
-                "input": ex["input_text"],
-                "output": ex["output_text"],
-            }) + "\n")
+    def _write_jsonl(path, exs):
+        with open(path, "w") as f:
+            for ex in exs:
+                f.write(json.dumps({
+                    "instruction": ex["instruction"],
+                    "input": ex["input_text"],
+                    "output": ex["output_text"],
+                }) + "\n")
 
-    # Write holdout data
+    # Write combined dataset (backward compat)
+    _write_jsonl(str(Path(output_dir) / "dataset.jsonl"), train_examples)
+
+    # Write stage-split files
+    stage_map = {"structure": [], "evidence": [], "decision": []}
+    for ex in train_examples:
+        stage = ex.get("curriculum_stage") or "structure"
+        stage_map.setdefault(stage, []).append(ex)
+
+    _write_jsonl(str(Path(output_dir) / "stage1_structure.jsonl"), stage_map.get("structure", []))
+    _write_jsonl(str(Path(output_dir) / "stage2_evidence.jsonl"), stage_map.get("evidence", []))
+    _write_jsonl(str(Path(output_dir) / "stage3_decision.jsonl"), stage_map.get("decision", []))
+
+    # Write holdout
     holdout_path = str(Path(output_dir) / "holdout.jsonl")
     with open(holdout_path, "w") as f:
         for ex in holdout_examples:
@@ -253,23 +318,22 @@ def export_training_data(
                 "created_at": ex["created_at"],
             }) + "\n")
 
-    # Write split metadata
     train_dates = [e["created_at"][:10] for e in train_examples] if train_examples else []
     holdout_dates = [e["created_at"][:10] for e in holdout_examples] if holdout_examples else []
 
     gap_days = 0
     if train_dates and holdout_dates:
         try:
-            last_train = datetime.fromisoformat(train_dates[-1])
-            first_holdout = datetime.fromisoformat(holdout_dates[0])
-            gap_days = (first_holdout - last_train).days
+            gap_days = (_dt.fromisoformat(holdout_dates[0]) - _dt.fromisoformat(train_dates[-1])).days
         except (ValueError, TypeError):
             pass
 
     split_info = {
         "total_examples": total,
+        "quality_filtered": total - len(examples) + len(holdout_examples) + len(train_examples),
         "training_examples": len(train_examples),
         "holdout_examples": len(holdout_examples),
+        "stage_counts": {k: len(v) for k, v in stage_map.items()},
         "training_date_range": {
             "start": train_dates[0] if train_dates else None,
             "end": train_dates[-1] if train_dates else None,
@@ -391,11 +455,18 @@ def run_fine_tune(db_path: str = "ai_research_desk.sqlite3") -> dict | None:
     holdout_count = split_counts.get("holdout", 0)
     print(f"[TRAINING] Exported {train_count} training + {holdout_count} holdout examples")
 
-    # Step 2: Write training script
+    # Step 2: Write training script (curriculum if stage files exist, legacy otherwise)
     script_path = Path("training_data") / "train.py"
     script_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(script_path, "w") as f:
-        f.write(TRAIN_SCRIPT)
+    stage1 = Path("training_data") / "stage1_structure.jsonl"
+    if stage1.exists() and stage1.stat().st_size > 0:
+        with open(script_path, "w") as f:
+            f.write(CURRICULUM_TRAIN_SCRIPT)
+        print("[TRAINING] Using three-stage curriculum training")
+    else:
+        with open(script_path, "w") as f:
+            f.write(TRAIN_SCRIPT)
+        print("[TRAINING] Using single-stage training (no curriculum data)")
 
     print("[TRAINING] Running fine-tuning script...")
 
@@ -506,6 +577,31 @@ def run_fine_tune(db_path: str = "ai_research_desk.sqlite3") -> dict | None:
         holdout_score=holdout_score,
         holdout_details=holdout_json,
     )
+
+    # Step 7: DPO refinement (if enough preference pairs exist)
+    try:
+        from src.training.dpo_pipeline import export_preference_pairs
+        dpo_count = export_preference_pairs(output_dir="training_data", db_path=db_path)
+        if dpo_count >= 100:
+            print(f"[TRAINING] Running DPO refinement with {dpo_count} preference pairs...")
+            dpo_script_path = Path("training_data") / "train_dpo.py"
+            with open(dpo_script_path, "w") as f:
+                f.write(DPO_TRAIN_SCRIPT)
+            try:
+                dpo_result = subprocess.run(
+                    [sys.executable, str(dpo_script_path)],
+                    capture_output=True, text=True, timeout=3600,
+                )
+                if dpo_result.returncode == 0:
+                    print("[TRAINING] DPO refinement complete")
+                else:
+                    print(f"[TRAINING] DPO failed (non-critical): {dpo_result.stderr[-500:]}")
+            except Exception as e:
+                print(f"[TRAINING] DPO failed (non-critical): {e}")
+        elif dpo_count > 0:
+            print(f"[TRAINING] {dpo_count} preference pairs (need >= 100 for DPO, skipping)")
+    except Exception as e:
+        logger.debug("[TRAINING] DPO step skipped: %s", e)
 
     print(f"[TRAINING] Fine-tune complete. Registered {version_name} ({example_count} examples)")
 
