@@ -1,0 +1,288 @@
+"""Historical scanner with outcome tracking and training example generation.
+
+Runs the scoring engine against point-in-time historical data, tracks
+real trade outcomes, and builds training examples from real setups.
+"""
+
+import logging
+
+import pandas as pd
+
+from src.features.engine import compute_features
+from src.llm.prompts import HISTORICAL_TRAINING_PROMPT
+from src.ranking.ranker import _score_ticker
+from src.training.historical_data import slice_to_date
+from src.universe.company_names import get_company_name
+
+logger = logging.getLogger(__name__)
+
+# Normal thresholds (not bootcamp) — we want quality setups
+PACKET_WORTHY_THRESHOLD = 70
+WATCHLIST_THRESHOLD = 45
+
+
+def scan_historical_date(data: dict, scan_date: str) -> list[dict]:
+    """Run the full scan pipeline as-of a specific date.
+
+    Simulates what the system would have produced on that date,
+    using ONLY data available on or before that date.
+
+    Args:
+        data: Output of fetch_historical_universe().
+        scan_date: ISO date string.
+
+    Returns:
+        List of qualified candidates with features, scores, and price levels.
+    """
+    ohlcv_dict, spy_df = slice_to_date(data, scan_date)
+
+    if spy_df.empty or len(spy_df) < 200:
+        return []
+
+    # Compute features for all tickers (skip earnings — not available historically)
+    candidates = []
+    for ticker, df in ohlcv_dict.items():
+        try:
+            features = compute_features(ticker, df, spy_df)
+            # Set earnings to "none" — historical earnings dates aren't available
+            features["earnings_date"] = None
+            features["hold_overlaps_earnings"] = False
+            features["days_to_earnings"] = None
+            features["event_risk_level"] = "none"
+
+            score = _score_ticker(features)
+            if score < PACKET_WORTHY_THRESHOLD:
+                continue
+
+            # Compute entry/stop/target levels
+            entry_price = features["current_price"]
+            atr = features["atr_14"]
+            stop_price = entry_price - (2 * atr)
+            target_1 = entry_price + (1.5 * atr)
+            target_2 = entry_price + (3 * atr)
+
+            candidates.append({
+                "scan_date": scan_date,
+                "ticker": ticker,
+                "score": score,
+                "qualification": "packet_worthy",
+                "features": features,
+                "entry_price": round(entry_price, 2),
+                "stop_price": round(stop_price, 2),
+                "target_1": round(target_1, 2),
+                "target_2": round(target_2, 2),
+            })
+        except Exception as e:
+            logger.debug("Failed to compute features for %s on %s: %s",
+                         ticker, scan_date, e)
+            continue
+
+    # Sort by score descending
+    candidates.sort(key=lambda x: x["score"], reverse=True)
+    return candidates
+
+
+def compute_outcome(
+    data: dict,
+    ticker: str,
+    entry_date: str,
+    entry_price: float,
+    stop_price: float,
+    target_1: float,
+    target_2: float,
+    max_hold_days: int = 15,
+) -> dict | None:
+    """Track what actually happened after a historical entry.
+
+    Simulates the shadow trade logic: check each subsequent day for
+    stop hit, target hit, or timeout.
+
+    Returns:
+        Outcome dict, or None if insufficient future data exists.
+    """
+    ticker_df = data["tickers"].get(ticker)
+    if ticker_df is None:
+        return None
+
+    entry_ts = pd.Timestamp(entry_date)
+    future = ticker_df[ticker_df.index > entry_ts]
+
+    if len(future) < 2:
+        return None
+
+    # Limit to max_hold_days trading days
+    hold_data = future.iloc[:max_hold_days]
+
+    exit_date = None
+    exit_price = None
+    exit_reason = None
+
+    # Track MFE and MAE
+    max_favorable = 0.0
+    max_adverse = 0.0
+
+    for i, (date, row) in enumerate(hold_data.iterrows()):
+        day_high = float(row["High"])
+        day_low = float(row["Low"])
+        day_close = float(row["Close"])
+
+        # Update MFE/MAE using intraday prices
+        favorable = day_high - entry_price
+        adverse = entry_price - day_low
+        max_favorable = max(max_favorable, favorable)
+        max_adverse = max(max_adverse, adverse)
+
+        # Check stop and target hits
+        stop_hit = day_low <= stop_price
+        t1_hit = day_high >= target_1
+        t2_hit = day_high >= target_2
+
+        # If stop and target hit on same day, assume stop hit first (conservative)
+        if stop_hit and (t1_hit or t2_hit):
+            exit_date = date.strftime("%Y-%m-%d")
+            exit_price = stop_price
+            exit_reason = "stop_hit"
+            break
+        elif stop_hit:
+            exit_date = date.strftime("%Y-%m-%d")
+            exit_price = stop_price
+            exit_reason = "stop_hit"
+            break
+        elif t2_hit:
+            exit_date = date.strftime("%Y-%m-%d")
+            exit_price = target_2
+            exit_reason = "target_2_hit"
+            break
+        elif t1_hit:
+            exit_date = date.strftime("%Y-%m-%d")
+            exit_price = target_1
+            exit_reason = "target_1_hit"
+            break
+
+    # Timeout: neither stop nor target hit within max_hold_days
+    if exit_reason is None:
+        if len(hold_data) == 0:
+            return None
+        last_row = hold_data.iloc[-1]
+        exit_date = hold_data.index[-1].strftime("%Y-%m-%d")
+        exit_price = float(last_row["Close"])
+        exit_reason = "timeout"
+
+    pnl_dollars = round(exit_price - entry_price, 2)
+    pnl_pct = round(pnl_dollars / entry_price * 100, 2)
+
+    # Duration in trading days
+    entry_ts_date = pd.Timestamp(entry_date)
+    exit_ts_date = pd.Timestamp(exit_date)
+    # Count trading days between entry and exit
+    trading_days = len(ticker_df[(ticker_df.index > entry_ts_date) &
+                                  (ticker_df.index <= exit_ts_date)])
+
+    # Classify outcome quality
+    outcome_quality = _classify_outcome_quality(
+        exit_reason, max_favorable, max_adverse
+    )
+
+    return {
+        "exit_date": exit_date,
+        "exit_price": round(exit_price, 2),
+        "exit_reason": exit_reason,
+        "pnl_dollars": pnl_dollars,
+        "pnl_pct": pnl_pct,
+        "duration_days": trading_days,
+        "max_favorable_excursion": round(max_favorable, 2),
+        "max_adverse_excursion": round(-max_adverse, 2),
+        "outcome_quality": outcome_quality,
+    }
+
+
+def _classify_outcome_quality(
+    exit_reason: str, mfe: float, mae: float
+) -> str:
+    """Classify outcome quality based on exit reason and excursions.
+
+    - clean_win: target hit, MFE > 2x MAE
+    - clean_loss: stop hit, MAE > 2x MFE
+    - messy: target or stop hit but MFE and MAE both significant
+    - timeout: neither target nor stop hit
+    """
+    if exit_reason == "timeout":
+        return "timeout"
+
+    if exit_reason in ("target_1_hit", "target_2_hit"):
+        if mae == 0 or mfe > 2 * mae:
+            return "clean_win"
+        return "messy"
+
+    if exit_reason == "stop_hit":
+        if mfe == 0 or mae > 2 * mfe:
+            return "clean_loss"
+        return "messy"
+
+    return "messy"
+
+
+def generate_backfill_example(candidate: dict, outcome: dict) -> dict:
+    """Build the training example structure from a historical scan + outcome.
+
+    The input_text matches the format of _build_feature_prompt() in
+    packet_writer.py so the model sees the same format during training
+    as during inference.
+
+    Returns:
+        {
+            "instruction": HISTORICAL_TRAINING_PROMPT,
+            "input_text": "...",
+            "output_text": None,  # filled by Claude API
+            "metadata": { ... }
+        }
+    """
+    features = candidate["features"]
+    ticker = candidate["ticker"]
+    company_name = get_company_name(ticker)
+
+    # Build input_text in the same format as _build_feature_prompt()
+    input_text = f"""Ticker: {ticker} ({company_name})
+Current Price: ${features.get('current_price', 0):.2f}
+Trend State: {features.get('trend_state', 'n/a')} | SMA50 slope: {features.get('sma50_slope', 'n/a')} | SMA200 slope: {features.get('sma200_slope', 'n/a')}
+Price vs SMA50: {features.get('price_vs_sma50_pct', 0):.1f}% | Price vs SMA200: {features.get('price_vs_sma200_pct', 0):.1f}%
+Relative Strength: {features.get('relative_strength_state', 'n/a')}
+RS vs SPY — 1m: {features.get('rs_vs_spy_1m', 0):.1f}% | 3m: {features.get('rs_vs_spy_3m', 0):.1f}% | 6m: {features.get('rs_vs_spy_6m', 0):.1f}%
+Pullback Depth: {features.get('pullback_depth_pct', 0):.1f}% from 50-day high
+ATR(14): ${features.get('atr_14', 0):.2f} ({features.get('atr_pct', 0):.1f}% of price)
+Volume Ratio: {features.get('volume_ratio_20d', 0):.2f}x 20-day average
+Distance to SMA20: {features.get('dist_to_sma20_pct', 0):.1f}%
+Score: {candidate['score']:.0f}/100
+Entry: ${candidate['entry_price']:.2f} | Stop: ${candidate['stop_price']:.2f} | Target 1: ${candidate['target_1']:.2f} | Target 2: ${candidate['target_2']:.2f}
+Event Risk: none"""
+
+    # Append actual outcome section
+    mfe_val = outcome["max_favorable_excursion"]
+    mae_val = outcome["max_adverse_excursion"]
+    outcome_section = f"""
+
+=== ACTUAL OUTCOME ===
+Exit Reason: {outcome['exit_reason']}
+P&L: ${outcome['pnl_dollars']:+.2f} ({outcome['pnl_pct']:+.2f}%)
+Duration: {outcome['duration_days']} trading days
+MFE: ${mfe_val:+.2f} (best unrealized gain)
+MAE: ${mae_val:.2f} (worst unrealized loss)"""
+
+    full_input = input_text + outcome_section
+
+    return {
+        "instruction": HISTORICAL_TRAINING_PROMPT,
+        "input_text": full_input,
+        "output_text": None,
+        "metadata": {
+            "scan_date": candidate["scan_date"],
+            "ticker": ticker,
+            "score": candidate["score"],
+            "entry_price": candidate["entry_price"],
+            "exit_price": outcome["exit_price"],
+            "exit_reason": outcome["exit_reason"],
+            "pnl_pct": outcome["pnl_pct"],
+            "duration_days": outcome["duration_days"],
+            "outcome_quality": outcome["outcome_quality"],
+        },
+    }
