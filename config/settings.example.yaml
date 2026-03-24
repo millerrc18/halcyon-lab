@@ -50,6 +50,16 @@ llm:
   max_tokens: 1500
   timeout_seconds: 60
 
+training:
+  enabled: true
+  anthropic_api_key: "your-anthropic-api-key-here"
+  claude_model: "claude-haiku-4-5-20251001"
+  auto_train_threshold: 50       # Fine-tune when N new examples accumulate
+  auto_train_time_days: 7        # Or fine-tune if N days since last train
+  auto_train_min_examples: 20    # Min new examples for time-based trigger
+  auto_rollback_expectancy_drop: 0.20   # Rollback if expectancy drops >20%
+  auto_rollback_winrate_drop: 0.10      # Rollback if win rate drops >10%
+
 bootcamp:
   enabled: false
   phase: 1                          # 1 = data collection, 2 = optimization, 3 = ML/LLM learning
