@@ -75,7 +75,7 @@ DEEPER ANALYSIS:
 Analysis text."""
 
         conviction, why_now, deeper = _parse_llm_response(response)
-        assert conviction is None  # 15 is out of 1-10 range
+        assert conviction == 10  # 15 is clamped to max 10
 
     def test_missing_sections_returns_none(self):
         from src.llm.packet_writer import _parse_llm_response

@@ -8,11 +8,12 @@ import json
 def test_quality_judge_prompt_format():
     from src.training.quality_filter import QUALITY_JUDGE_PROMPT
     assert "thesis_clarity" in QUALITY_JUDGE_PROMPT
-    assert "evidence_quality" in QUALITY_JUDGE_PROMPT
-    assert "risk_assessment" in QUALITY_JUDGE_PROMPT
-    assert "technical_accuracy" in QUALITY_JUDGE_PROMPT
+    assert "evidence_grounding" in QUALITY_JUDGE_PROMPT
+    assert "risk_identification" in QUALITY_JUDGE_PROMPT
     assert "calibration" in QUALITY_JUDGE_PROMPT
     assert "actionability" in QUALITY_JUDGE_PROMPT
+    assert "weighted_overall" in QUALITY_JUDGE_PROMPT
+    assert "process_quality" in QUALITY_JUDGE_PROMPT
 
 
 @patch("src.training.claude_client.generate_training_example")
@@ -20,14 +21,19 @@ def test_score_training_example_valid(mock_generate):
     from src.training.quality_filter import score_training_example
 
     mock_generate.return_value = json.dumps({
-        "thesis_clarity": 4, "evidence_quality": 3, "risk_assessment": 4,
-        "technical_accuracy": 5, "calibration": 3, "actionability": 4,
-        "overall": 3.8, "issues": "Minor calibration gap"
+        "thesis_clarity": 4, "evidence_grounding": 3, "risk_identification": 4,
+        "calibration": 3, "structure": 4, "actionability": 4,
+        "weighted_overall": 3.6, "process_quality": "good",
+        "issues": "Minor calibration gap"
     })
 
     result = score_training_example("input text", "output text")
     assert result is not None
-    assert result["overall"] == 3.8
+    # Recalculated: 4*0.25 + 3*0.20 + 4*0.20 + 3*0.15 + 4*0.10 + 4*0.10
+    # = 1.0 + 0.6 + 0.8 + 0.45 + 0.4 + 0.4 = 3.65 → rounds to 3.6
+    expected = round(4*0.25 + 3*0.20 + 4*0.20 + 3*0.15 + 4*0.10 + 4*0.10, 1)
+    assert result["weighted_overall"] == expected
+    assert result["overall"] == expected  # backward compat
     assert result["thesis_clarity"] == 4
 
 
@@ -36,14 +42,16 @@ def test_score_training_example_no_overall(mock_generate):
     from src.training.quality_filter import score_training_example
 
     mock_generate.return_value = json.dumps({
-        "thesis_clarity": 4, "evidence_quality": 3, "risk_assessment": 4,
-        "technical_accuracy": 5, "calibration": 3, "actionability": 4,
+        "thesis_clarity": 4, "evidence_grounding": 3, "risk_identification": 4,
+        "calibration": 3, "structure": 4, "actionability": 4,
     })
 
     result = score_training_example("input", "output")
     assert result is not None
     assert "overall" in result
-    assert abs(result["overall"] - 3.8) < 0.1
+    assert "weighted_overall" in result
+    expected = round(4*0.25 + 3*0.20 + 4*0.20 + 3*0.15 + 4*0.10 + 4*0.10, 1)
+    assert result["overall"] == expected
 
 
 @patch("src.training.claude_client.generate_training_example")

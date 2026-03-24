@@ -382,12 +382,62 @@ def _compute_training_status(days: int, db_path: str) -> dict:
     except Exception:
         counts = {"total": 0, "live": 0, "backfill": 0}
 
+    # Training data quality metrics
+    training_data_quality = {}
+    try:
+        from src.training.validation import validate_training_dataset
+        validation = validate_training_dataset(db_path)
+        training_data_quality["format_compliance"] = validation.get("format_breakdown", {})
+        training_data_quality["average_process_score"] = validation.get("avg_quality_score")
+    except Exception:
+        pass
+
+    try:
+        from src.training.leakage_detector import check_outcome_leakage
+        leakage = check_outcome_leakage(db_path)
+        training_data_quality["leakage_test_accuracy"] = leakage.get("test_accuracy")
+    except Exception:
+        pass
+
+    # Annie Duke quadrant distribution from source tags
+    try:
+        import sqlite3 as _sqlite3
+        with _sqlite3.connect(db_path) as conn:
+            conn.row_factory = _sqlite3.Row
+            rows = conn.execute(
+                "SELECT source, quality_score_auto FROM training_examples "
+                "WHERE source IS NOT NULL"
+            ).fetchall()
+        quadrants = {
+            "good_process_good_outcome": 0,
+            "good_process_bad_outcome": 0,
+            "bad_process_good_outcome": 0,
+            "bad_process_bad_outcome": 0,
+        }
+        for row in rows:
+            source = row["source"] or ""
+            score = row["quality_score_auto"]
+            is_win = "win" in source
+            is_good_process = score is not None and score >= 3.0
+            if is_good_process and is_win:
+                quadrants["good_process_good_outcome"] += 1
+            elif is_good_process and not is_win:
+                quadrants["good_process_bad_outcome"] += 1
+            elif not is_good_process and is_win:
+                quadrants["bad_process_good_outcome"] += 1
+            elif not is_good_process and not is_win:
+                quadrants["bad_process_bad_outcome"] += 1
+        training_data_quality["quadrant_distribution"] = quadrants
+    except Exception:
+        pass
+
     return {
         "total_examples": counts.get("total", 0),
         "backfill_examples": counts.get("backfill", 0),
         "live_examples": counts.get("live", 0),
         "examples_this_period": 0,  # Would need date filtering
         "model_version_trend": "stable",
+        "training_data_quality": training_data_quality,
     }
 
 

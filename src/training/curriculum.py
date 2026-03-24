@@ -26,12 +26,32 @@ OUTCOME B: {loser_outcome}
 
 OUTPUT FORMAT:
 === TRADE A COMMENTARY ===
-WHY NOW: [2-3 sentences]
-DEEPER ANALYSIS: [4-6 paragraphs]
+<why_now>
+[2-3 sentences]
+</why_now>
+<analysis>
+[4-6 paragraphs]
+</analysis>
+<metadata>
+Conviction: [1-10]
+Direction: LONG
+Time Horizon: [description]
+Key Risk: [one sentence]
+</metadata>
 
 === TRADE B COMMENTARY ===
-WHY NOW: [2-3 sentences]
-DEEPER ANALYSIS: [4-6 paragraphs — risk section must address the distinguishing factor]
+<why_now>
+[2-3 sentences]
+</why_now>
+<analysis>
+[4-6 paragraphs — risk section must address the distinguishing factor]
+</analysis>
+<metadata>
+Conviction: [1-10]
+Direction: LONG
+Time Horizon: [description]
+Key Risk: [one sentence]
+</metadata>
 """
 
 

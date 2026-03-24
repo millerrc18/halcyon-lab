@@ -85,57 +85,60 @@ Event Risk: {packet.event_risk}"""
 
 
 def _parse_llm_response(response: str) -> tuple[int | None, str | None, str | None]:
-    """Parse CONVICTION, WHY NOW, and DEEPER ANALYSIS from LLM response.
+    """Parse XML-tagged response into conviction, why_now, and deeper_analysis.
+
+    Expected format:
+        <why_now>...</why_now>
+        <analysis>...</analysis>
+        <metadata>Conviction: N\nDirection: ...\nTime Horizon: ...\nKey Risk: ...</metadata>
+
+    Falls back to plain-text parsing if XML tags are not found (backward compat).
 
     Returns (conviction, why_now, deeper_analysis) or (None, None, None) on failure.
     """
     import re
 
     conviction = None
-    conviction_reason = None
     why_now = None
     deeper_analysis = None
 
-    upper = response.upper()
+    # Try XML parsing first
+    wn_match = re.search(r'<why_now>(.*?)</why_now>', response, re.DOTALL)
+    an_match = re.search(r'<analysis>(.*?)</analysis>', response, re.DOTALL)
+    md_match = re.search(r'<metadata>(.*?)</metadata>', response, re.DOTALL)
 
-    # Parse CONVICTION line
-    conviction_marker = "CONVICTION:"
-    conv_idx = upper.find(conviction_marker)
-    if conv_idx != -1:
-        conv_start = conv_idx + len(conviction_marker)
-        # Find the end of the conviction line (next section or newline)
-        why_idx_temp = upper.find("WHY NOW:", conv_start)
-        conv_end = why_idx_temp if why_idx_temp != -1 else conv_start + 200
-        conv_text = response[conv_start:conv_end].strip()
-        # Extract number 1-10
-        match = re.search(r'\b(\d{1,2})\b', conv_text)
-        if match:
-            val = int(match.group(1))
-            if 1 <= val <= 10:
-                conviction = val
-                # Everything after the number is the reason
-                reason_start = match.end()
-                conviction_reason = conv_text[reason_start:].strip().rstrip('.')
-                if not conviction_reason:
-                    conviction_reason = None
+    if wn_match:
+        why_now = wn_match.group(1).strip()
+    if an_match:
+        deeper_analysis = an_match.group(1).strip()
+    if md_match:
+        metadata_text = md_match.group(1).strip()
+        conv_match = re.search(r'Conviction:\s*(\d+)', metadata_text)
+        if conv_match:
+            conviction = int(conv_match.group(1))
+            conviction = max(1, min(10, conviction))
 
-    # Find WHY NOW section
-    why_now_marker = "WHY NOW:"
-    deeper_marker = "DEEPER ANALYSIS:"
+    # Fallback to plain-text parsing for backward compatibility
+    if why_now is None and "WHY NOW:" in response.upper():
+        upper = response.upper()
+        why_now_marker = "WHY NOW:"
+        deeper_marker = "DEEPER ANALYSIS:"
 
-    why_idx = upper.find(why_now_marker.upper())
-    deeper_idx = upper.find(deeper_marker.upper())
+        why_idx = upper.find(why_now_marker)
+        deeper_idx = upper.find(deeper_marker)
 
-    if why_idx == -1 or deeper_idx == -1:
-        return conviction, None, None
+        if why_idx != -1 and deeper_idx != -1:
+            why_start = why_idx + len(why_now_marker)
+            why_now = response[why_start:deeper_idx].strip()
+            deeper_start = deeper_idx + len(deeper_marker)
+            deeper_analysis = response[deeper_start:].strip()
 
-    # Extract WHY NOW (between marker and DEEPER ANALYSIS)
-    why_start = why_idx + len(why_now_marker)
-    why_now = response[why_start:deeper_idx].strip()
-
-    # Extract DEEPER ANALYSIS (after marker to end)
-    deeper_start = deeper_idx + len(deeper_marker)
-    deeper_analysis = response[deeper_start:].strip()
+    # Fallback conviction from CONVICTION: line (old format)
+    if conviction is None and "CONVICTION:" in response.upper():
+        conv_match = re.search(r'CONVICTION:\s*(\d+)', response, re.IGNORECASE)
+        if conv_match:
+            conviction = int(conv_match.group(1))
+            conviction = max(1, min(10, conviction))
 
     if not why_now or not deeper_analysis:
         return conviction, None, None

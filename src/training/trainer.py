@@ -392,9 +392,10 @@ where each N is 1-5."""
         if not model_output:
             continue
 
-        # Check format compliance
-        upper = model_output.upper()
-        if "WHY NOW" in upper and "DEEPER ANALYSIS" in upper:
+        # Check format compliance (XML or plain text)
+        if "<why_now>" in model_output and "<analysis>" in model_output:
+            format_passes += 1
+        elif "WHY NOW" in model_output.upper() and "DEEPER ANALYSIS" in model_output.upper():
             format_passes += 1
 
         # Score model output

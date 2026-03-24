@@ -41,12 +41,16 @@ def validate_training_dataset(db_path: str = "ai_research_desk.sqlite3") -> dict
     examples = [dict(r) for r in rows]
     total = len(examples)
 
-    # 1. Format compliance
-    format_pass = 0
+    # 1. Format compliance (XML or plain text)
+    format_xml = 0
+    format_plain = 0
     for ex in examples:
-        output = (ex.get("output_text") or "").upper()
-        if "WHY NOW" in output and "DEEPER ANALYSIS" in output:
-            format_pass += 1
+        output = ex.get("output_text") or ""
+        if "<why_now>" in output and "<analysis>" in output:
+            format_xml += 1
+        elif "WHY NOW" in output.upper() and "DEEPER ANALYSIS" in output.upper():
+            format_plain += 1
+    format_pass = format_xml + format_plain
     format_compliance = format_pass / total if total > 0 else 0
 
     # 2. Diversity — Shannon entropy over tickers
@@ -132,6 +136,7 @@ def validate_training_dataset(db_path: str = "ai_research_desk.sqlite3") -> dict
     return {
         "total_examples": total,
         "format_compliance": round(format_compliance, 3),
+        "format_breakdown": {"xml": format_xml, "plain_text": format_plain},
         "tickers_represented": tickers_represented,
         "diversity_score": round(diversity_score, 3),
         "wins": wins,

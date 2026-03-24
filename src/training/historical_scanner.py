@@ -9,7 +9,7 @@ import logging
 import pandas as pd
 
 from src.features.engine import compute_features
-from src.llm.prompts import HISTORICAL_TRAINING_PROMPT
+from src.llm.prompts import BLINDED_ANALYSIS_PROMPT, HISTORICAL_TRAINING_PROMPT
 from src.ranking.ranker import _score_ticker
 from src.training.historical_data import slice_to_date
 from src.universe.company_names import get_company_name
@@ -267,10 +267,13 @@ def generate_backfill_example(candidate: dict, outcome: dict) -> dict:
     packet_writer.py so the model sees the same format during training
     as during inference.
 
+    NOTE: The input_text contains ONLY setup data (no outcome). The outcome
+    is stored separately in metadata for evaluation purposes only.
+
     Returns:
         {
-            "instruction": HISTORICAL_TRAINING_PROMPT,
-            "input_text": "...",
+            "instruction": BLINDED_ANALYSIS_PROMPT (formatted with scan_date),
+            "input_text": "..." (feature data only — NO outcome),
             "output_text": None,  # filled by Claude API
             "metadata": { ... }
         }
@@ -319,23 +322,12 @@ Score: {candidate['score']:.0f}/100
 Entry: ${candidate['entry_price']:.2f} | Stop: ${candidate['stop_price']:.2f} | Target 1: ${candidate['target_1']:.2f} | Target 2: ${candidate['target_2']:.2f}
 Event Risk: none"""
 
-    # Append actual outcome section
-    mfe_val = outcome["max_favorable_excursion"]
-    mae_val = outcome["max_adverse_excursion"]
-    outcome_section = f"""
-
-=== ACTUAL OUTCOME ===
-Exit Reason: {outcome['exit_reason']}
-P&L: ${outcome['pnl_dollars']:+.2f} ({outcome['pnl_pct']:+.2f}%)
-Duration: {outcome['duration_days']} trading days
-MFE: ${mfe_val:+.2f} (best unrealized gain)
-MAE: ${mae_val:.2f} (worst unrealized loss)"""
-
-    full_input = input_text + outcome_section
+    # NOTE: Outcome is NOT appended to input_text — self-blinding pipeline
+    # ensures Claude never sees the outcome during generation.
 
     return {
-        "instruction": HISTORICAL_TRAINING_PROMPT,
-        "input_text": full_input,
+        "instruction": BLINDED_ANALYSIS_PROMPT.format(date=candidate["scan_date"]),
+        "input_text": input_text,
         "output_text": None,
         "metadata": {
             "scan_date": candidate["scan_date"],
