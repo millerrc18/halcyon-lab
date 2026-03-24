@@ -4,13 +4,14 @@ from src.universe.company_names import get_company_name
 
 
 def build_morning_watchlist(watchlist: list[dict], packet_worthy: list[dict],
-                            date_str: str) -> str:
+                            date_str: str, narrative: str | None = None) -> str:
     """Build a formatted plain-text morning watchlist email body.
 
     Args:
         watchlist: List of watchlist candidate dicts from get_top_candidates.
         packet_worthy: List of packet-worthy candidate dicts from get_top_candidates.
         date_str: Date string for the header (YYYY-MM-DD).
+        narrative: Optional LLM-generated narrative summary.
 
     Returns:
         Formatted plain-text email body.
@@ -24,6 +25,12 @@ def build_morning_watchlist(watchlist: list[dict], packet_worthy: list[dict],
     lines.append(f"  - {len(watchlist)} names on watchlist")
     lines.append(f"  - {len(packet_worthy)} names packet-worthy (action packets to follow)")
     lines.append("")
+
+    # LLM narrative (if available)
+    if narrative:
+        lines.append("ANALYST BRIEFING:")
+        lines.append(narrative)
+        lines.append("")
 
     # Packet-worthy section
     lines.append(f"PACKET-WORTHY ({len(packet_worthy)}):")
