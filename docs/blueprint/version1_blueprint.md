@@ -1,4 +1,6 @@
-# AI Research Desk - Version 1 Blueprint
+> **DEPRECATION NOTICE**: This was the original v1 blueprint. See [docs/architecture.md](../architecture.md) for the current system architecture.
+
+# AI Research Desk - Version 1 Blueprint (Historical)
 
 ## 1. Objective
 

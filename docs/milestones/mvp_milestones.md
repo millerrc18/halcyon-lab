@@ -1,38 +1,54 @@
-# MVP Milestones
+# Halcyon Lab — Milestones
 
-## Milestone 1 - Foundation
-- Create repo and docs
-- Lock blueprint and packet template
-- Stand up local config and SQLite journal
-- Create thin runnable CLI skeleton
+## Completed Milestones
 
-## Milestone 2 - Research Core
-- Populate S&P 100 universe
-- Add market data ingestion layer
-- Add first-pass feature engine
-- Add basic ranking logic for pullback-in-trend setup
+### M1 — Foundation
+- Repo structure, docs, blueprint, config, SQLite journal, CLI skeleton
 
-## Milestone 3 - Communication Layer
-- Build packet formatter
-- Build morning watchlist email
-- Build action packet email
-- Build end-of-day recap email
+### M2 — Research Core
+- S&P 100 universe, yfinance ingestion, feature engine (20+ indicators)
 
-## Milestone 4 - Shadow Ledger
-- Connect Alpaca paper account or equivalent shadow-execution adapter
-- Log entry / exit events
-- Track outcome metrics
-- Separate earnings-adjacent trades as distinct class
+### M3 — Trade Packets
+- Ranking engine, packet templates, email delivery
 
-## Milestone 5 - Review Loop
-- Add assistant postmortem generation
-- Add Ryan review flow for taken trades
-- Add scorecard output for 30-day bootcamp
+### M4 — LLM Integration
+- Ollama/Qwen inference, LLM packet writer, system prompts
 
-## Milestone 6 - Bootcamp (30-day intensive calibration)
-- Operates in aggressive paper-trading mode — no position limits, loose thresholds, maximum data collection
-- Phase 1 (Days 1–10): High-volume data collection, early threshold tuning
-- Phase 2 (Days 11–20): Statistical optimization of scoring weights and cutoffs based on Phase 1 outcomes
-- Phase 3 (Days 21–30): ML/LLM learning — train or fine-tune ranking models on accumulated outcome data
-- Email mode configurable: silent / daily summary / full stream (toggled by Ryan at any time)
-- Exit evaluation: shadow performance metrics, optimization lift, ML vs deterministic comparison, promotion readiness
+### M5 — Shadow Trading
+- Alpaca paper trading, bracket orders, trade lifecycle management
+
+### M6 — Data Enrichment
+- SEC EDGAR fundamentals, Finnhub insiders, FRED macro data, multi-source prompt
+
+### M7 — Training Pipeline
+- Historical backfill, Claude training data generation, Unsloth fine-tuning, auto-rollback
+
+### M8 — Review System
+- Human review workflow, scorecards, postmortem generation, bootcamp reports
+
+### M9 — Risk & Governance
+- Risk governor (7 checks), kill switch, daily/weekly auditor, CTO report
+
+### M10 — Advanced Training
+- Holdout validation, A/B model evaluation, learned confidence, feature importance
+
+### M11 — Quality Pipeline
+- News enrichment, three-stage curriculum, LLM-as-judge quality scoring, DPO preference pairs, contrastive training data, dataset validation
+
+### M12 — Dashboard
+- React/Vite/Tailwind dashboard, WebSocket live updates, CTO Report page, error handling
+
+## Upcoming Milestones
+
+### M13 — Bootcamp Graduation
+- 200+ quality-scored training examples
+- Positive expectancy over 50+ trades
+- Holdout score ≥ 3.5
+
+### M14 — Micro Live
+- Real Alpaca execution with tight limits
+- Live P&L tracking
+
+### M15 — Model Sophistication
+- GRPO reinforcement learning
+- Regime-specific LoRA adapters

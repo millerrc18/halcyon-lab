@@ -1,106 +1,89 @@
-# AI Research Desk
+# Halcyon Lab
 
-A docs-first, local-first MVP for an always-on AI research desk that monitors the S&P 100, surfaces high-conviction short swing opportunities, sends institutional-style trade packets to Ryan's work email, and maintains a shadow paper-trading ledger for continuous learning.
+An autonomous AI trading desk that scans the S&P 100, generates institutional-quality trade commentary using a fine-tuned LLM, executes bracket orders via Alpaca paper trading, and continuously improves through a self-training pipeline with quality gates.
 
-## MVP objective
+## Features
 
-Answer one question:
+- **Systematic Scoring**: 0-100 composite score from 20+ technical indicators
+- **7+ Data Sources**: Technical, regime, sector, fundamentals, insiders, news, macro
+- **LLM Commentary**: Ollama/Qwen3-8B generates analyst-style trade packets
+- **Bracket Orders**: Automated entry + stop + target via Alpaca paper trading
+- **Risk Governor**: 7 safety checks + kill switch to halt all trading
+- **Training Pipeline**: Three-stage curriculum SFT + DPO with quality gates
+- **Walk-Forward Backtesting**: Validate model performance on historical data
+- **A/B Model Evaluation**: Shadow evaluation before model promotion
+- **Dashboard**: React web interface with WebSocket live updates
+- **Auditor Agent**: Daily and weekly automated system health checks
+- **CTO Report**: Comprehensive performance analytics
 
-**Can this system consistently surface useful, high-quality short swing ideas that improve decision quality without hurting day-job performance?**
+## Prerequisites
 
-## Version 1 at a glance
+- Python 3.12+
+- Node.js 18+ (for dashboard)
+- Ollama (for local LLM inference)
+- Alpaca paper trading account
+- API keys: Finnhub (free), FRED (free), Anthropic (for training data generation)
 
-- Universe: S&P 100
-- Primary mode: short swing equities
-- Setup family: pullback in strong trend / relative strength continuation
-- Expected hold period: typically 2 to 10 trading days
-- Alert cadence:
-  - Morning watchlist
-  - Action packets only when threshold is cleared
-  - End-of-day recap
-- Quality philosophy: maximize idea quality even if there are zero packets for an entire week
-- Event risk: earnings-adjacent trades are allowed, but must be specially labeled and sized more conservatively
-- Position sizing: suggested framework based on $1,000 starting working capital
-- Review loop: full post-trade review only on trades Ryan actually executes
-- Execution: no autonomous live trading in MVP
-
-## Repo contents
-
-- `docs/charter/` - charter document
-- `docs/blueprint/` - Version 1 blueprint
-- `docs/packet_templates/` - trade packet structure and email format
-- `docs/journal/` - journal schema and data dictionary
-- `docs/milestones/` - milestone plan for MVP
-- `docs/issues/` - initial issue backlog for GitHub
-- `src/` - thin runnable skeleton
-- `config/` - local configuration template
-
-## Recommended stack
-
-- Python
-- Alpaca paper trading for shadow ledger and future API-first integration
-- vectorbt for fast signal research
-- LEAN as a later promotion gate for more rigorous validation
-- Local SQLite for MVP journal storage
-- SMTP email delivery from a dedicated assistant email to Ryan's work email
-
-## Quick start
-
-### 1. Create a virtual environment
+## Quick Start
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate  # Windows: .venv\Scripts\activate
+# 1. Clone and setup
+git clone <repo-url> && cd halcyon-lab
+python -m venv .venv && source .venv/bin/activate  # or .venv\Scripts\activate on Windows
 pip install -r requirements.txt
-```
 
-### 2. Copy config template
-
-```bash
+# 2. Configure
 cp config/settings.example.yaml config/settings.local.yaml
-```
+# Edit config/settings.local.yaml with your API keys
 
-Fill in email credentials, Alpaca keys, and any future data provider settings.
-
-### 3. Initialize the local journal database
-
-```bash
+# 3. Initialize
 python -m src.main init-db
+python -m src.main preflight
+
+# 4. Pull LLM model
+ollama pull qwen3:8b
+
+# 5. Run a scan
+python -m src.main scan --verbose --dry-run
+
+# 6. Start the dashboard
+cd frontend && npm install && npm run build && cd ..
+python -m src.main dashboard
+
+# 7. Start the automated watch loop
+python -m src.main watch
 ```
 
-### 4. Generate a demo packet
+## Training Data Generation
 
 ```bash
-python -m src.main demo-packet
+# Historical backfill (generates training examples from real outcomes)
+python -m src.main backfill-training --months 12 --yes
+
+# Classify difficulty and curriculum stage
+python -m src.main classify-training-data
+
+# Score quality with LLM-as-judge
+python -m src.main score-training-data
+
+# Validate dataset health
+python -m src.main validate-training-data
+
+# Fine-tune
+python -m src.main train --force
 ```
 
-### 5. Run a placeholder scan
+## Architecture
 
-```bash
-python -m src.main scan
-```
+See [docs/architecture.md](docs/architecture.md) for the full system architecture, database schema, and data flow diagrams.
 
-## Suggested first implementation order
+## Documentation
 
-1. Finalize docs
-2. Populate S&P 100 universe file
-3. Stand up journal storage
-4. Build packet generator
-5. Add email sender
-6. Add market data ingestion
-7. Add feature engine and ranker
-8. Add shadow paper ledger
-9. Run 30-day bootcamp
+- [Architecture](docs/architecture.md) — System design, database schema, API routes
+- [Training Guide](docs/training-guide.md) — Training data pipeline, quality scoring, curriculum
+- [Roadmap](docs/roadmap.md) — 5-phase development plan with performance gates
+- [Email Setup](docs/guides/email_setup.md) — SMTP configuration guide
 
-## MVP success criteria
+## License
 
-- 3 to 5 actionable packets per week on average when opportunity set is healthy
-- Zero packets is acceptable in weak conditions
-- Packets are concise, useful, and defensible
-- Journal is complete for 100% of recommendations
-- Shadow performance is measurable and reviewable
-- Workflow does not materially disrupt work performance
-
-## Notes
-
-This repo is intentionally lightweight. The goal is to preserve focus, make progress quickly, and avoid overengineering before the core research loop proves it deserves expansion.
+MIT
