@@ -11,11 +11,19 @@ def build_packet_from_features(ticker: str, features: dict, config: dict) -> Tra
     pullback = features.get("pullback_depth_pct", 0.0)
     score = features.get("_score", 70)
 
+    # Earnings / event risk
+    event_risk_level = features.get("event_risk_level", "none")
+    days_to_earnings = features.get("days_to_earnings")
+    earnings_date = features.get("earnings_date")
+    conservative_sizing = event_risk_level in ("elevated", "imminent")
+
     # Position sizing from config
     risk_cfg = config.get("risk", {})
     capital = risk_cfg.get("starting_capital", 1000)
     risk_pct = risk_cfg.get("planned_risk_pct_max", 0.01)
     max_risk_dollars = capital * risk_pct
+    if conservative_sizing:
+        max_risk_dollars *= 0.5  # Reduce position size by 50% for earnings risk
     stop_distance = 2 * atr if atr > 0 else price * 0.03
     shares = max(1, int(max_risk_dollars / stop_distance)) if stop_distance > 0 else 1
     allocation = shares * price
@@ -44,6 +52,14 @@ def build_packet_from_features(ticker: str, features: dict, config: dict) -> Tra
     target_2 = price + 3.0 * atr
     targets = f"${target_1:.2f} / ${target_2:.2f}"
 
+    # Event risk text
+    if event_risk_level == "imminent":
+        event_risk = f"EARNINGS IMMINENT ({days_to_earnings} days) — high gap risk, conservative sizing applied"
+    elif event_risk_level == "elevated":
+        event_risk = f"Earnings in {days_to_earnings} days — elevated gap risk"
+    else:
+        event_risk = "Normal"
+
     # Deeper analysis
     deeper_analysis = (
         f"Trend: {trend.replace('_', ' ')}. SMA50 slope is {features.get('sma50_slope', 'n/a')}, "
@@ -61,6 +77,14 @@ def build_packet_from_features(ticker: str, features: dict, config: dict) -> Tra
         f"Planned risk ${max_risk_dollars:.2f} ({risk_pct*100:.1f}% of ${capital} capital)."
     )
 
+    # Append earnings risk section to deeper analysis when relevant
+    if conservative_sizing and earnings_date:
+        deeper_analysis += (
+            f"\nEvent Risk: Next earnings {earnings_date}. Hold window overlaps earnings.\n"
+            f"Gap risk is elevated. Conservative sizing applied — position reduced 50%.\n"
+            f"Thesis assumes exit before earnings / hold through event based on hold period."
+        )
+
     return TradePacket(
         ticker=ticker,
         company_name=get_company_name(ticker),
@@ -72,7 +96,7 @@ def build_packet_from_features(ticker: str, features: dict, config: dict) -> Tra
         targets=targets,
         expected_hold_period="2 to 10 trading days",
         confidence=confidence,
-        event_risk="Normal",
+        event_risk=event_risk,
         position_sizing=PositionSizing(
             allocation_dollars=round(allocation, 2),
             allocation_pct=round(allocation_pct, 1),

@@ -147,6 +147,11 @@ def compute_features(ticker: str, ohlcv: pd.DataFrame, spy: pd.DataFrame) -> dic
         "atr_pct": round(atr_pct, 2),
         "dist_to_sma20_pct": round(dist_to_sma20_pct, 2),
         "volume_ratio_20d": round(volume_ratio_20d, 2),
+        # Earnings fields — populated by compute_all_features after this call
+        "earnings_date": None,
+        "hold_overlaps_earnings": False,
+        "days_to_earnings": None,
+        "event_risk_level": "none",
     }
 
 
@@ -155,14 +160,27 @@ def compute_all_features(ohlcv_data: dict[str, pd.DataFrame],
     """Compute features for all tickers in the OHLCV data dict.
 
     Skips tickers with fewer than 200 rows of data.
+    Adds earnings date and event-risk classification for each ticker.
     """
+    from src.features.earnings import get_next_earnings_date, check_earnings_overlap
+
     results = {}
     for ticker, df in ohlcv_data.items():
         if len(df) < 200:
             print(f"WARNING: {ticker} has only {len(df)} rows (need 200+), skipping", file=sys.stderr)
             continue
         try:
-            results[ticker] = compute_features(ticker, df, spy)
+            feat = compute_features(ticker, df, spy)
+
+            # Earnings lookup and event-risk classification
+            earnings_date = get_next_earnings_date(ticker)
+            earnings_info = check_earnings_overlap(earnings_date)
+            feat["earnings_date"] = earnings_info["earnings_date"]
+            feat["hold_overlaps_earnings"] = earnings_info["hold_overlaps_earnings"]
+            feat["days_to_earnings"] = earnings_info["days_to_earnings"]
+            feat["event_risk_level"] = earnings_info["event_risk_level"]
+
+            results[ticker] = feat
         except Exception as e:
             print(f"WARNING: Failed to compute features for {ticker}: {e}", file=sys.stderr)
     return results
