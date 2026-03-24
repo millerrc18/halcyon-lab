@@ -111,7 +111,14 @@ def cmd_scan(args):
         if ranked:
             print("Top scores:")
             for r in ranked[:15]:
-                print(f"  {r['ticker']:6s}  score={r['score']:5.1f}  {r['qualification']}")
+                feat = r["features"]
+                earnings_tag = ""
+                if feat.get("event_risk_level") in ("elevated", "imminent"):
+                    days = feat.get("days_to_earnings", "?")
+                    earnings_tag = f"  [EARNINGS {feat['event_risk_level'].upper()} {days}d]"
+                elif feat.get("earnings_date"):
+                    earnings_tag = f"  earnings={feat['earnings_date']}"
+                print(f"  {r['ticker']:6s}  score={r['score']:5.1f}  {r['qualification']}{earnings_tag}")
             print()
 
     # 5-6. Generate packets and log
@@ -126,6 +133,9 @@ def cmd_scan(args):
             ticker = candidate["ticker"]
             feat = candidate["features"]
             feat["_score"] = candidate["score"]
+
+            if candidate.get("earnings_risk"):
+                print(f"  *** {ticker} — EARNINGS RISK PACKET ***")
 
             packet = build_packet_from_features(ticker, feat, config)
             rendered = render_packet(packet)
