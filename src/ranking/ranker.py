@@ -72,7 +72,11 @@ def rank_universe(features: dict[str, dict]) -> list[dict]:
         score = _score_ticker(feat)
 
         if score >= packet_threshold:
-            qualification = "packet_worthy"
+            event_risk_level = feat.get("event_risk_level", "none")
+            if event_risk_level in ("elevated", "imminent"):
+                qualification = "earnings_risk_packet"
+            else:
+                qualification = "packet_worthy"
         elif score >= watchlist_threshold:
             qualification = "watchlist"
         else:
@@ -96,7 +100,15 @@ def get_top_candidates(ranked: list[dict], max_packets: int = 5,
     Returns:
         {"packet_worthy": [...], "watchlist": [...]} sorted by score descending.
     """
-    packet_worthy = [r for r in ranked if r["qualification"] == "packet_worthy"][:max_packets]
+    # Include earnings_risk_packet in packet_worthy list with a flag
+    packet_worthy = []
+    for r in ranked:
+        if r["qualification"] in ("packet_worthy", "earnings_risk_packet"):
+            entry = dict(r)
+            entry["earnings_risk"] = r["qualification"] == "earnings_risk_packet"
+            packet_worthy.append(entry)
+            if len(packet_worthy) >= max_packets:
+                break
     watchlist = [r for r in ranked if r["qualification"] == "watchlist"][:max_watchlist]
     return {
         "packet_worthy": packet_worthy,

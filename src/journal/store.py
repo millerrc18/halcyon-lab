@@ -130,7 +130,11 @@ def log_recommendation(
         "position_size_dollars": packet.position_sizing.allocation_dollars,
         "position_size_pct": packet.position_sizing.allocation_pct,
         "estimated_dollar_risk": packet.position_sizing.estimated_risk_dollars,
-        "event_risk_flag": "none",
+        "earnings_date": features.get("earnings_date"),
+        "event_risk_flag": features.get("event_risk_level", "none"),
+        "hold_window_overlaps_earnings": 1 if features.get("hold_overlaps_earnings") else 0,
+        "event_risk_warning_text": packet.event_risk if packet.event_risk != "Normal" else None,
+        "conservative_sizing_applied": 1 if features.get("event_risk_level") in ("elevated", "imminent") else 0,
         "packet_sent": 0,
     }
 
@@ -143,3 +147,30 @@ def log_recommendation(
         conn.commit()
 
     return rec_id
+
+
+def get_todays_recommendations(db_path: str = "ai_research_desk.sqlite3") -> list[dict]:
+    """Query recommendations created today (ET timezone).
+
+    Returns a list of dicts with key fields for each recommendation.
+    """
+    initialize_database(db_path)
+
+    et = ZoneInfo("America/New_York")
+    today_str = datetime.now(et).strftime("%Y-%m-%d")
+
+    fields = [
+        "recommendation_id", "ticker", "company_name", "recommendation",
+        "entry_zone", "stop_level", "target_1", "target_2",
+        "confidence_score", "priority_score",
+    ]
+    columns_sql = ", ".join(fields)
+
+    with sqlite3.connect(db_path) as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            f"SELECT {columns_sql} FROM recommendations WHERE created_at LIKE ?",
+            (f"{today_str}%",),
+        ).fetchall()
+
+    return [dict(row) for row in rows]
