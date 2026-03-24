@@ -11,11 +11,13 @@ logger = logging.getLogger(__name__)
 
 
 def _build_feature_prompt(packet: TradePacket, features: dict) -> str:
-    """Build a structured prompt from packet and feature data."""
+    """Build a multi-source prompt from all available data."""
     ticker = packet.ticker
     company_name = packet.company_name
 
-    return f"""Ticker: {ticker} ({company_name})
+    # SECTION 1: Technical Data (existing)
+    prompt = f"""=== TECHNICAL DATA ===
+Ticker: {ticker} ({company_name})
 Current Price: ${features.get('current_price', 0):.2f}
 Trend State: {features.get('trend_state', 'n/a')} | SMA50 slope: {features.get('sma50_slope', 'n/a')} | SMA200 slope: {features.get('sma200_slope', 'n/a')}
 Price vs SMA50: {features.get('price_vs_sma50_pct', 0):.1f}% | Price vs SMA200: {features.get('price_vs_sma200_pct', 0):.1f}%
@@ -24,11 +26,55 @@ RS vs SPY — 1m: {features.get('rs_vs_spy_1m', 0):.1f}% | 3m: {features.get('rs
 Pullback Depth: {features.get('pullback_depth_pct', 0):.1f}% from 50-day high
 ATR(14): ${features.get('atr_14', 0):.2f} ({features.get('atr_pct', 0):.1f}% of price)
 Volume Ratio: {features.get('volume_ratio_20d', 0):.2f}x 20-day average
-Distance to SMA20: {features.get('dist_to_sma20_pct', 0):.1f}%
+Distance to SMA20: {features.get('dist_to_sma20_pct', 0):.1f}%"""
+
+    # SECTION 2: Market Regime (new)
+    prompt += f"""
+
+=== MARKET REGIME ===
+Market Trend: {features.get('market_trend', 'n/a')} | SPY RSI(14): {features.get('spy_rsi_14', 'n/a')}
+Volatility: {features.get('volatility_regime', 'n/a')} ({features.get('vix_proxy', 0):.1f}% realized vol)
+SPY: {features.get('spy_20d_return', 0):+.1f}% (20d) | {features.get('spy_drawdown_from_high', 0):.1f}% from 52-week high
+Breadth: {features.get('market_breadth_label', 'n/a')} ({features.get('market_breadth_pct', 0):.0f}% above 50d MA)
+Regime: {features.get('regime_label', 'n/a')}"""
+
+    # SECTION 3: Sector Context (new)
+    prompt += f"""
+
+=== SECTOR CONTEXT ===
+Sector: {features.get('sector', 'n/a')} | Rank: {features.get('sector_rs_rank', 'n/a')} | Sector Avg Score: {features.get('sector_avg_score', 0):.0f}"""
+
+    # SECTION 4: Fundamental Snapshot (new)
+    fundamental_text = features.get('fundamental_summary', 'No fundamental data available')
+    prompt += f"""
+
+=== FUNDAMENTAL SNAPSHOT ===
+{fundamental_text}"""
+
+    # SECTION 5: Insider Activity (new)
+    insider_text = features.get('insider_summary', 'No insider data available')
+    prompt += f"""
+
+=== INSIDER ACTIVITY ===
+{insider_text}"""
+
+    # SECTION 6: Macro Context (new)
+    macro_text = features.get('macro_summary', 'No macro data available')
+    prompt += f"""
+
+=== MACRO CONTEXT ===
+{macro_text}"""
+
+    # SECTION 7: Entry/Stop/Targets (existing)
+    prompt += f"""
+
+=== TRADE PARAMETERS ===
 Score: {features.get('_score', 0):.0f}/100 | Confidence: {packet.confidence}/10
 Entry Zone: {packet.entry_zone} | Stop: {packet.stop_invalidation} | Targets: {packet.targets}
 Position Size: ${packet.position_sizing.allocation_dollars:.0f} ({packet.position_sizing.allocation_pct:.1f}% of capital) | Risk: ${packet.position_sizing.estimated_risk_dollars:.2f}
 Event Risk: {packet.event_risk}"""
+
+    return prompt
 
 
 def _parse_llm_response(response: str) -> tuple[str | None, str | None]:
