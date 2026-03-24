@@ -25,6 +25,32 @@ def cmd_send_test_email(args):
         print("Failed to send test email. Check config and credentials.")
 
 
+def cmd_ingest(args):
+    from src.data_ingestion.market_data import fetch_ohlcv, fetch_spy_benchmark
+
+    universe = get_sp100_universe()
+    print(f"Fetching OHLCV data for {len(universe)} tickers + SPY...")
+
+    ohlcv = fetch_ohlcv(universe)
+    spy = fetch_spy_benchmark()
+
+    succeeded = len(ohlcv)
+    failed = len(universe) - succeeded
+
+    print(f"\nIngestion complete:")
+    print(f"  Tickers succeeded: {succeeded}")
+    print(f"  Tickers failed:    {failed}")
+
+    if ohlcv:
+        sample = next(iter(ohlcv.values()))
+        print(f"  Date range:        {sample.index.min().date()} to {sample.index.max().date()}")
+
+    if spy.empty:
+        print("  SPY benchmark:     FAILED")
+    else:
+        print(f"  SPY benchmark:     OK ({len(spy)} rows)")
+
+
 def cmd_scan(args):
     universe = get_sp100_universe()
     print(f"Universe loaded: {len(universe)} tickers")
@@ -44,6 +70,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     send_test = subparsers.add_parser("send-test-email", help="Send a test email")
     send_test.set_defaults(func=cmd_send_test_email)
+
+    ingest = subparsers.add_parser("ingest", help="Fetch OHLCV data for S&P 100 universe")
+    ingest.set_defaults(func=cmd_ingest)
 
     scan = subparsers.add_parser("scan", help="Run placeholder universe scan")
     scan.set_defaults(func=cmd_scan)
