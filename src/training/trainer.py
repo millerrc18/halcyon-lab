@@ -53,7 +53,7 @@ def main():
 
     dataset = Dataset.from_list(examples).map(fmt)
     trainer = SFTTrainer(model=model, processing_class=tokenizer,
-        train_dataset=dataset, dataset_text_field="text", max_seq_length=1024,
+        train_dataset=dataset, max_seq_length=1024,
         args=TrainingArguments(per_device_train_batch_size=1, gradient_accumulation_steps=16,
             num_train_epochs=1, learning_rate=2e-4, bf16=True, logging_steps=10,
             output_dir="training_data/checkpoints", report_to="none"))
@@ -135,7 +135,7 @@ def main():
             print(f"  Empty dataset for {name}, skipping")
             continue
         trainer = SFTTrainer(model=model, processing_class=tokenizer,
-            train_dataset=ds, dataset_text_field="text", max_seq_length=512,
+            train_dataset=ds, max_seq_length=512,
             args=TrainingArguments(
                 per_device_train_batch_size=1, gradient_accumulation_steps=16,
                 num_train_epochs=1, learning_rate=lr, bf16=True,
