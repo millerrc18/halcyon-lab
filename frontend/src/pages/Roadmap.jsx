@@ -360,13 +360,17 @@ export default function Roadmap() {
 
   // Build a flat kpis object from CTO report data
   const ts = ctoData?.trade_summary || {}
+  const fm = ctoData?.fund_metrics || {}
   const kpis = {
     trades_closed: ts.trades_closed || 0,
     win_rate: ts.win_rate || 0,
     sharpe_ratio: ts.sharpe_ratio || 0,
     expectancy_dollars: ts.expectancy_dollars || 0,
     max_drawdown_pct: ts.max_drawdown_pct || 0,
-    profitable_months: null, // computed later when we have monthly data
+    avg_rubric_score: ctoData?.headline_kpis?.avg_rubric_score || null,
+    sortino_ratio: fm.sortino_ratio || null,
+    calmar_ratio: fm.calmar_ratio || null,
+    profitable_months: fm.monthly_batting_avg != null ? Math.round((fm.monthly_batting_avg / 100) * (fm.total_months || 0)) : null,
     live_trades: null,       // Phase 2+
     live_paper_delta: null,  // Phase 2+
   }
