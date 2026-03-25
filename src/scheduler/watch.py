@@ -120,6 +120,16 @@ class WatchLoop:
 
         from src.training.versioning import get_active_model_name, get_training_example_counts
         model_name = get_active_model_name()
+
+        # Warn if config model differs from the active trained model
+        config_model = self.config.get("llm", {}).get("model", "qwen3:8b")
+        if model_name and model_name != "base" and model_name != config_model:
+            logger.warning(
+                "Config model is '%s' but active trained model is '%s' — "
+                "inference will use the trained model",
+                config_model, model_name,
+            )
+
         if self.training_enabled:
             t_counts = get_training_example_counts()
             training_str = f"enabled ({t_counts['total']} examples)"

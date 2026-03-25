@@ -213,7 +213,7 @@ def trigger_collect_data(background_tasks: BackgroundTasks):
 
 
 @router.post("/scan")
-def trigger_scan(background_tasks: BackgroundTasks):
+def action_trigger_scan(background_tasks: BackgroundTasks):
     """Run a market scan in the background."""
     if not _set_running("scan"):
         raise HTTPException(status_code=409, detail=f"Action '{_running_action}' already running")

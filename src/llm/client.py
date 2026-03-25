@@ -12,12 +12,26 @@ logger = logging.getLogger(__name__)
 
 
 def _get_llm_config() -> dict:
-    """Load LLM config section with defaults."""
+    """Load LLM config section with defaults.
+
+    Checks the model versions table first — if a trained model is active,
+    it takes precedence over the config file default.
+    """
     config = load_config()
     llm_cfg = config.get("llm", {})
+
+    model = llm_cfg.get("model", "qwen3:8b")
+    try:
+        from src.training.versioning import get_active_model_name
+        active = get_active_model_name()
+        if active and active != "base":
+            model = active
+    except Exception:
+        pass  # Fall back to config model
+
     return {
         "enabled": llm_cfg.get("enabled", False),
-        "model": llm_cfg.get("model", "qwen3:8b"),
+        "model": model,
         "base_url": llm_cfg.get("base_url", "http://localhost:11434"),
         "temperature": llm_cfg.get("temperature", 0.7),
         "max_tokens": llm_cfg.get("max_tokens", 1500),

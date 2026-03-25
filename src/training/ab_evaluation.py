@@ -122,8 +122,8 @@ def _score_output(judge_prompt: str, output: str) -> float | None:
             match = re.search(r'[1-5]', result.strip())
             if match:
                 return float(match.group())
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("AB evaluation scoring failed: %s", e)
     return None
 
 

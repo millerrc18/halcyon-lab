@@ -45,8 +45,8 @@ def get_system_status(config: dict) -> dict:
                 acct = resp.json()
                 alpaca_connected = True
                 alpaca_equity = float(acct.get("equity", 0))
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Alpaca connection check failed: %s", e)
 
     # Shadow trading
     shadow_trading_enabled = config.get("shadow_trading", {}).get("enabled", False)
@@ -70,8 +70,8 @@ def get_system_status(config: dict) -> dict:
             journal_recs = conn.execute("SELECT COUNT(*) FROM recommendations").fetchone()[0]
             journal_trades = conn.execute("SELECT COUNT(*) FROM shadow_trades").fetchone()[0]
             conn.close()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Journal DB query failed: %s", e)
 
     # Training
     training_cfg = config.get("training", {})
@@ -81,8 +81,8 @@ def get_system_status(config: dict) -> dict:
         try:
             t_counts = get_training_example_counts()
             training_examples = t_counts["total"]
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Training example count failed: %s", e)
 
     # Bootcamp
     bootcamp_cfg = config.get("bootcamp", {})

@@ -6,7 +6,6 @@ breached, the trade is rejected with an explanation.
 """
 
 import logging
-import sqlite3
 from pathlib import Path
 
 from src.config import load_config
@@ -171,16 +170,18 @@ def get_portfolio_state(db_path: str = "ai_research_desk.sqlite3") -> dict:
 
     open_trades = get_open_shadow_trades(db_path)
 
-    # Try to get equity from Alpaca
-    equity = 5000.0  # Default
-    cash = 5000.0
+    # Try to get equity from Alpaca, fall back to config starting_capital
+    config = load_config()
+    starting_capital = config.get("risk", {}).get("starting_capital", 100000)
+    equity = float(starting_capital)
+    cash = float(starting_capital)
     try:
         from src.shadow_trading.alpaca_adapter import get_account_info
         acct = get_account_info()
-        equity = acct.get("equity", 5000.0)
-        cash = acct.get("cash", 5000.0)
-    except Exception:
-        pass
+        equity = acct.get("equity", float(starting_capital))
+        cash = acct.get("cash", float(starting_capital))
+    except Exception as e:
+        logger.debug("Alpaca account unreachable, using config starting_capital: %s", e)
 
     # Build position list with sectors
     positions = []
@@ -199,8 +200,8 @@ def get_portfolio_state(db_path: str = "ai_research_desk.sqlite3") -> dict:
             current = _get_current_price_safe(ticker)
             if current and entry_price > 0:
                 unrealized = (current - entry_price) * shares
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Could not get current price for %s: %s", ticker, e)
 
         positions.append({
             "ticker": ticker,

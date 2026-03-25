@@ -1,6 +1,7 @@
-import { useEffect, useRef } from 'react'
+import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query'
+import { WebSocketProvider, useWebSocketContext } from './contexts/WebSocketContext'
 import Layout from './components/Layout'
 import ErrorBoundary from './components/ErrorBoundary'
 import ToastContainer, { toast } from './components/Toast'
@@ -20,62 +21,37 @@ const queryClient = new QueryClient({
   },
 })
 
-function WebSocketProvider({ children }) {
+function CacheInvalidator() {
   const qc = useQueryClient()
-  const wsRef = useRef(null)
-  const reconnectRef = useRef(null)
+  const { subscribe } = useWebSocketContext()
 
   useEffect(() => {
-    function connect() {
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-      const ws = new WebSocket(`${protocol}//${window.location.host}/ws/live`)
-      wsRef.current = ws
-
-      ws.onmessage = (event) => {
-        try {
-          const msg = JSON.parse(event.data)
-          const type = msg.type
-          // Invalidate relevant caches based on event type
-          if (type === 'scan_complete') {
-            qc.invalidateQueries({ queryKey: ['scan'] })
-            qc.invalidateQueries({ queryKey: ['status'] })
-            toast('Scan complete', 'info')
-          } else if (type === 'trade_opened') {
-            qc.invalidateQueries({ queryKey: ['shadow'] })
-            toast(`Trade opened: ${msg.data?.ticker || ''}`, 'info')
-          } else if (type === 'trade_closed') {
-            qc.invalidateQueries({ queryKey: ['shadow'] })
-            const pnl = msg.data?.pnl_dollars
-            const type = pnl >= 0 ? 'success' : 'error'
-            toast(`Trade closed: ${msg.data?.ticker || ''} $${pnl?.toFixed(2) || ''}`, type)
-          } else if (type === 'pnl_update') {
-            qc.invalidateQueries({ queryKey: ['shadow'] })
-          } else if (type === 'training_update') {
-            qc.invalidateQueries({ queryKey: ['training'] })
-            toast('Training update', 'info')
-          } else if (type === 'system_status') {
-            qc.invalidateQueries({ queryKey: ['status'] })
-          }
-        } catch (e) { /* ignore parse errors */ }
+    return subscribe((msg) => {
+      const msgType = msg.type
+      if (msgType === 'scan_complete') {
+        qc.invalidateQueries({ queryKey: ['scan'] })
+        qc.invalidateQueries({ queryKey: ['status'] })
+        toast('Scan complete', 'info')
+      } else if (msgType === 'trade_opened') {
+        qc.invalidateQueries({ queryKey: ['shadow'] })
+        toast(`Trade opened: ${msg.data?.ticker || ''}`, 'info')
+      } else if (msgType === 'trade_closed') {
+        qc.invalidateQueries({ queryKey: ['shadow'] })
+        const pnl = msg.data?.pnl_dollars
+        const pnlType = pnl >= 0 ? 'success' : 'error'
+        toast(`Trade closed: ${msg.data?.ticker || ''} $${pnl?.toFixed(2) || ''}`, pnlType)
+      } else if (msgType === 'pnl_update') {
+        qc.invalidateQueries({ queryKey: ['shadow'] })
+      } else if (msgType === 'training_update') {
+        qc.invalidateQueries({ queryKey: ['training'] })
+        toast('Training update', 'info')
+      } else if (msgType === 'system_status') {
+        qc.invalidateQueries({ queryKey: ['status'] })
       }
+    })
+  }, [qc, subscribe])
 
-      ws.onclose = () => {
-        reconnectRef.current = setTimeout(connect, 5000)
-      }
-
-      ws.onerror = () => {
-        ws.close()
-      }
-    }
-
-    connect()
-    return () => {
-      if (wsRef.current) wsRef.current.close()
-      if (reconnectRef.current) clearTimeout(reconnectRef.current)
-    }
-  }, [qc])
-
-  return children
+  return null
 }
 
 export default function App() {
@@ -83,6 +59,7 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <ErrorBoundary>
         <WebSocketProvider>
+          <CacheInvalidator />
           <BrowserRouter>
             <Routes>
               <Route element={<Layout />}>
