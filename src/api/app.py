@@ -4,7 +4,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 
-from src.api.routes import system, scan, shadow, training, review, packets, docs
+from src.api.routes import system, scan, shadow, training, review, packets, docs, actions
 from src.api.websocket import manager
 
 app = FastAPI(title="Halcyon Lab", version="1.0.0")
@@ -24,6 +24,7 @@ app.include_router(training.router, prefix="/api")
 app.include_router(review.router, prefix="/api")
 app.include_router(packets.router, prefix="/api")
 app.include_router(docs.router, prefix="/api")
+app.include_router(actions.router, prefix="/api")
 
 
 @app.on_event("startup")

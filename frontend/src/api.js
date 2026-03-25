@@ -44,4 +44,10 @@ export const api = {
   getDoc: (docId) => fetchApi(`/docs/${docId}`),
   getMetricHistory: (days = 90) => fetchApi(`/metric-history?days=${days}`),
   getCosts: (days = 30) => fetchApi(`/costs?days=${days}`),
+  // Actions
+  triggerActionScan: () => fetchApi('/actions/scan', { method: 'POST' }),
+  triggerCtoReport: () => fetchApi('/actions/cto-report', { method: 'POST' }),
+  triggerCollectTraining: () => fetchApi('/actions/collect-training', { method: 'POST' }),
+  triggerTrainPipeline: () => fetchApi('/actions/train-pipeline', { method: 'POST' }),
+  triggerScore: () => fetchApi('/actions/score', { method: 'POST' }),
 }

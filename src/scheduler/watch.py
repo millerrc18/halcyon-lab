@@ -19,8 +19,10 @@ ET = ZoneInfo("America/New_York")
 class WatchLoop:
     """Automated daily cadence loop for the AI Research Desk."""
 
-    def __init__(self, config: dict, email_mode: str | None = None):
+    def __init__(self, config: dict, email_mode: str | None = None,
+                 overnight: bool = False):
         self.config = config
+        self.overnight = overnight
         auto_cfg = config.get("automation", {})
         bootcamp_cfg = config.get("bootcamp", {})
         bootcamp_enabled = bootcamp_cfg.get("enabled", False)
@@ -60,6 +62,13 @@ class WatchLoop:
         self._daily_audit_done = False
         self._consecutive_errors = 0
 
+        # Overnight schedule flags
+        self._post_close_done = False
+        self._overnight_training_collection_done = False
+        self._news_ingestion_done = False
+        self._enrichment_precache_done = False
+        self._pre_market_done = False
+
     def _reset_daily_state(self):
         """Reset daily flags at midnight ET."""
         self._morning_done = False
@@ -71,6 +80,12 @@ class WatchLoop:
         self._training_run_done = False
         self._saturday_reports_done = False
         self._daily_audit_done = False
+        # Overnight flags
+        self._post_close_done = False
+        self._overnight_training_collection_done = False
+        self._news_ingestion_done = False
+        self._enrichment_precache_done = False
+        self._pre_market_done = False
 
     def _is_market_open(self, now: datetime) -> bool:
         """Check if market is currently open (weekday, between open and close)."""
@@ -125,6 +140,7 @@ class WatchLoop:
    Morning watchlist: {self.morning_hour}:00 ET
    Market scans: every {self.scan_interval} min ({self.market_open_hour}:{self.market_open_minute:02d}-{self.market_close_hour}:00 ET)
    EOD recap: {self.eod_hour}:00 ET
+   Overnight: {'enabled' if self.overnight else 'disabled'}
 
  Press Ctrl+C to stop.
 {'='*45}
@@ -180,6 +196,7 @@ class WatchLoop:
 
     def _run_scan(self):
         """Execute a market-hours scan cycle."""
+        from src.api.websocket import broadcast_sync
         from src.data_ingestion.market_data import fetch_ohlcv, fetch_spy_benchmark
         from src.features.engine import compute_all_features
         from src.journal.store import log_recommendation
@@ -191,6 +208,10 @@ class WatchLoop:
         from src.email.notifier import send_email
 
         print("[WATCH] Running market scan...")
+        try:
+            broadcast_sync("scan_started", {"time": datetime.now(ET).isoformat()})
+        except Exception:
+            pass
         universe = get_sp100_universe()
         ohlcv = fetch_ohlcv(universe)
         spy = fetch_spy_benchmark()
@@ -214,6 +235,11 @@ class WatchLoop:
 
         if not packet_worthy:
             print(f"[WATCH] No packet-worthy setups. {len(candidates['watchlist'])} on watchlist.")
+            try:
+                broadcast_sync("scan_complete", {"tickers_scanned": len(universe),
+                                                 "packets": 0})
+            except Exception:
+                pass
             return
 
         print(f"[WATCH] Found {len(packet_worthy)} packet-worthy names.")
@@ -238,12 +264,24 @@ class WatchLoop:
             print(f"  -> Logged {ticker}: {rec_id}")
             self._trades_managed_today += 1
 
+            try:
+                broadcast_sync("trade_opened", {"ticker": ticker, "side": "BUY",
+                                                "score": candidate["score"]})
+            except Exception:
+                pass
+
             if self.email_mode == "full_stream":
                 subject = f"[TRADE DESK] Action Packet - {ticker}"
                 send_email(subject, rendered)
                 print(f"  -> Email sent for {ticker}")
             elif self.email_mode == "daily_summary":
                 self._daily_packets.append(rendered)
+
+        try:
+            broadcast_sync("scan_complete", {"tickers_scanned": len(universe),
+                                             "packets": len(packet_worthy)})
+        except Exception:
+            pass
 
     def _run_eod_recap(self):
         """Execute the EOD recap pipeline."""
@@ -343,6 +381,34 @@ class WatchLoop:
                       and hour == 9 and not self._saturday_reports_done):
                     self._safe_run("Saturday reports", self._run_saturday_reports)
                     self._saturday_reports_done = True
+
+                # ── Overnight schedule (weekdays only, --overnight flag) ──
+                elif self.overnight and now.weekday() < 5:
+                    ran = False
+                    if hour == 17 and now.minute >= 30 and not self._post_close_done:
+                        self._safe_run("post-close capture", self._run_post_close_capture)
+                        self._post_close_done = True
+                        ran = True
+                    elif (hour == 18 and self.training_enabled
+                          and not self._overnight_training_collection_done):
+                        self._safe_run("overnight training collection",
+                                       self._run_overnight_training_collection)
+                        self._overnight_training_collection_done = True
+                        ran = True
+                    elif hour == 22 and not self._news_ingestion_done:
+                        self._safe_run("news ingestion", self._run_news_ingestion)
+                        self._news_ingestion_done = True
+                        ran = True
+                    elif hour == 23 and not self._enrichment_precache_done:
+                        self._safe_run("enrichment precache", self._run_enrichment_precache)
+                        self._enrichment_precache_done = True
+                        ran = True
+                    elif hour == 6 and not self._pre_market_done:
+                        self._safe_run("pre-market refresh", self._run_pre_market_refresh)
+                        self._pre_market_done = True
+                        ran = True
+                    if not ran:
+                        print(f"[WATCH] {time_str} ET -- overnight mode")
 
                 # 7. Status log
                 else:
@@ -456,6 +522,176 @@ class WatchLoop:
         except Exception as e:
             logger.error("[WATCH] CTO report failed: %s", e)
             print(f"[WATCH] CTO report failed: {e}")
+
+    # ── Overnight Schedule Methods ────────────────────────────────────
+
+    def _run_post_close_capture(self):
+        """5:30 PM ET — Capture final closing prices, update MFE/MAE on open positions."""
+        from src.api.websocket import broadcast_sync
+        from src.data_ingestion.market_data import fetch_ohlcv, fetch_spy_benchmark
+        from src.journal.store import get_open_shadow_trades, update_shadow_trade
+        from src.universe.sp100 import get_sp100_universe
+
+        try:
+            broadcast_sync("overnight_task", {"task": "post_close_capture", "status": "started"})
+        except Exception:
+            pass
+
+        logger.info("[OVERNIGHT] Running post-close capture...")
+        print("[WATCH] Running post-close capture...")
+
+        universe = get_sp100_universe()
+        ohlcv = fetch_ohlcv(universe)
+        count = len(ohlcv)
+        print(f"[WATCH] Fetched closing data for {count} tickers")
+
+        # Update MFE/MAE on open positions
+        open_trades = get_open_shadow_trades()
+        updated = 0
+        for trade in open_trades:
+            ticker = trade["ticker"]
+            if ticker in ohlcv and not ohlcv[ticker].empty:
+                try:
+                    close_price = float(ohlcv[ticker].iloc[-1].get("close", 0))
+                    entry = trade.get("actual_entry_price") or trade.get("entry_price", 0)
+                    if entry and close_price:
+                        pnl_pct = (close_price - entry) / entry * 100
+                        current_mfe = trade.get("mfe_pct") or 0
+                        current_mae = trade.get("mae_pct") or 0
+                        new_mfe = max(current_mfe, pnl_pct)
+                        new_mae = min(current_mae, pnl_pct)
+                        update_shadow_trade(trade["trade_id"],
+                                            {"mfe_pct": new_mfe, "mae_pct": new_mae})
+                        updated += 1
+                except Exception as e:
+                    logger.warning("[OVERNIGHT] MFE/MAE update failed for %s: %s", ticker, e)
+
+        # Log daily regime from SPY close
+        spy = fetch_spy_benchmark()
+        if not spy.empty:
+            logger.info("[OVERNIGHT] SPY close: %.2f", spy.iloc[-1].get("close", 0))
+
+        print(f"[WATCH] Post-close capture complete: {count} tickers, {updated} MFE/MAE updates")
+
+        try:
+            broadcast_sync("overnight_task", {"task": "post_close_capture", "status": "complete",
+                                              "tickers_updated": count, "mfe_mae_updated": updated})
+        except Exception:
+            pass
+
+    def _run_overnight_training_collection(self):
+        """6:00 PM ET — Collect training examples from today's closed trades."""
+        from src.api.websocket import broadcast_sync
+        from src.training.data_collector import collect_training_examples_from_closed_trades
+
+        try:
+            broadcast_sync("overnight_task", {"task": "training_collection", "status": "started"})
+        except Exception:
+            pass
+
+        logger.info("[OVERNIGHT] Running training data collection...")
+        print("[WATCH] Running overnight training data collection...")
+        count = collect_training_examples_from_closed_trades()
+        print(f"[WATCH] Training collection: {count} new examples")
+
+        try:
+            broadcast_sync("overnight_task", {"task": "training_collection", "status": "complete",
+                                              "examples_collected": count})
+        except Exception:
+            pass
+
+    def _run_news_ingestion(self):
+        """10:00 PM ET — Full universe news pull and caching."""
+        from src.api.websocket import broadcast_sync
+        from src.universe.sp100 import get_sp100_universe
+
+        try:
+            broadcast_sync("overnight_task", {"task": "news_ingestion", "status": "started"})
+        except Exception:
+            pass
+
+        logger.info("[OVERNIGHT] Running news ingestion...")
+        print("[WATCH] Running news ingestion...")
+
+        universe = get_sp100_universe()
+        articles_cached = 0
+
+        for ticker in universe:
+            try:
+                from src.data_enrichment.news import fetch_recent_news
+                result = fetch_recent_news(ticker, lookback_days=1)
+                if result and result.get("articles"):
+                    articles_cached += len(result["articles"])
+            except Exception as e:
+                logger.warning("[OVERNIGHT] News fetch failed for %s: %s", ticker, e)
+
+        print(f"[WATCH] News ingestion complete: {len(universe)} tickers, {articles_cached} articles cached")
+
+        try:
+            broadcast_sync("overnight_task", {"task": "news_ingestion", "status": "complete",
+                                              "tickers_scanned": len(universe), "articles_cached": articles_cached})
+        except Exception:
+            pass
+
+    def _run_enrichment_precache(self):
+        """11:00 PM ET — Pre-fetch fundamentals, insider data, macro for all tickers."""
+        from src.api.websocket import broadcast_sync
+        from src.data_enrichment.enricher import enrich_features
+        from src.universe.sp100 import get_sp100_universe
+
+        try:
+            broadcast_sync("overnight_task", {"task": "enrichment_precache", "status": "started"})
+        except Exception:
+            pass
+
+        logger.info("[OVERNIGHT] Running enrichment pre-cache...")
+        print("[WATCH] Running enrichment pre-cache...")
+
+        universe = get_sp100_universe()
+        # Build minimal feature dict just for cache warming
+        stub_features = {t: {} for t in universe}
+        try:
+            enrich_features(stub_features, self.config)
+            count = len(universe)
+        except Exception as e:
+            logger.error("[OVERNIGHT] Enrichment pre-cache failed: %s", e)
+            count = 0
+
+        print(f"[WATCH] Enrichment pre-cache complete: {count} tickers enriched")
+
+        try:
+            broadcast_sync("overnight_task", {"task": "enrichment_precache", "status": "complete",
+                                              "tickers_enriched": count})
+        except Exception:
+            pass
+
+    def _run_pre_market_refresh(self):
+        """6:00 AM ET — Quick pre-market data check before morning watchlist."""
+        from src.api.websocket import broadcast_sync
+        from src.universe.sp100 import get_sp100_universe
+
+        try:
+            broadcast_sync("overnight_task", {"task": "pre_market_refresh", "status": "started"})
+        except Exception:
+            pass
+
+        logger.info("[OVERNIGHT] Running pre-market refresh...")
+        print("[WATCH] Running pre-market refresh...")
+
+        universe = get_sp100_universe()
+        # Fetch pre-market data if available (best-effort)
+        try:
+            from src.data_ingestion.market_data import fetch_ohlcv
+            ohlcv = fetch_ohlcv(universe[:20])  # Quick check on top tickers
+            print(f"[WATCH] Pre-market refresh: checked {len(ohlcv)} tickers")
+        except Exception as e:
+            logger.warning("[OVERNIGHT] Pre-market refresh failed: %s", e)
+            print(f"[WATCH] Pre-market refresh: partial ({e})")
+
+        try:
+            broadcast_sync("overnight_task", {"task": "pre_market_refresh", "status": "complete"})
+        except Exception:
+            pass
 
     def _minutes_until_next_scan(self, now: datetime) -> float:
         """Calculate minutes until next scan is due."""
