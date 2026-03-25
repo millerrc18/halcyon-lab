@@ -72,9 +72,9 @@ CURRICULUM_TRAIN_SCRIPT = '''
 import json, sys, os, torch
 
 def main():
-    from transformers import AutoModelForCausalLM, AutoTokenizer, TrainingArguments, BitsAndBytesConfig
+    from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
     from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
-    from trl import SFTTrainer
+    from trl import SFTTrainer, SFTConfig
     from datasets import Dataset
 
     print(f"[TRAIN] CUDA: {torch.cuda.is_available()}, GPU: {torch.cuda.get_device_name(0)}")
@@ -134,14 +134,24 @@ def main():
         if len(ds) == 0:
             print(f"  Empty dataset for {name}, skipping")
             continue
-        trainer = SFTTrainer(model=model, processing_class=tokenizer,
-            train_dataset=ds, max_seq_length=512,
-            args=TrainingArguments(
-                per_device_train_batch_size=1, gradient_accumulation_steps=16,
-                num_train_epochs=1, learning_rate=lr, bf16=True,
-                logging_steps=10, output_dir=f"training_data/checkpoints/{name.lower()}",
-                optim="paged_adamw_8bit",
-                report_to="none"))
+        sft_config = SFTConfig(
+            per_device_train_batch_size=1,
+            gradient_accumulation_steps=16,
+            num_train_epochs=1,
+            learning_rate=lr,
+            bf16=True,
+            logging_steps=10,
+            max_seq_length=512,
+            output_dir=f"training_data/checkpoints/{name.lower()}",
+            optim="paged_adamw_8bit",
+            report_to="none",
+            dataset_text_field="text",
+        )
+        trainer = SFTTrainer(
+            model=model,
+            train_dataset=ds,
+            args=sft_config,
+        )
         trainer.train()
         print(f"  {name} complete: {len(ds)} examples")
 
