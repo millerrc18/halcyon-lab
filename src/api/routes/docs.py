@@ -28,9 +28,14 @@ DOCS = [
     {"id": "research-universe-size", "path": "docs/research/Optimal_Trading_Universe_Size__S&P_500_Filtered_to_325_Stocks.md", "title": "Research: Optimal Universe Size (~325 Stocks)"},
 
     # Research — Business & Operations
+    {"id": "research-business-plan", "path": "docs/research/Halcyon_Lab__AI-Powered_Equity_Research_Investor-Ready_Business_Plan.md", "title": "Research: Investor-Ready Business Plan"},
     {"id": "research-fund-path", "path": "docs/research/From_Solo_AI_Trader_to_Fund_Manager__A_Complete_Operational_Roadmap.md", "title": "Research: Solo Trader → Fund Manager"},
     {"id": "research-scaling-plan", "path": "docs/research/Halcyon_Lab_Scaling_Plan_Through_2026.md", "title": "Research: Scaling Plan Through 2026"},
     {"id": "research-options", "path": "docs/research/AI-Powered_Options_Trading__From_First_Principles_to_Production_Architecture.md", "title": "Research: Options Trading Strategy"},
+
+    # Research — External (ChatGPT Deep Research)
+    {"id": "research-event-calendar", "path": "docs/research/Market_Event_Calendar_Dataset_2020-2027.md", "title": "Research: Market Event Calendar (2020-2027)"},
+    {"id": "research-api-comparison", "path": "docs/research/Market_Data_APIs_Comprehensive_Comparison_2026.md", "title": "Research: Market Data API Comparison (2026)"},
 ]
 
 
