@@ -82,6 +82,7 @@ const ROADMAP_DATA = {
         { label: 'Live Alpaca account + reconciliation', status: 'pending' },
         { label: 'Research Analyst — 2nd paper account for max training data volume', status: 'pending' },
         { label: 'Google Trends + GSCPI signals', status: 'pending' },
+        { label: 'AI Council — 7 agents (CTO/CFO/CRO/COO/CIO/CDO/CSO) for strategic decisions', status: 'pending' },
       ],
     },
     {
