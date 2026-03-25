@@ -130,11 +130,23 @@ def _compute_trade_summary(closed: list, open_trades: list, all_trades: list) ->
     max_win = max(closed, key=lambda t: t.get("pnl_pct", 0) or 0) if closed else None
     max_loss = min(closed, key=lambda t: t.get("pnl_pct", 0) or 0) if closed else None
 
+    # Sharpe ratio (annualized from per-trade returns)
+    import math
+    pnl_pcts = [t.get("pnl_pct", 0) or 0 for t in closed]
+    if len(pnl_pcts) >= 2:
+        mean_r = sum(pnl_pcts) / len(pnl_pcts)
+        std_r = (sum((r - mean_r) ** 2 for r in pnl_pcts) / (len(pnl_pcts) - 1)) ** 0.5
+        # Annualize assuming ~150 trades/year (roughly 3/week)
+        sharpe = (mean_r / std_r) * math.sqrt(150) if std_r > 0 else 0
+    else:
+        sharpe = 0
+
     return {
         "trades_opened": len(all_trades),
         "trades_closed": len(closed),
         "trades_open": len(open_trades),
         "win_rate": round(win_rate, 3),
+        "sharpe_ratio": round(sharpe, 2),
         "avg_winner_pct": round(avg_winner, 1),
         "avg_loser_pct": round(avg_loser, 1),
         "expectancy_dollars": round(expectancy, 2),
