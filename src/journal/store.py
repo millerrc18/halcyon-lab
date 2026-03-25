@@ -91,6 +91,15 @@ CREATE TABLE IF NOT EXISTS shadow_trades (
     updated_at TEXT NOT NULL,
     alpaca_order_id TEXT
 );
+
+-- Indexes for frequently queried columns
+CREATE INDEX IF NOT EXISTS idx_recommendations_ticker ON recommendations(ticker);
+CREATE INDEX IF NOT EXISTS idx_recommendations_created_at ON recommendations(created_at);
+CREATE INDEX IF NOT EXISTS idx_shadow_trades_status ON shadow_trades(status);
+CREATE INDEX IF NOT EXISTS idx_shadow_trades_ticker ON shadow_trades(ticker);
+CREATE INDEX IF NOT EXISTS idx_shadow_trades_recommendation_id ON shadow_trades(recommendation_id);
+CREATE INDEX IF NOT EXISTS idx_shadow_trades_created_at ON shadow_trades(created_at);
+CREATE INDEX IF NOT EXISTS idx_shadow_trades_status_exit ON shadow_trades(status, actual_exit_time);
 """
 
 

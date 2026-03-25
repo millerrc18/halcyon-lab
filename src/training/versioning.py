@@ -33,6 +33,13 @@ CREATE TABLE IF NOT EXISTS training_examples (
     output_text TEXT NOT NULL,
     quality_score REAL
 );
+
+-- Training table indexes
+CREATE INDEX IF NOT EXISTS idx_training_examples_source ON training_examples(source);
+CREATE INDEX IF NOT EXISTS idx_training_examples_ticker ON training_examples(ticker);
+CREATE INDEX IF NOT EXISTS idx_training_examples_created_at ON training_examples(created_at);
+CREATE INDEX IF NOT EXISTS idx_training_examples_recommendation_id ON training_examples(recommendation_id);
+CREATE INDEX IF NOT EXISTS idx_model_versions_status ON model_versions(status);
 """
 
 
