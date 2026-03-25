@@ -89,12 +89,22 @@ def generate_cto_report(days: int = 7, db_path: str = "ai_research_desk.sqlite3"
     # Confidence calibration
     confidence_calibration = _compute_confidence_calibration(closed, recommendations)
 
+    # Build headline KPIs — the 5 numbers that matter most
+    headline_kpis = {
+        "sharpe_ratio": trade_summary.get("sharpe_ratio", 0),
+        "win_rate": trade_summary.get("win_rate", 0),
+        "max_drawdown_pct": trade_summary.get("max_drawdown_pct", 0),
+        "confidence_calibration": confidence_calibration.get("correlation_with_outcomes", 0),
+        "avg_rubric_score": training_status.get("training_data_quality", {}).get("average_process_score"),
+    }
+
     return {
         "report_period": {
             "start": start_str,
             "end": end_str,
             "trading_days": trading_days,
         },
+        "headline_kpis": headline_kpis,
         "system_status": {
             "model_version": model_name,
             "dataset_size": dataset_size,
@@ -141,12 +151,44 @@ def _compute_trade_summary(closed: list, open_trades: list, all_trades: list) ->
     else:
         sharpe = 0
 
+    # Max drawdown (cumulative P&L peak-to-trough)
+    cumulative = 0
+    peak = 0
+    max_dd = 0
+    for t in closed:
+        cumulative += t.get("pnl_dollars", 0) or 0
+        if cumulative > peak:
+            peak = cumulative
+        dd = peak - cumulative
+        if dd > max_dd:
+            max_dd = dd
+    max_dd_pct = (max_dd / peak * 100) if peak > 0 else 0
+
+    # Profit factor (gross wins / gross losses)
+    gross_wins = sum(t.get("pnl_dollars", 0) or 0 for t in winners)
+    gross_losses = abs(sum(t.get("pnl_dollars", 0) or 0 for t in losers))
+    profit_factor = gross_wins / gross_losses if gross_losses > 0 else (float('inf') if gross_wins > 0 else 0)
+
+    # Max consecutive losses
+    max_consec_losses = 0
+    current_streak = 0
+    for t in closed:
+        if (t.get("pnl_dollars") or 0) <= 0:
+            current_streak += 1
+            max_consec_losses = max(max_consec_losses, current_streak)
+        else:
+            current_streak = 0
+
     return {
         "trades_opened": len(all_trades),
         "trades_closed": len(closed),
         "trades_open": len(open_trades),
         "win_rate": round(win_rate, 3),
         "sharpe_ratio": round(sharpe, 2),
+        "max_drawdown_dollars": round(max_dd, 2),
+        "max_drawdown_pct": round(max_dd_pct, 1),
+        "profit_factor": round(profit_factor, 2) if profit_factor != float('inf') else "inf",
+        "max_consecutive_losses": max_consec_losses,
         "avg_winner_pct": round(avg_winner, 1),
         "avg_loser_pct": round(avg_loser, 1),
         "expectancy_dollars": round(expectancy, 2),
@@ -526,11 +568,25 @@ def format_cto_report(report: dict) -> str:
     lines.append(f"MODEL: {status['model_version']} | Dataset: {status['dataset_size']} examples")
     lines.append("")
 
+    # Headline KPIs — the 5 numbers that matter most
+    kpis = report.get("headline_kpis", {})
+    lines.append("HEADLINE KPIs:")
+    lines.append(f"  Sharpe Ratio:     {kpis.get('sharpe_ratio', 0):>8.2f}   (target: > 0.5 Phase 1, > 1.0 Phase 3)")
+    lines.append(f"  Win Rate:         {kpis.get('win_rate', 0):>8.1%}   (target: > 45%)")
+    lines.append(f"  Max Drawdown:     {kpis.get('max_drawdown_pct', 0):>7.1f}%   (target: < 15%)")
+    cal = kpis.get('confidence_calibration', 0)
+    lines.append(f"  Confidence Cal:   {cal:>8.3f}   (target: > 0.3 = model has judgment)")
+    rubric = kpis.get('avg_rubric_score')
+    lines.append(f"  Avg Rubric Score: {rubric:>8.1f}/5  (target: > 3.5 = institutional quality)" if rubric else "  Avg Rubric Score:      n/a   (run score-training-data)")
+    lines.append("")
+
     ts = report["trade_summary"]
     lines.append("TRADE SUMMARY:")
     lines.append(f"  Opened: {ts['trades_opened']} | Closed: {ts['trades_closed']} | Open: {ts['trades_open']}")
-    lines.append(f"  Win Rate: {ts['win_rate']:.1%} | Avg Winner: {ts['avg_winner_pct']:+.1f}% | Avg Loser: {ts['avg_loser_pct']:+.1f}%")
+    lines.append(f"  Win Rate: {ts['win_rate']:.1%} | Sharpe: {ts.get('sharpe_ratio', 0):.2f} | Profit Factor: {ts.get('profit_factor', 0)}")
+    lines.append(f"  Avg Winner: {ts['avg_winner_pct']:+.1f}% | Avg Loser: {ts['avg_loser_pct']:+.1f}%")
     lines.append(f"  Expectancy: ${ts['expectancy_dollars']:+.2f} | Total P&L: ${ts['total_pnl']:+.2f}")
+    lines.append(f"  Max Drawdown: ${ts.get('max_drawdown_dollars', 0):.2f} ({ts.get('max_drawdown_pct', 0):.1f}%) | Max Consec Losses: {ts.get('max_consecutive_losses', 0)}")
     if ts.get("max_single_win"):
         lines.append(f"  Best: {ts['max_single_win']['ticker']} ({ts['max_single_win']['pnl_pct']:+.1f}%)")
     if ts.get("max_single_loss"):
