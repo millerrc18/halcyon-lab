@@ -48,6 +48,7 @@ const ROADMAP_DATA = {
         { label: 'Score + classify + fine-tune halcyon-v1', status: 'pending' },
         { label: 'Unified train-pipeline command (score → leakage → classify → train)', status: 'pending' },
         { label: 'Dashboard action buttons (scan, train, CTO report, backfill, leakage check)', status: 'pending' },
+        { label: 'Live activity feed — real-time event stream on dashboard', status: 'pending' },
       ],
     },
     {
