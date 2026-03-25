@@ -7,7 +7,7 @@ import LoadingSpinner from '../components/LoadingSpinner'
 import PnlText from '../components/PnlText'
 import StatusBadge from '../components/StatusBadge'
 import ActivityFeed from '../components/ActivityFeed'
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Area, AreaChart } from 'recharts'
+import { XAxis, YAxis, Tooltip, ResponsiveContainer, Area, AreaChart } from 'recharts'
 
 export default function Dashboard() {
   const queryClient = useQueryClient()

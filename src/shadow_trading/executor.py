@@ -63,7 +63,7 @@ def open_shadow_trade(
         if not check["approved"]:
             reason = check.get("rejection_reason", "Risk check failed")
             logger.warning("[RISK] Trade rejected for %s: %s", packet.ticker, reason)
-            print(f"[RISK] BLOCKED: {packet.ticker} — {reason}")
+            logger.info("[RISK] BLOCKED: %s — %s", packet.ticker, reason)
             return None
     except ImportError:
         pass  # Risk module not available, continue without
@@ -80,8 +80,7 @@ def open_shadow_trade(
 
     open_trades = get_open_shadow_trades(db_path)
     if len(open_trades) >= max_positions:
-        logger.info(f"[SHADOW] At position limit ({max_positions}), skipping")
-        print(f"[SHADOW] At position limit ({max_positions}), skipping")
+        logger.info("[SHADOW] At position limit (%d), skipping", max_positions)
         return None
 
     ticker = packet.ticker
@@ -89,8 +88,7 @@ def open_shadow_trade(
     # Check for duplicate open trade
     existing = get_open_shadow_trade_for_ticker(ticker, db_path)
     if existing:
-        logger.info(f"[SHADOW] Already have open trade for {ticker}, skipping")
-        print(f"[SHADOW] Already have open trade for {ticker}, skipping")
+        logger.info("[SHADOW] Already have open trade for %s, skipping", ticker)
         return None
 
     # Parse packet values
@@ -170,7 +168,7 @@ def open_shadow_trade(
 
         except Exception as e2:
             logger.warning(f"[SHADOW] Alpaca order failed for {ticker}: {e2}")
-            print(f"[SHADOW] Alpaca order failed for {ticker}: {e2}, recording trade without Alpaca")
+            logger.warning("[SHADOW] Alpaca order failed for %s: %s, recording trade without Alpaca", ticker, e2)
             trade_data["actual_entry_price"] = entry_price
             trade_data["actual_entry_time"] = now.isoformat()
             trade_data["status"] = "open"
@@ -192,9 +190,9 @@ def open_shadow_trade(
         )
 
     actual_price = trade_data.get("actual_entry_price", entry_price)
-    print(
-        f"[SHADOW] Opened shadow trade for {ticker} at ${actual_price:.2f} "
-        f"({planned_shares} shares)"
+    logger.info(
+        "[SHADOW] Opened shadow trade for %s at $%.2f (%d shares)",
+        ticker, actual_price, planned_shares,
     )
 
     return trade_id
@@ -381,10 +379,9 @@ def check_and_manage_open_trades(
             }
             actions.append(action)
 
-            print(
-                f"[SHADOW] Closed {ticker}: {exit_reason} | "
-                f"P&L=${pnl_dollars:+.2f} ({pnl_pct:+.1f}%) | "
-                f"held {days_open} days"
+            logger.info(
+                "[SHADOW] Closed %s: %s | P&L=$%+.2f (%+.1f%%) | held %d days",
+                ticker, exit_reason, pnl_dollars, pnl_pct, days_open,
             )
 
     return actions

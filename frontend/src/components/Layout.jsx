@@ -1,7 +1,7 @@
 import { Outlet, NavLink } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../api'
-import { LayoutDashboard, FileText, TrendingUp, Brain, ClipboardCheck, BarChart3, Settings, Activity, Map, BookOpen } from 'lucide-react'
+import { LayoutDashboard, FileText, TrendingUp, Brain, ClipboardCheck, BarChart3, Settings, Map, BookOpen } from 'lucide-react'
 import StatusBadge from './StatusBadge'
 
 const navItems = [

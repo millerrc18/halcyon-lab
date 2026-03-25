@@ -1,9 +1,10 @@
 """Feature engine for pullback-in-trend setup analysis."""
 
-import sys
+import logging
 
-import numpy as np
 import pandas as pd
+
+logger = logging.getLogger(__name__)
 
 
 def _slope_direction(series: pd.Series, window: int = 10) -> str:
@@ -169,13 +170,13 @@ def compute_all_features(ohlcv_data: dict[str, pd.DataFrame],
     try:
         regime = compute_market_regime(spy, ohlcv_data)
     except Exception as e:
-        print(f"WARNING: Failed to compute market regime: {e}", file=sys.stderr)
+        logger.warning("Failed to compute market regime: %s", e)
         regime = {}
 
     results = {}
     for ticker, df in ohlcv_data.items():
         if len(df) < 200:
-            print(f"WARNING: {ticker} has only {len(df)} rows (need 200+), skipping", file=sys.stderr)
+            logger.warning("%s has only %d rows (need 200+), skipping", ticker, len(df))
             continue
         try:
             feat = compute_features(ticker, df, spy)
@@ -193,5 +194,5 @@ def compute_all_features(ohlcv_data: dict[str, pd.DataFrame],
 
             results[ticker] = feat
         except Exception as e:
-            print(f"WARNING: Failed to compute features for {ticker}: {e}", file=sys.stderr)
+            logger.warning("Failed to compute features for %s: %s", ticker, e)
     return results

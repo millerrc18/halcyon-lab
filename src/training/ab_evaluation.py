@@ -1,6 +1,5 @@
 """A/B shadow model evaluation with promotion logic."""
 
-import json
 import logging
 import sqlite3
 import uuid

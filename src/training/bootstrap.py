@@ -43,7 +43,7 @@ def generate_synthetic_training_data(
     init_training_tables(db_path)
 
     universe = get_sp100_universe()
-    print(f"[TRAINING] Fetching data for synthetic example generation...")
+    logger.info("[TRAINING] Fetching data for synthetic example generation...")
 
     # Fetch a batch of data once
     sample_tickers = random.sample(universe, min(n_examples, len(universe)))
@@ -51,7 +51,7 @@ def generate_synthetic_training_data(
     spy = fetch_spy_benchmark()
 
     if spy.empty:
-        print("[TRAINING] ERROR: Could not fetch SPY benchmark.")
+        logger.warning("[TRAINING] Could not fetch SPY benchmark.")
         return 0
 
     count = 0
@@ -134,6 +134,6 @@ MFE: ${mfe:.2f} | MAE: ${mae:.2f}"""
 
         if count % 10 == 0:
             cost = estimate_bootstrap_cost(count)
-            print(f"  [TRAINING] Bootstrap progress: {count}/{n_examples} (est. cost: ${cost:.2f})")
+            logger.info("  [TRAINING] Bootstrap progress: %d/%d (est. cost: $%.2f)", count, n_examples, cost)
 
     return count

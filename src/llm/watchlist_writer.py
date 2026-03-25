@@ -58,7 +58,7 @@ Watchlist ({len(watchlist)} names):
 
     if response:
         logger.info("[LLM] Generated watchlist narrative")
-        print("  [LLM] Generated watchlist narrative")
+        logger.info("  [LLM] Generated watchlist narrative")
     else:
         logger.warning("[LLM] Failed to generate watchlist narrative")
 

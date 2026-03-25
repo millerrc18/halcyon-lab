@@ -1,9 +1,11 @@
 """Earnings date lookup and event-risk classification."""
 
-import sys
+import logging
 from datetime import date, datetime
 
 import yfinance as yf
+
+logger = logging.getLogger(__name__)
 
 
 def get_next_earnings_date(ticker: str) -> str | None:
@@ -45,7 +47,7 @@ def get_next_earnings_date(ticker: str) -> str | None:
             if future:
                 return min(future).date().isoformat()
     except Exception as e:
-        print(f"WARNING: Could not fetch earnings date for {ticker}: {e}", file=sys.stderr)
+        logger.warning("Could not fetch earnings date for %s: %s", ticker, e)
 
     return None
 

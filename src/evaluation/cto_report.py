@@ -4,10 +4,8 @@ Produces a comprehensive structured report for CTO analysis,
 designed to be consumed by Claude for strategic recommendations.
 """
 
-import json
 import logging
-import sqlite3
-from collections import Counter, defaultdict
+from collections import defaultdict
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
