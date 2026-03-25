@@ -69,8 +69,8 @@ const ROADMAP_DATA = {
       name: 'Phase 2 — Micro live',
       status: 'locked',
       capital: '$500–$1,000',
-      monthlyCost: '$85/mo',
-      description: 'Auto-execute with risk governor. No human approval. Shadow runs in parallel.',
+      monthlyCost: '$350/mo',
+      description: 'Expand to ~325 stocks. Auto-execute with risk governor. No human approval.',
       gate: {
         label: 'Live trading proves execution quality and real-money edge',
         metrics: [
@@ -82,6 +82,9 @@ const ROADMAP_DATA = {
         ],
       },
       items: [
+        { label: 'Expand universe: S&P 100 → ~325 stocks (S&P 500 filtered by $100M+ ADV)', status: 'pending' },
+        { label: 'Add GICS sector as input feature (sector conditioning)', status: 'pending' },
+        { label: 'Upgrade data API to Polygon.io ($199/mo) for full US equity coverage', status: 'pending' },
         { label: 'LLC formation + trader tax status consultation', status: 'pending' },
         { label: 'Interactive Brokers account + IB adapter', status: 'pending' },
         { label: 'IB paper testing (2 weeks) → live with $500-$1K', status: 'pending' },
@@ -117,7 +120,8 @@ const ROADMAP_DATA = {
       },
       items: [
         { label: 'Regime-specific LoRA adapters (HMM)', status: 'pending' },
-        { label: 'Polygon.io + FMP data ($51/mo)', status: 'pending' },
+        { label: 'Sector-specific LoRA adapters (Tech, Healthcare, Energy, Financials)', status: 'pending' },
+        { label: 'FMP consensus/fundamentals data ($29/mo)', status: 'pending' },
         { label: 'Qwen 2.5 14B production model', status: 'pending' },
         { label: 'Multi-teacher data generation', status: 'pending' },
         { label: 'Tiered data architecture (core/archive/recent)', status: 'pending' },
@@ -170,7 +174,7 @@ const ROADMAP_DATA = {
       },
       items: [
         { label: 'Multi-setup families (breakout, momentum, mean reversion)', status: 'pending' },
-        { label: 'S&P 500 expanded universe', status: 'pending' },
+        { label: 'Russell 1000 expansion (~500-700 stocks) if alpha proven at 325', status: 'pending' },
         { label: 'Options: live trading credit spreads + iron condors ($2K+ dedicated capital)', status: 'pending' },
         { label: 'Options: XSP/SPX index options via IB (Section 1256 tax treatment)', status: 'pending' },
         { label: 'Verified track record (Interactive Brokers or equivalent)', status: 'pending' },
