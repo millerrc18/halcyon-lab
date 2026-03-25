@@ -52,7 +52,7 @@ def main():
              {"role":"assistant","content":ex["output"]}], tokenize=False)}
 
     dataset = Dataset.from_list(examples).map(fmt)
-    trainer = SFTTrainer(model=model, tokenizer=tokenizer,
+    trainer = SFTTrainer(model=model, processing_class=tokenizer,
         train_dataset=dataset, dataset_text_field="text", max_seq_length=1024,
         args=TrainingArguments(per_device_train_batch_size=1, gradient_accumulation_steps=16,
             num_train_epochs=1, learning_rate=2e-4, bf16=True, logging_steps=10,
@@ -134,7 +134,7 @@ def main():
         if len(ds) == 0:
             print(f"  Empty dataset for {name}, skipping")
             continue
-        trainer = SFTTrainer(model=model, tokenizer=tokenizer,
+        trainer = SFTTrainer(model=model, processing_class=tokenizer,
             train_dataset=ds, dataset_text_field="text", max_seq_length=512,
             args=TrainingArguments(
                 per_device_train_batch_size=1, gradient_accumulation_steps=16,
@@ -189,7 +189,7 @@ def main():
 
     dataset = Dataset.from_list(pairs)
 
-    trainer = DPOTrainer(model=model, tokenizer=tokenizer, train_dataset=dataset,
+    trainer = DPOTrainer(model=model, processing_class=tokenizer, train_dataset=dataset,
         args=DPOConfig(
             per_device_train_batch_size=1, gradient_accumulation_steps=8,
             num_train_epochs=3, learning_rate=5e-5, beta=0.1, bf16=True,
