@@ -29,9 +29,29 @@ Thumbs.db
 # Runtime data
 *.sqlite3
 logs/
+data/
+
+# Training artifacts
+training_data/
+*.pkl
+*.gguf
+*.safetensors
+
+# Model outputs
+models/
+
+# Cache
+.cache/
+*.pickle
 
 # Claude Code
 .claude/
+
+# Misc
+*.log
+*.bak
+*.tmp
+.env
 
 # Frontend build
 frontend/dist/
