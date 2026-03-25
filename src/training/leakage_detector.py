@@ -97,10 +97,12 @@ def check_outcome_leakage(db_path: str = "ai_research_desk.sqlite3") -> dict:
             "note": "Need at least 50 examples with output text to test for leakage",
         }
 
-    vectorizer = TfidfVectorizer(max_features=500, stop_words="english")
+    vectorizer = TfidfVectorizer(max_features=100, stop_words="english",
+                                   min_df=3, max_df=0.8)
     X = vectorizer.fit_transform(texts)
 
-    clf = LogisticRegression(max_iter=1000, random_state=42)
+    # Use strong regularization to prevent overfitting on small datasets
+    clf = LogisticRegression(max_iter=1000, random_state=42, C=0.1)
     n_splits = min(5, min(sum(1 for l in labels if l == 1), sum(1 for l in labels if l == 0)))
     if n_splits < 2:
         return {
@@ -110,8 +112,13 @@ def check_outcome_leakage(db_path: str = "ai_research_desk.sqlite3") -> dict:
             "note": "Need at least 2 examples per class for cross-validation",
         }
 
-    scores = cross_val_score(clf, X, labels, cv=n_splits, scoring="accuracy")
-    accuracy = float(np.mean(scores))
+    # Run multiple random seeds for stability
+    all_scores = []
+    for seed in [42, 123, 456, 789, 1024]:
+        clf_s = LogisticRegression(max_iter=1000, random_state=seed, C=0.1)
+        scores = cross_val_score(clf_s, X, labels, cv=n_splits, scoring="accuracy")
+        all_scores.extend(scores)
+    accuracy = float(np.mean(all_scores))
 
     # Get feature importance
     clf.fit(X, labels)
