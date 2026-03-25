@@ -388,19 +388,27 @@ def cmd_check_leakage(args):
     from src.training.leakage_detector import check_outcome_leakage
     result = check_outcome_leakage()
     print("\n=== OUTCOME LEAKAGE TEST ===")
-    if result.get("test_accuracy") is None:
+    if result.get("balanced_accuracy") is None:
         print(f"  {result.get('note', 'Insufficient data')}")
     else:
-        status = "LEAKING" if result["is_leaking"] else "CLEAN"
-        print(f"  Status:   {status}")
-        print(f"  Accuracy: {result['test_accuracy']:.1%} (should be <= 55%)")
-        print(f"  Examples: {result['n_examples']}")
+        print(f"  Status:            {result['status']}")
+        print(f"  Balanced Accuracy: {result['balanced_accuracy']:.1%} (CLEAN ≤55%, MARGINAL 55-65%, LEAKING >65%)")
+        print(f"  Raw Accuracy:      {result['raw_accuracy']:.1%}")
+        print(f"  Majority Baseline: {result['majority_baseline']:.1%} (predicting all-majority-class)")
+        print(f"  Above Baseline:    {result['accuracy_above_baseline']:+.1%}")
+        cb = result.get("class_balance", {})
+        print(f"  Class Balance:     {cb.get('wins', 0)} wins / {cb.get('losses', 0)} losses ({cb.get('win_pct', 0)}% win)")
+        print(f"  Examples:          {result['n_examples']}")
         if result.get("feature_importance"):
             fi = result["feature_importance"]
-            print(f"  Win predictors:  {', '.join(fi['win_predictors'][:3])}")
-            print(f"  Loss predictors: {', '.join(fi['loss_predictors'][:3])}")
+            print(f"  Win predictors:    {', '.join(fi['win_predictors'][:3])}")
+            print(f"  Loss predictors:   {', '.join(fi['loss_predictors'][:3])}")
         if result["is_leaking"]:
-            print("\n  ACTION: Commentary text predicts outcomes — iterate on prompts before fine-tuning.")
+            print("\n  ACTION: Commentary text predicts outcomes beyond feature-level signal.")
+            print("  Investigate whether language reveals directional expectations.")
+        elif result["status"] == "MARGINAL":
+            print("\n  MARGINAL: Some signal detected, likely feature-level (not outcome leakage).")
+            print("  Safe to proceed with training. Monitor on future datasets.")
         else:
             print("\n  Commentary is outcome-independent. Safe to fine-tune.")
 
