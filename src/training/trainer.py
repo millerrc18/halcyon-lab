@@ -139,7 +139,7 @@ def main():
     from datasets import Dataset
 
     model, tokenizer = FastLanguageModel.from_pretrained(
-        model_name="training_data/lora_adapter", max_seq_length=2048, dtype=None, load_in_4bit=True)
+        model_name="training_data/lora_adapter", max_seq_length=1024, dtype=None, load_in_4bit=True)
 
     model = FastLanguageModel.get_peft_model(model,
         r=8, lora_alpha=16, lora_dropout=0.0,
