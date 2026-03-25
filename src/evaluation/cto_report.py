@@ -89,6 +89,9 @@ def generate_cto_report(days: int = 7, db_path: str = "ai_research_desk.sqlite3"
     # Confidence calibration
     confidence_calibration = _compute_confidence_calibration(closed, recommendations)
 
+    # Fund-level metrics
+    fund_metrics = _compute_fund_metrics(closed, trade_summary)
+
     # Build headline KPIs — the 5 numbers that matter most
     headline_kpis = {
         "sharpe_ratio": trade_summary.get("sharpe_ratio", 0),
@@ -122,6 +125,7 @@ def generate_cto_report(days: int = 7, db_path: str = "ai_research_desk.sqlite3"
         "feature_correlations": feature_correlations,
         "training_status": training_status,
         "confidence_calibration": confidence_calibration,
+        "fund_metrics": fund_metrics,
     }
 
 
@@ -551,6 +555,94 @@ def _compute_confidence_calibration(closed: list, recommendations: list) -> dict
         "is_calibrated": is_calibrated,
         "overconfidence_rate": round(overconfidence, 2),
         "total_with_conviction": len(convictions),
+    }
+
+
+def _compute_fund_metrics(closed: list, trade_summary: dict) -> dict:
+    """Compute fund-level performance metrics (Sortino, Calmar, VaR, etc.)."""
+    import math
+
+    pnl_pcts = [t.get("pnl_pct", 0) or 0 for t in closed]
+    pnl_dollars = [t.get("pnl_dollars", 0) or 0 for t in closed]
+    durations = [t.get("duration_days", 0) or 0 for t in closed]
+
+    if len(pnl_pcts) < 2:
+        return {
+            "sortino_ratio": None,
+            "calmar_ratio": None,
+            "var_95": None,
+            "monthly_batting_avg": None,
+            "avg_hold_period_days": None,
+            "return_skewness": None,
+            "best_trade_pct": None,
+            "worst_trade_pct": None,
+            "total_return_pct": None,
+            "beta": None,
+            "alpha": None,
+        }
+
+    mean_r = sum(pnl_pcts) / len(pnl_pcts)
+
+    # Sortino ratio — only penalizes downside volatility
+    downside = [r for r in pnl_pcts if r < 0]
+    if downside:
+        downside_dev = (sum(r ** 2 for r in downside) / len(downside)) ** 0.5
+        sortino = (mean_r / downside_dev) * math.sqrt(150) if downside_dev > 0 else 0
+    else:
+        sortino = float('inf') if mean_r > 0 else 0
+
+    # Calmar ratio — return / max drawdown
+    max_dd_pct = trade_summary.get("max_drawdown_pct", 0)
+    calmar = (mean_r * 150) / max_dd_pct if max_dd_pct > 0 else 0
+
+    # VaR 95% — 5th percentile of returns
+    sorted_pnl = sorted(pnl_pcts)
+    var_idx = max(0, int(len(sorted_pnl) * 0.05) - 1)
+    var_95 = sorted_pnl[var_idx] if sorted_pnl else 0
+
+    # Monthly batting average — % of months with positive P&L
+    monthly_pnl = defaultdict(float)
+    for t in closed:
+        month_key = (t.get("created_at") or "")[:7]
+        if month_key:
+            monthly_pnl[month_key] += t.get("pnl_dollars", 0) or 0
+    positive_months = sum(1 for v in monthly_pnl.values() if v > 0)
+    monthly_batting = (positive_months / len(monthly_pnl) * 100) if monthly_pnl else None
+
+    # Average hold period
+    avg_hold = sum(durations) / len(durations) if durations else 0
+
+    # Return skewness
+    if len(pnl_pcts) >= 3:
+        std_r = (sum((r - mean_r) ** 2 for r in pnl_pcts) / (len(pnl_pcts) - 1)) ** 0.5
+        if std_r > 0:
+            skew = (sum((r - mean_r) ** 3 for r in pnl_pcts) / len(pnl_pcts)) / (std_r ** 3)
+        else:
+            skew = 0
+    else:
+        skew = None
+
+    # Best / worst trade
+    best = max(pnl_pcts) if pnl_pcts else None
+    worst = min(pnl_pcts) if pnl_pcts else None
+
+    # Total return (sum of all trade P&L as % of starting capital)
+    total_pnl = sum(pnl_dollars)
+    # Assume $100k starting capital
+    total_return_pct = (total_pnl / 100000) * 100
+
+    return {
+        "sortino_ratio": round(sortino, 2) if sortino != float('inf') else "inf",
+        "calmar_ratio": round(calmar, 2),
+        "var_95": round(var_95, 2),
+        "monthly_batting_avg": round(monthly_batting, 1) if monthly_batting is not None else None,
+        "avg_hold_period_days": round(avg_hold, 1),
+        "return_skewness": round(skew, 2) if skew is not None else None,
+        "best_trade_pct": round(best, 2) if best is not None else None,
+        "worst_trade_pct": round(worst, 2) if worst is not None else None,
+        "total_return_pct": round(total_return_pct, 2),
+        "beta": None,
+        "alpha": None,
     }
 
 

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { api } from '../api'
 import LoadingSpinner from '../components/LoadingSpinner'
 
 function renderMarkdown(md) {
@@ -86,11 +87,11 @@ export default function Docs() {
   const [activeDoc, setActiveDoc] = useState('agents')
   const { data: docList } = useQuery({
     queryKey: ['docs-list'],
-    queryFn: () => fetch('/api/docs').then(r => r.json()),
+    queryFn: api.getDocsList,
   })
   const { data: doc, isLoading } = useQuery({
     queryKey: ['doc', activeDoc],
-    queryFn: () => fetch(`/api/docs/${activeDoc}`).then(r => r.json()),
+    queryFn: () => api.getDoc(activeDoc),
     enabled: !!activeDoc,
   })
 

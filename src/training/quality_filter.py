@@ -117,7 +117,7 @@ def score_training_example(input_text: str, output_text: str,
         f"INPUT DATA:\n{input_text[:1500]}\n\n"
         f"COMMENTARY TO SCORE:\n{output_text[:2000]}"
     )
-    response = generate_training_example(QUALITY_JUDGE_PROMPT, prompt)
+    response = generate_training_example(QUALITY_JUDGE_PROMPT, prompt, purpose="scoring")
 
     if response is None:
         return None

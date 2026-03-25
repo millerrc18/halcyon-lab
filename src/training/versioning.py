@@ -1,10 +1,12 @@
 """Model versioning and performance tracking for the training pipeline."""
 
+import logging
 import sqlite3
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
+logger = logging.getLogger(__name__)
 ET = ZoneInfo("America/New_York")
 
 TRAINING_SCHEMA = """
@@ -106,6 +108,26 @@ def init_training_tables(db_path: str = "ai_research_desk.sqlite3") -> None:
                 full_report TEXT
             )
         """)
+        conn.commit()
+
+        # API cost tracking table
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS api_costs (
+                cost_id TEXT PRIMARY KEY,
+                created_at TEXT NOT NULL,
+                model TEXT NOT NULL,
+                purpose TEXT NOT NULL,
+                input_tokens INTEGER NOT NULL,
+                output_tokens INTEGER NOT NULL,
+                cost_dollars REAL NOT NULL
+            )
+        """)
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_api_costs_created_at ON api_costs(created_at)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_api_costs_purpose ON api_costs(purpose)"
+        )
         conn.commit()
 
 
@@ -317,3 +339,125 @@ def _migrate_model_version_column(db_path: str = "ai_research_desk.sqlite3") -> 
             conn.commit()
     except sqlite3.OperationalError:
         pass  # Column already exists
+
+
+# ---------------------------------------------------------------------------
+# API cost tracking
+# ---------------------------------------------------------------------------
+
+# Pricing per million tokens
+API_PRICING = {
+    "claude-haiku-4-5-20251001": {"input": 1.0, "output": 5.0},
+    "claude-haiku-4-5-20251022": {"input": 1.0, "output": 5.0},
+}
+_DEFAULT_PRICING = {"input": 1.0, "output": 5.0}
+
+
+def log_api_cost(
+    model: str,
+    purpose: str,
+    input_tokens: int,
+    output_tokens: int,
+    db_path: str = "ai_research_desk.sqlite3",
+) -> None:
+    """Log an API call's token usage and cost. Never raises."""
+    try:
+        init_training_tables(db_path)
+        rates = API_PRICING.get(model, _DEFAULT_PRICING)
+        cost = (input_tokens * rates["input"] + output_tokens * rates["output"]) / 1_000_000
+
+        cost_id = str(uuid.uuid4())
+        created_at = datetime.now(ET).isoformat()
+
+        with sqlite3.connect(db_path) as conn:
+            conn.execute(
+                """INSERT INTO api_costs
+                   (cost_id, created_at, model, purpose, input_tokens, output_tokens, cost_dollars)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (cost_id, created_at, model, purpose, input_tokens, output_tokens, cost),
+            )
+            conn.commit()
+    except Exception as e:
+        logger.debug("Failed to log API cost: %s", e)
+
+
+def get_cost_summary(days: int = 30, db_path: str = "ai_research_desk.sqlite3") -> dict:
+    """Return cost summary: total, by purpose, by day."""
+    init_training_tables(db_path)
+    now = datetime.now(ET)
+    cutoff = (now - timedelta(days=days)).isoformat()
+    today_str = now.strftime("%Y-%m-%d")
+    week_ago = (now - timedelta(days=7)).isoformat()
+
+    with sqlite3.connect(db_path) as conn:
+        conn.row_factory = sqlite3.Row
+
+        # Total (all time)
+        row = conn.execute("SELECT COALESCE(SUM(cost_dollars), 0) as total FROM api_costs").fetchone()
+        total_all_time = row["total"]
+
+        # Total in window
+        row = conn.execute(
+            "SELECT COALESCE(SUM(cost_dollars), 0) as total, "
+            "COALESCE(SUM(input_tokens), 0) as inp, "
+            "COALESCE(SUM(output_tokens), 0) as outp, "
+            "COUNT(*) as calls "
+            "FROM api_costs WHERE created_at >= ?",
+            (cutoff,),
+        ).fetchone()
+        total_period = row["total"]
+        total_input_tokens = row["inp"]
+        total_output_tokens = row["outp"]
+        total_calls = row["calls"]
+
+        # Today
+        row = conn.execute(
+            "SELECT COALESCE(SUM(cost_dollars), 0) as total FROM api_costs WHERE created_at >= ?",
+            (today_str,),
+        ).fetchone()
+        total_today = row["total"]
+
+        # This week
+        row = conn.execute(
+            "SELECT COALESCE(SUM(cost_dollars), 0) as total FROM api_costs WHERE created_at >= ?",
+            (week_ago,),
+        ).fetchone()
+        total_week = row["total"]
+
+        # By purpose
+        rows = conn.execute(
+            "SELECT purpose, SUM(cost_dollars) as cost, SUM(input_tokens) as inp, "
+            "SUM(output_tokens) as outp, COUNT(*) as calls "
+            "FROM api_costs WHERE created_at >= ? GROUP BY purpose ORDER BY cost DESC",
+            (cutoff,),
+        ).fetchall()
+        by_purpose = {
+            r["purpose"]: {
+                "cost": round(r["cost"], 4),
+                "input_tokens": r["inp"],
+                "output_tokens": r["outp"],
+                "calls": r["calls"],
+            }
+            for r in rows
+        }
+
+        # Daily totals
+        daily_rows = conn.execute(
+            "SELECT DATE(created_at) as day, SUM(cost_dollars) as cost, COUNT(*) as calls "
+            "FROM api_costs WHERE created_at >= ? GROUP BY DATE(created_at) ORDER BY day",
+            (cutoff,),
+        ).fetchall()
+        daily = [{"date": r["day"], "cost": round(r["cost"], 4), "calls": r["calls"]} for r in daily_rows]
+
+    return {
+        "total_all_time": round(total_all_time, 4),
+        "total_period": round(total_period, 4),
+        "total_today": round(total_today, 4),
+        "total_week": round(total_week, 4),
+        "total_input_tokens": total_input_tokens,
+        "total_output_tokens": total_output_tokens,
+        "total_calls": total_calls,
+        "days": days,
+        "by_purpose": by_purpose,
+        "daily": daily,
+    }

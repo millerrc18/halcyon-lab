@@ -34,13 +34,6 @@ def startup():
     initialize_database()
 
 
-# CTO Report API endpoint
-@app.get("/api/cto-report")
-def api_cto_report(days: int = 7):
-    from src.evaluation.cto_report import generate_cto_report
-    return generate_cto_report(days=days)
-
-
 # WebSocket for live updates (uses shared manager from websocket.py)
 @app.websocket("/ws/live")
 async def websocket_endpoint(websocket: WebSocket):

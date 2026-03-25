@@ -9,8 +9,8 @@ import { TrendingUp } from 'lucide-react'
 
 export default function ShadowLedger() {
   const [tab, setTab] = useState('open')
-  const { data: openData, isLoading: openLoading } = useQuery({ queryKey: ['shadow-open'], queryFn: api.getOpenTrades })
-  const { data: closedData, isLoading: closedLoading } = useQuery({ queryKey: ['shadow-closed'], queryFn: () => api.getClosedTrades(30) })
+  const { data: openData, isLoading: openLoading } = useQuery({ queryKey: ['shadow-open'], queryFn: api.getOpenTrades, refetchInterval: 30000 })
+  const { data: closedData, isLoading: closedLoading } = useQuery({ queryKey: ['shadow-closed'], queryFn: () => api.getClosedTrades(30), refetchInterval: 30000 })
 
   const openCols = [
     { key: 'ticker', label: 'Ticker', type: 'text' },

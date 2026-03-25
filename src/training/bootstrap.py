@@ -110,7 +110,7 @@ MFE: ${mfe:.2f} | MAE: ${mae:.2f}"""
 
         full_prompt = feature_text + "\n" + outcome_text
 
-        response = generate_training_example(TRAINING_EXAMPLE_PROMPT, full_prompt)
+        response = generate_training_example(TRAINING_EXAMPLE_PROMPT, full_prompt, purpose="bootstrap")
         if response is None:
             logger.warning("[TRAINING] Failed to generate synthetic for %s, skipping", ticker)
             continue

@@ -400,7 +400,7 @@ where each N is 1-5."""
 
         # Score model output
         judge_input = f"ANALYSIS TO RATE:\n{model_output}"
-        score_text = generate_training_example(JUDGE_PROMPT, judge_input)
+        score_text = generate_training_example(JUDGE_PROMPT, judge_input, purpose="scoring")
         if score_text:
             try:
                 # Try to parse JSON from response
@@ -414,7 +414,7 @@ where each N is 1-5."""
 
         # Score gold standard output
         gold_input = f"ANALYSIS TO RATE:\n{ex['output']}"
-        gold_text = generate_training_example(JUDGE_PROMPT, gold_input)
+        gold_text = generate_training_example(JUDGE_PROMPT, gold_input, purpose="scoring")
         if gold_text:
             try:
                 json_match = re.search(r'\{[^}]+\}', gold_text)

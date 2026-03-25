@@ -2,10 +2,13 @@ import { useQuery } from '@tanstack/react-query'
 import { api } from '../api'
 import LoadingSpinner from '../components/LoadingSpinner'
 import StatusBadge from '../components/StatusBadge'
+import MetricCard from '../components/MetricCard'
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 
 export default function Settings() {
   const { data: config, isLoading } = useQuery({ queryKey: ['config'], queryFn: api.getConfig })
   const { data: status } = useQuery({ queryKey: ['status'], queryFn: api.getStatus })
+  const { data: costs } = useQuery({ queryKey: ['costs'], queryFn: () => api.getCosts(30), refetchInterval: 120000 })
 
   if (isLoading) return <LoadingSpinner />
 
@@ -26,6 +29,10 @@ export default function Settings() {
   return (
     <div className="space-y-6">
       <h2 className="text-xl font-medium">Settings</h2>
+
+      <div className="bg-amber-900/30 border border-amber-500/50 rounded-lg p-3 text-amber-300 text-sm">
+        Configuration changes require a watch loop restart to take effect.
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Section title="Risk">
@@ -88,6 +95,57 @@ export default function Settings() {
             ))}
           </div>
         </div>
+      )}
+
+      {/* API Cost Tracking */}
+      {costs && (
+        <>
+          <h3 className="text-sm text-[var(--text-muted)] uppercase tracking-wide">API Costs</h3>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <MetricCard label="All Time" value={`$${costs.total_all_time.toFixed(2)}`} />
+            <MetricCard label="Today" value={`$${costs.total_today.toFixed(4)}`} />
+            <MetricCard label="This Week" value={`$${costs.total_week.toFixed(4)}`} />
+            <MetricCard label="API Calls (30d)" value={costs.total_calls} />
+          </div>
+
+          {/* Breakdown by purpose */}
+          {Object.keys(costs.by_purpose).length > 0 && (
+            <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-lg p-4">
+              <h3 className="text-sm text-[var(--text-muted)] uppercase tracking-wide mb-4">Cost by Purpose (30d)</h3>
+              <div className="space-y-2 text-sm">
+                {Object.entries(costs.by_purpose)
+                  .sort((a, b) => b[1].cost - a[1].cost)
+                  .map(([purpose, data]) => (
+                    <div key={purpose} className="flex items-center justify-between">
+                      <span className="text-[var(--text-secondary)] capitalize">{purpose.replace(/_/g, ' ')}</span>
+                      <div className="flex items-center gap-4 font-mono">
+                        <span className="text-[var(--text-muted)] text-xs">{data.calls} calls</span>
+                        <span>${data.cost.toFixed(4)}</span>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          )}
+
+          {/* Daily spend chart */}
+          {costs.daily && costs.daily.length > 0 && (
+            <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-lg p-4">
+              <h3 className="text-sm text-[var(--text-muted)] uppercase tracking-wide mb-4">Daily Spend (30d)</h3>
+              <ResponsiveContainer width="100%" height={180}>
+                <BarChart data={costs.daily}>
+                  <XAxis dataKey="date" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} tickFormatter={d => d.slice(5)} />
+                  <YAxis tick={{ fontSize: 10, fill: 'var(--text-muted)' }} tickFormatter={v => `$${v}`} />
+                  <Tooltip
+                    contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 12 }}
+                    formatter={v => [`$${v.toFixed(4)}`, 'Cost']}
+                  />
+                  <Bar dataKey="cost" fill="var(--blue)" radius={[2, 2, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </>
       )}
     </div>
   )

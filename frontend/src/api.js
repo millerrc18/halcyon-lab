@@ -40,4 +40,8 @@ export const api = {
   getLatestAudit: () => fetchApi('/audit/latest'),
   getAuditHistory: (days = 7) => fetchApi(`/audit/history?days=${days}`),
   getCtoReport: (days = 7) => fetchApi(`/cto-report?days=${days}`),
+  getDocsList: () => fetchApi('/docs'),
+  getDoc: (docId) => fetchApi(`/docs/${docId}`),
+  getMetricHistory: (days = 90) => fetchApi(`/metric-history?days=${days}`),
+  getCosts: (days = 30) => fetchApi(`/costs?days=${days}`),
 }

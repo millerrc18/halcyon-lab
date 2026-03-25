@@ -5,8 +5,8 @@ import StatusBadge from '../components/StatusBadge'
 import LoadingSpinner from '../components/LoadingSpinner'
 
 export default function Training() {
-  const { data: status, isLoading } = useQuery({ queryKey: ['training-status'], queryFn: api.getTrainingStatus })
-  const { data: history } = useQuery({ queryKey: ['training-versions'], queryFn: api.getTrainingVersions })
+  const { data: status, isLoading } = useQuery({ queryKey: ['training-status'], queryFn: api.getTrainingStatus, refetchInterval: 60000 })
+  const { data: history } = useQuery({ queryKey: ['training-versions'], queryFn: api.getTrainingVersions, refetchInterval: 60000 })
 
   if (isLoading) return <LoadingSpinner />
 
