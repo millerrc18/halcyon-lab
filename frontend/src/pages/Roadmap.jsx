@@ -29,18 +29,19 @@ const ROADMAP_DATA = {
       monthlyCost: '$5/mo',
       description: '30-day intensive paper trading. Prove the system has an edge.',
       gate: {
-        label: '50+ closed trades, positive expectancy, win rate > 45%',
+        label: '50+ closed trades, positive expectancy, system proves edge',
         metrics: [
           { key: 'trades_closed', label: 'Closed trades', target: 50, op: '>=' },
           { key: 'win_rate', label: 'Win rate', target: 0.45, op: '>=', fmt: 'pct' },
           { key: 'sharpe_ratio', label: 'Sharpe', target: 0.5, op: '>=' },
           { key: 'expectancy_dollars', label: 'Expectancy', target: 0, op: '>', fmt: 'dollar' },
+          { key: 'avg_rubric_score', label: 'Rubric score', target: 3.5, op: '>=' },
         ],
       },
       items: [
         { label: '7-source data enrichment', status: 'done' },
         { label: 'Bracket orders via Alpaca', status: 'done' },
-        { label: 'Risk governor (7 hard limits)', status: 'done' },
+        { label: 'Risk governor (8 hard limits)', status: 'done' },
         { label: 'Auditor agent (daily + weekly)', status: 'done' },
         { label: 'Validation holdout + A/B eval', status: 'done' },
         { label: 'Walk-forward backtesting', status: 'done' },
@@ -48,14 +49,19 @@ const ROADMAP_DATA = {
         { label: 'News enrichment (Finnhub)', status: 'done' },
         { label: 'Quality pipeline + LLM-as-judge', status: 'done' },
         { label: 'Dashboard + WebSocket', status: 'done' },
-        { label: 'XML output format', status: 'in-progress' },
-        { label: 'Self-blinding training pipeline', status: 'in-progress' },
-        { label: 'Process-first quality rubric', status: 'in-progress' },
-        { label: 'Re-run backfill with new methodology', status: 'pending' },
-        { label: 'Score + classify + fine-tune halcyon-v1', status: 'pending' },
-        { label: 'Unified train-pipeline command (score → leakage → classify → train)', status: 'pending' },
-        { label: 'Dashboard action buttons (scan, train, CTO report, backfill, leakage check)', status: 'pending' },
-        { label: 'Live activity feed — real-time event stream on dashboard', status: 'pending' },
+        { label: 'XML output format', status: 'done' },
+        { label: 'Self-blinding training pipeline', status: 'done' },
+        { label: 'Process-first quality rubric', status: 'done' },
+        { label: 'Re-run backfill with new methodology (976 examples)', status: 'done' },
+        { label: 'Score + classify + fine-tune halcyon-v1', status: 'in-progress' },
+        { label: 'Fund metrics + metric history trending', status: 'done' },
+        { label: 'API cost tracking', status: 'done' },
+        { label: 'Database indexes + codebase audit', status: 'done' },
+        { label: 'Leakage detector (balanced accuracy)', status: 'done' },
+        { label: '24/7 overnight schedule (Phase A)', status: 'pending' },
+        { label: 'Unified train-pipeline command', status: 'pending' },
+        { label: 'Dashboard action buttons', status: 'pending' },
+        { label: 'Live activity feed', status: 'pending' },
       ],
     },
     {
@@ -66,10 +72,12 @@ const ROADMAP_DATA = {
       monthlyCost: '$85/mo',
       description: 'Auto-execute with risk governor. No human approval. Shadow runs in parallel.',
       gate: {
-        label: 'Live matches paper within 20%, 50+ live trades',
+        label: 'Live trading proves execution quality and real-money edge',
         metrics: [
           { key: 'live_trades', label: 'Live trades', target: 50, op: '>=' },
           { key: 'live_paper_delta', label: 'Live vs paper', target: 20, op: '<=', fmt: 'pctAbs' },
+          { key: 'sharpe_ratio', label: 'Sharpe (live)', target: 0.75, op: '>=' },
+          { key: 'max_drawdown_pct', label: 'Max DD', target: 20, op: '<=', fmt: 'pctVal' },
         ],
       },
       items: [
@@ -97,9 +105,10 @@ const ROADMAP_DATA = {
       monthlyCost: '$135/mo',
       description: 'Tiered autonomy by conviction level. Multiple data feeds.',
       gate: {
-        label: '3 months profitable, Sharpe > 1.0, max drawdown < 15%',
+        label: 'Institutional-quality risk-adjusted returns',
         metrics: [
           { key: 'sharpe_ratio', label: 'Sharpe', target: 1.0, op: '>=' },
+          { key: 'sortino_ratio', label: 'Sortino', target: 1.5, op: '>=' },
           { key: 'max_drawdown_pct', label: 'Max DD', target: 15, op: '<=', fmt: 'pctVal' },
           { key: 'profitable_months', label: 'Profitable months', target: 3, op: '>=' },
         ],
@@ -120,10 +129,13 @@ const ROADMAP_DATA = {
       monthlyCost: '$135/mo',
       description: 'All trades auto-executed within hard risk limits.',
       gate: {
-        label: '6 months profitable, consistent across market regimes',
+        label: 'Investor-ready track record across market regimes',
         metrics: [
           { key: 'profitable_months', label: 'Profitable months', target: 6, op: '>=' },
-          { key: 'sharpe_ratio', label: 'Sharpe', target: 1.0, op: '>=' },
+          { key: 'sharpe_ratio', label: 'Sharpe', target: 1.2, op: '>=' },
+          { key: 'sortino_ratio', label: 'Sortino', target: 1.5, op: '>=' },
+          { key: 'max_drawdown_pct', label: 'Max DD', target: 12, op: '<=', fmt: 'pctVal' },
+          { key: 'calmar_ratio', label: 'Calmar', target: 1.0, op: '>=' },
         ],
       },
       items: [
@@ -141,7 +153,14 @@ const ROADMAP_DATA = {
       capital: '$100K+',
       monthlyCost: '$200/mo',
       description: 'Grow capital under management. Build auditable track record. Multi-strategy diversification.',
-      gate: null,
+      gate: {
+        label: 'Institutional allocation threshold',
+        metrics: [
+          { key: 'track_record_months', label: 'Audited months', target: 12, op: '>=' },
+          { key: 'sharpe_ratio', label: 'Sharpe', target: 1.5, op: '>=' },
+          { key: 'max_drawdown_pct', label: 'Max DD', target: 10, op: '<=', fmt: 'pctVal' },
+        ],
+      },
       items: [
         { label: 'Multi-setup families (breakout, momentum, mean reversion)', status: 'pending' },
         { label: 'S&P 500 expanded universe', status: 'pending' },
