@@ -141,7 +141,7 @@ def main():
             learning_rate=lr,
             bf16=True,
             logging_steps=10,
-            max_seq_length=512,
+            max_length=512,
             output_dir=f"training_data/checkpoints/{name.lower()}",
             optim="paged_adamw_8bit",
             report_to="none",
