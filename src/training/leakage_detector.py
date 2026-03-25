@@ -62,6 +62,33 @@ def check_outcome_leakage(db_path: str = "ai_research_desk.sqlite3") -> dict:
     texts = [row["output_text"] for row in rows if row["output_text"]]
     labels = [1 if "win" in row["source"] else 0 for row in rows if row["output_text"]]
 
+    # Mask ticker names and company names to prevent ticker-level correlation
+    # from registering as outcome leakage. We want to test whether the
+    # COMMENTARY STYLE reveals outcomes, not whether certain tickers won/lost.
+    try:
+        from src.universe.sp100 import get_sp100_universe
+        from src.universe.company_names import COMPANY_NAMES
+        tickers = set(t.lower() for t in get_sp100_universe())
+        company_words = set()
+        for name in COMPANY_NAMES.values():
+            for word in name.lower().split():
+                if len(word) > 2:  # Skip "of", "the", etc.
+                    company_words.add(word)
+        # Also mask common ticker-like patterns
+        import re
+        def mask_text(text):
+            masked = text.lower()
+            # Replace ticker symbols (standalone uppercase 1-5 letter words)
+            for ticker in tickers:
+                masked = re.sub(r'\b' + re.escape(ticker) + r'\b', 'TICKER', masked)
+            # Replace company name words
+            for word in company_words:
+                masked = re.sub(r'\b' + re.escape(word) + r'\b', 'COMPANY', masked)
+            return masked
+        texts = [mask_text(t) for t in texts]
+    except Exception:
+        pass  # If masking fails, continue with unmasked text
+
     if len(texts) < 50:
         return {
             "test_accuracy": None,
