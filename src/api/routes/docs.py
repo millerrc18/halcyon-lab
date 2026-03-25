@@ -29,6 +29,7 @@ DOCS = [
     # Research — Business & Operations
     {"id": "research-fund-path", "path": "docs/research/From_Solo_AI_Trader_to_Fund_Manager__A_Complete_Operational_Roadmap.md", "title": "Research: Solo Trader → Fund Manager"},
     {"id": "research-scaling-plan", "path": "docs/research/Halcyon_Lab_Scaling_Plan_Through_2026.md", "title": "Research: Scaling Plan Through 2026"},
+    {"id": "research-options", "path": "docs/research/AI-Powered_Options_Trading__From_First_Principles_to_Production_Architecture.md", "title": "Research: Options Trading Strategy"},
 ]
 
 

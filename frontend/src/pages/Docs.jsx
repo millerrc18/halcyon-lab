@@ -99,7 +99,7 @@ export default function Docs() {
     { label: 'Core', ids: ['agents', 'readme', 'architecture', 'training-guide', 'roadmap'] },
     { label: 'Research — Training', ids: ['research-training-formats', 'research-quality-rubric', 'research-self-blinding', 'research-model-degradation', 'research-training-gaps', 'research-grpo', 'research-qwen-selection'] },
     { label: 'Research — Strategy', ids: ['research-alt-data', 'research-halcyon-framework'] },
-    { label: 'Research — Business', ids: ['research-fund-path', 'research-scaling-plan'] },
+    { label: 'Research — Business', ids: ['research-fund-path', 'research-scaling-plan', 'research-options'] },
   ]
 
   const docMap = Object.fromEntries((docList || []).map(d => [d.id, d]))
