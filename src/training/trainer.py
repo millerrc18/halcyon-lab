@@ -25,7 +25,8 @@ logger = logging.getLogger(__name__)
 ET = ZoneInfo("America/New_York")
 
 TRAIN_SCRIPT = '''# training_data/train.py — legacy single-stage (kept for backward compat)
-import json, sys
+import json, sys, os
+os.environ["UNSLOTH_DISABLE_FUSED_CROSS_ENTROPY"] = "1"
 
 def main():
     from unsloth import FastLanguageModel
@@ -68,7 +69,8 @@ if __name__ == "__main__":
 '''
 
 CURRICULUM_TRAIN_SCRIPT = '''
-import json, sys
+import json, sys, os
+os.environ["UNSLOTH_DISABLE_FUSED_CROSS_ENTROPY"] = "1"
 
 def main():
     from unsloth import FastLanguageModel
@@ -131,7 +133,8 @@ if __name__ == "__main__":
 '''
 
 DPO_TRAIN_SCRIPT = '''
-import json, sys
+import json, sys, os
+os.environ["UNSLOTH_DISABLE_FUSED_CROSS_ENTROPY"] = "1"
 
 def main():
     from unsloth import FastLanguageModel
