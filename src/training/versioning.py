@@ -108,6 +108,72 @@ def init_training_tables(db_path: str = "ai_research_desk.sqlite3") -> None:
         """)
         conn.commit()
 
+        # Metric snapshots for historical trending
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS metric_snapshots (
+                snapshot_id TEXT PRIMARY KEY,
+                created_at TEXT NOT NULL,
+                snapshot_date TEXT NOT NULL,
+                metrics_json TEXT NOT NULL
+            )
+        """)
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_metric_snapshots_date
+            ON metric_snapshots(snapshot_date)
+        """)
+        conn.commit()
+
+
+def save_metric_snapshot(metrics: dict, db_path: str = "ai_research_desk.sqlite3") -> None:
+    """Save a metric snapshot for historical trending.
+
+    Called automatically by the CTO report generator. Stores one snapshot
+    per day (skips if today's snapshot already exists).
+    """
+    import json
+    from datetime import datetime
+    init_training_tables(db_path)
+    today = datetime.now(ET).strftime("%Y-%m-%d")
+
+    with sqlite3.connect(db_path) as conn:
+        existing = conn.execute(
+            "SELECT 1 FROM metric_snapshots WHERE snapshot_date = ?", (today,)
+        ).fetchone()
+        if existing:
+            return  # Already have today's snapshot
+
+        snapshot_id = str(uuid.uuid4())
+        conn.execute(
+            "INSERT INTO metric_snapshots (snapshot_id, created_at, snapshot_date, metrics_json) "
+            "VALUES (?, ?, ?, ?)",
+            (snapshot_id, datetime.now(ET).isoformat(), today, json.dumps(metrics)),
+        )
+        conn.commit()
+
+
+def get_metric_history(days: int = 90, db_path: str = "ai_research_desk.sqlite3") -> list[dict]:
+    """Retrieve historical metric snapshots for trending.
+
+    Returns a list of {date, metrics} dicts, sorted chronologically.
+    """
+    import json
+    init_training_tables(db_path)
+    with sqlite3.connect(db_path) as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            "SELECT snapshot_date, metrics_json FROM metric_snapshots "
+            "ORDER BY snapshot_date ASC"
+        ).fetchall()
+
+    result = []
+    for row in rows:
+        try:
+            metrics = json.loads(row["metrics_json"])
+            result.append({"date": row["snapshot_date"], **metrics})
+        except (json.JSONDecodeError, TypeError):
+            continue
+    return result
+
 
 def get_active_model_version(db_path: str = "ai_research_desk.sqlite3") -> dict | None:
     """Return the currently active model version, or None if using base."""

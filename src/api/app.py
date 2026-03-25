@@ -41,6 +41,12 @@ def api_cto_report(days: int = 7):
     return generate_cto_report(days=days)
 
 
+@app.get("/api/metric-history")
+def api_metric_history(days: int = 90):
+    from src.training.versioning import get_metric_history
+    return get_metric_history(days=days)
+
+
 # WebSocket for live updates (uses shared manager from websocket.py)
 @app.websocket("/ws/live")
 async def websocket_endpoint(websocket: WebSocket):
