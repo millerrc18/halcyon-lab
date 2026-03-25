@@ -26,6 +26,8 @@ DOCS = [
     {"id": "research-alt-data", "path": "docs/research/Alternative_Data_Signals_for_Large-Cap_Short-Horizon_Trading__A_Cost-Benefit_Analysis_for_the_Halcyon_Lab_Stack.md", "title": "Research: Alternative Data Signals"},
     {"id": "research-halcyon-framework", "path": "docs/research/The_Halcyon_Framework__Compute__Value__and_Moat_for_a_Solo_AI_Trading_System.md", "title": "Research: Halcyon Framework (Compute, Value, Moat)"},
     {"id": "research-universe-size", "path": "docs/research/Optimal_Trading_Universe_Size__S&P_500_Filtered_to_325_Stocks.md", "title": "Research: Optimal Universe Size (~325 Stocks)"},
+    {"id": "research-regime-timeline", "path": "docs/research/US_Equity_Market_Regime_Timeline_2015-2026.md", "title": "Research: Market Regime Timeline (2015-2026)"},
+    {"id": "research-sp100-profiles", "path": "docs/research/SP100_Pullback_Trading_Profiles.md", "title": "Research: S&P 100 Pullback Trading Profiles"},
 
     # Research — Business & Operations
     {"id": "research-business-plan", "path": "docs/research/Halcyon_Lab__AI-Powered_Equity_Research_Investor-Ready_Business_Plan.md", "title": "Research: Investor-Ready Business Plan"},
