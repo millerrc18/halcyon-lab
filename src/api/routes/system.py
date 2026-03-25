@@ -189,6 +189,112 @@ def metric_history(days: int = 90):
     return snapshots
 
 
+@router.get("/data-collection-stats")
+def data_collection_stats():
+    """Return summary stats for all data collection tables."""
+    import sqlite3
+
+    db_path = "ai_research_desk.sqlite3"
+    stats = {}
+
+    try:
+        with sqlite3.connect(db_path) as conn:
+            # Options chains
+            row = conn.execute(
+                "SELECT COUNT(*), MIN(collected_at), MAX(collected_at), COUNT(DISTINCT ticker) "
+                "FROM options_chains"
+            ).fetchone()
+            if row and row[0]:
+                stats["options_chains"] = {
+                    "total_records": row[0],
+                    "first_collected": row[1],
+                    "last_collected": row[2],
+                    "tickers_covered": row[3],
+                }
+            else:
+                stats["options_chains"] = {"total_records": 0}
+
+            # Options metrics
+            row = conn.execute(
+                "SELECT COUNT(*), MAX(collected_date), COUNT(DISTINCT ticker) "
+                "FROM options_metrics"
+            ).fetchone()
+            if row and row[0]:
+                stats["options_metrics"] = {
+                    "total_records": row[0],
+                    "last_date": row[1],
+                    "tickers_covered": row[2],
+                }
+            else:
+                stats["options_metrics"] = {"total_records": 0}
+
+            # VIX term structure
+            row = conn.execute(
+                "SELECT COUNT(*), MIN(collected_date), MAX(collected_date) "
+                "FROM vix_term_structure"
+            ).fetchone()
+            if row and row[0]:
+                stats["vix_term_structure"] = {
+                    "days_of_history": row[0],
+                    "first_date": row[1],
+                    "last_date": row[2],
+                }
+            else:
+                stats["vix_term_structure"] = {"days_of_history": 0}
+
+            # Macro snapshots
+            row = conn.execute(
+                "SELECT COUNT(*), COUNT(DISTINCT series_id), MAX(collected_date) "
+                "FROM macro_snapshots"
+            ).fetchone()
+            if row and row[0]:
+                stats["macro_snapshots"] = {
+                    "total_records": row[0],
+                    "series_tracked": row[1],
+                    "last_date": row[2],
+                }
+            else:
+                stats["macro_snapshots"] = {"total_records": 0}
+
+            # Google trends
+            row = conn.execute(
+                "SELECT COUNT(*), COUNT(DISTINCT ticker), MAX(collected_date) "
+                "FROM google_trends"
+            ).fetchone()
+            if row and row[0]:
+                # Tickers covered this week
+                week_row = conn.execute(
+                    "SELECT COUNT(DISTINCT ticker) FROM google_trends "
+                    "WHERE collected_date >= date('now', '-7 days')"
+                ).fetchone()
+                stats["google_trends"] = {
+                    "total_records": row[0],
+                    "tickers_all_time": row[1],
+                    "last_date": row[2],
+                    "tickers_this_week": week_row[0] if week_row else 0,
+                }
+            else:
+                stats["google_trends"] = {"total_records": 0}
+
+            # CBOE ratios
+            row = conn.execute(
+                "SELECT COUNT(*), MAX(collected_date) FROM cboe_ratios"
+            ).fetchone()
+            if row and row[0]:
+                stats["cboe_ratios"] = {
+                    "total_records": row[0],
+                    "last_date": row[1],
+                }
+            else:
+                stats["cboe_ratios"] = {"total_records": 0}
+
+    except Exception:
+        # Tables may not exist yet
+        pass
+
+    return stats
+
+
 @router.put("/config")
 def update_config(updates: dict):
     import yaml

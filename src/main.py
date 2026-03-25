@@ -488,6 +488,46 @@ def cmd_train_pipeline(args):
         print("\n  Training failed. Check logs.")
 
 
+def cmd_collect_data(args):
+    """Run data collection pipeline manually."""
+    from src.data_collection.options_collector import collect_options_chains
+    from src.data_collection.options_metrics import compute_options_metrics
+    from src.data_collection.vix_collector import collect_vix_term_structure
+    from src.data_collection.macro_collector import collect_macro_snapshots
+    from src.data_collection.cboe_collector import collect_cboe_ratios
+    from src.data_collection.trends_collector import collect_google_trends
+    from src.universe.sp100 import get_sp100_universe
+
+    print("\n=== DATA COLLECTION ===\n")
+    universe = get_sp100_universe()
+
+    print("[1/6] Collecting options chains...")
+    r = collect_options_chains(universe)
+    print(f"  {r}")
+
+    print("[2/6] Computing options metrics...")
+    r = compute_options_metrics(universe)
+    print(f"  {r}")
+
+    print("[3/6] VIX term structure...")
+    r = collect_vix_term_structure()
+    print(f"  {r}")
+
+    print("[4/6] CBOE ratios...")
+    r = collect_cboe_ratios()
+    print(f"  {r}")
+
+    print("[5/6] FRED macro indicators...")
+    r = collect_macro_snapshots()
+    print(f"  {r}")
+
+    print("[6/6] Google Trends (batch)...")
+    r = collect_google_trends(universe, batch_size=20)
+    print(f"  {r}")
+
+    print("\nData collection complete.")
+
+
 def cmd_watch(args):
     from src.config import load_config
     from src.scheduler.watch import WatchLoop
@@ -558,6 +598,7 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_parser("check-leakage").set_defaults(func=cmd_check_leakage)
 
     # Operations
+    sp.add_parser("collect-data", help="Run market data collection pipeline").set_defaults(func=cmd_collect_data)
     sp.add_parser("halt-trading").set_defaults(func=cmd_halt_trading)
     sp.add_parser("resume-trading").set_defaults(func=cmd_resume_trading)
     sp.add_parser("preflight").set_defaults(func=cmd_preflight)

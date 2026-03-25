@@ -1,0 +1,178 @@
+"""Expanded FRED macro indicator collector.
+
+Supplements the existing macro enrichment with additional series:
+supply chain, credit stress, oil, dollar index, etc.
+"""
+
+import logging
+import sqlite3
+import time
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
+import requests
+
+logger = logging.getLogger(__name__)
+ET = ZoneInfo("America/New_York")
+
+DB_PATH = "ai_research_desk.sqlite3"
+FRED_BASE = "https://api.stlouisfed.org/fred/series/observations"
+
+FRED_SERIES = {
+    # Existing core series
+    "FEDFUNDS": "Federal Funds Rate",
+    "DGS10": "10-Year Treasury Yield",
+    "DGS2": "2-Year Treasury Yield",
+    "CPIAUCSL": "CPI All Urban Consumers",
+    "UNRATE": "Unemployment Rate",
+    # New expanded series
+    "GSCPI": "NY Fed Global Supply Chain Pressure Index",
+    "NAPMSDEL": "ISM Supplier Deliveries Index",
+    "ISRATIO": "Total Business Inventory/Sales Ratio",
+    "T10Y2Y": "10Y-2Y Treasury Spread",
+    "TEDRATE": "TED Spread",
+    "VIXCLS": "VIX Close (FRED)",
+    "BAMLH0A0HYM2": "High Yield Spread",
+    "DCOILWTICO": "WTI Crude Oil Price",
+    "DTWEXBGS": "Trade-Weighted USD Index",
+}
+
+_INIT_SQL = """
+CREATE TABLE IF NOT EXISTS macro_snapshots (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    collected_at TEXT NOT NULL,
+    collected_date TEXT NOT NULL,
+    series_id TEXT NOT NULL,
+    series_name TEXT NOT NULL,
+    value REAL,
+    previous_value REAL,
+    change_pct REAL
+);
+
+CREATE INDEX IF NOT EXISTS idx_macro_snapshots_date
+    ON macro_snapshots(collected_date);
+CREATE INDEX IF NOT EXISTS idx_macro_snapshots_series
+    ON macro_snapshots(series_id, collected_date);
+"""
+
+
+def _init_table(db_path: str) -> None:
+    with sqlite3.connect(db_path) as conn:
+        conn.executescript(_INIT_SQL)
+
+
+def _get_fred_api_key() -> str | None:
+    """Get FRED API key from config."""
+    try:
+        from src.config import load_config
+        config = load_config()
+        return config.get("fred", {}).get("api_key") or config.get("fred_api_key")
+    except Exception:
+        return None
+
+
+def _fetch_latest(series_id: str, api_key: str) -> float | None:
+    """Fetch the most recent value for a FRED series."""
+    try:
+        resp = requests.get(
+            FRED_BASE,
+            params={
+                "series_id": series_id,
+                "api_key": api_key,
+                "sort_order": "desc",
+                "limit": 1,
+                "file_type": "json",
+            },
+            timeout=15,
+        )
+        resp.raise_for_status()
+        observations = resp.json().get("observations", [])
+        if observations:
+            val = observations[0].get("value", ".")
+            if val != ".":
+                return float(val)
+    except Exception as e:
+        logger.debug("Failed to fetch FRED %s: %s", series_id, e)
+    return None
+
+
+def _get_previous_value(
+    conn: sqlite3.Connection, series_id: str, today_str: str
+) -> float | None:
+    """Get the most recent previous value for change computation."""
+    row = conn.execute(
+        """SELECT value FROM macro_snapshots
+        WHERE series_id = ? AND collected_date < ? AND value IS NOT NULL
+        ORDER BY collected_date DESC LIMIT 1""",
+        (series_id, today_str),
+    ).fetchone()
+    return row[0] if row else None
+
+
+def collect_macro_snapshots(db_path: str = DB_PATH) -> dict:
+    """Collect latest values for all tracked FRED series.
+
+    Returns: {"series_collected": int, "notable_changes": list}
+    """
+    _init_table(db_path)
+
+    api_key = _get_fred_api_key()
+    if not api_key:
+        logger.warning("[MACRO] No FRED API key configured")
+        return {"series_collected": 0, "notable_changes": [], "error": "no_api_key"}
+
+    now = datetime.now(ET)
+    today_str = now.strftime("%Y-%m-%d")
+
+    series_collected = 0
+    notable_changes = []
+
+    with sqlite3.connect(db_path) as conn:
+        for series_id, series_name in FRED_SERIES.items():
+            try:
+                value = _fetch_latest(series_id, api_key)
+                if value is None:
+                    continue
+
+                previous = _get_previous_value(conn, series_id, today_str)
+                change_pct = None
+                if previous is not None and previous != 0:
+                    change_pct = round((value - previous) / abs(previous) * 100, 4)
+
+                conn.execute(
+                    """INSERT INTO macro_snapshots
+                    (collected_at, collected_date, series_id, series_name,
+                     value, previous_value, change_pct)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                    (
+                        now.isoformat(),
+                        today_str,
+                        series_id,
+                        series_name,
+                        value,
+                        previous,
+                        change_pct,
+                    ),
+                )
+                series_collected += 1
+
+                # Flag notable changes (>5% move)
+                if change_pct is not None and abs(change_pct) > 5:
+                    notable_changes.append({
+                        "series": series_id,
+                        "name": series_name,
+                        "change_pct": change_pct,
+                    })
+
+                logger.debug("[MACRO] %s = %.4f (prev: %s, chg: %s%%)",
+                             series_id, value, previous, change_pct)
+
+            except Exception as e:
+                logger.warning("[MACRO] Error fetching %s: %s", series_id, e)
+
+            # Rate limit
+            time.sleep(0.2)
+
+    result = {"series_collected": series_collected, "notable_changes": notable_changes}
+    logger.info("[MACRO] Collection complete: %s", result)
+    return result

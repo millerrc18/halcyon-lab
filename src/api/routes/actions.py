@@ -162,6 +162,56 @@ def _run_score():
         _clear_running()
 
 
+def _run_collect_data():
+    try:
+        broadcast_sync("action_started", {"action": "collect-data"})
+    except Exception:
+        pass
+    try:
+        from src.data_collection.options_collector import collect_options_chains
+        from src.data_collection.options_metrics import compute_options_metrics
+        from src.data_collection.vix_collector import collect_vix_term_structure
+        from src.data_collection.macro_collector import collect_macro_snapshots
+        from src.data_collection.cboe_collector import collect_cboe_ratios
+        from src.data_collection.trends_collector import collect_google_trends
+        from src.universe.sp100 import get_sp100_universe
+
+        universe = get_sp100_universe()
+        results = {}
+        results["options"] = collect_options_chains(universe)
+        results["metrics"] = compute_options_metrics(universe)
+        results["vix"] = collect_vix_term_structure()
+        results["cboe"] = collect_cboe_ratios()
+        results["macro"] = collect_macro_snapshots()
+        results["trends"] = collect_google_trends(universe, batch_size=20)
+
+        try:
+            broadcast_sync("action_complete", {
+                "action": "collect-data",
+                "contracts": results["options"].get("contracts_stored", 0),
+                "tickers": results["options"].get("tickers_collected", 0),
+            })
+        except Exception:
+            pass
+    except Exception as e:
+        logger.error("Action collect-data failed: %s", e)
+        try:
+            broadcast_sync("action_error", {"action": "collect-data", "error": str(e)})
+        except Exception:
+            pass
+    finally:
+        _clear_running()
+
+
+@router.post("/collect-data")
+def trigger_collect_data(background_tasks: BackgroundTasks):
+    """Run the full data collection pipeline in the background."""
+    if not _set_running("collect-data"):
+        raise HTTPException(status_code=409, detail=f"Action '{_running_action}' already running")
+    background_tasks.add_task(_run_collect_data)
+    return {"status": "started", "action": "collect-data"}
+
+
 @router.post("/scan")
 def trigger_scan(background_tasks: BackgroundTasks):
     """Run a market scan in the background."""

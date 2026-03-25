@@ -65,6 +65,7 @@ class WatchLoop:
         # Overnight schedule flags
         self._post_close_done = False
         self._overnight_training_collection_done = False
+        self._data_collection_done = False
         self._news_ingestion_done = False
         self._enrichment_precache_done = False
         self._pre_market_done = False
@@ -83,6 +84,7 @@ class WatchLoop:
         # Overnight flags
         self._post_close_done = False
         self._overnight_training_collection_done = False
+        self._data_collection_done = False
         self._news_ingestion_done = False
         self._enrichment_precache_done = False
         self._pre_market_done = False
@@ -395,6 +397,11 @@ class WatchLoop:
                                        self._run_overnight_training_collection)
                         self._overnight_training_collection_done = True
                         ran = True
+                    elif (hour == 21 and now.minute >= 30
+                          and not self._data_collection_done):
+                        self._safe_run("data collection", self._run_data_collection)
+                        self._data_collection_done = True
+                        ran = True
                     elif hour == 22 and not self._news_ingestion_done:
                         self._safe_run("news ingestion", self._run_news_ingestion)
                         self._news_ingestion_done = True
@@ -690,6 +697,61 @@ class WatchLoop:
 
         try:
             broadcast_sync("overnight_task", {"task": "pre_market_refresh", "status": "complete"})
+        except Exception:
+            pass
+
+    def _run_data_collection(self):
+        """9:30 PM ET — Comprehensive market data collection."""
+        from src.api.websocket import broadcast_sync
+        from src.data_collection.options_collector import collect_options_chains
+        from src.data_collection.options_metrics import compute_options_metrics
+        from src.data_collection.vix_collector import collect_vix_term_structure
+        from src.data_collection.trends_collector import collect_google_trends
+        from src.data_collection.macro_collector import collect_macro_snapshots
+        from src.data_collection.cboe_collector import collect_cboe_ratios
+        from src.universe.sp100 import get_sp100_universe
+
+        try:
+            broadcast_sync("overnight_task", {"task": "data_collection", "status": "started"})
+        except Exception:
+            pass
+
+        logger.info("[OVERNIGHT] Running comprehensive data collection...")
+        print("[WATCH] Running comprehensive data collection...")
+
+        universe = get_sp100_universe()
+        results = {}
+
+        # 1. Options chains (most important)
+        print("[WATCH]   [1/6] Options chains...")
+        results["options"] = collect_options_chains(universe)
+
+        # 2. Derived metrics from chains
+        print("[WATCH]   [2/6] Options metrics...")
+        results["metrics"] = compute_options_metrics(universe)
+
+        # 3. VIX term structure
+        print("[WATCH]   [3/6] VIX term structure...")
+        results["vix"] = collect_vix_term_structure()
+
+        # 4. CBOE ratios
+        print("[WATCH]   [4/6] CBOE ratios...")
+        results["cboe"] = collect_cboe_ratios()
+
+        # 5. FRED macro
+        print("[WATCH]   [5/6] FRED macro indicators...")
+        results["macro"] = collect_macro_snapshots()
+
+        # 6. Google Trends (batched — subset each night)
+        print("[WATCH]   [6/6] Google Trends (batch)...")
+        results["trends"] = collect_google_trends(universe, batch_size=20)
+
+        summary = {k: str(v) for k, v in results.items()}
+        print(f"[WATCH] Data collection complete: {summary}")
+
+        try:
+            broadcast_sync("overnight_task", {"task": "data_collection", "status": "complete",
+                                              "results": summary})
         except Exception:
             pass
 
