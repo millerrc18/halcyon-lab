@@ -18,7 +18,7 @@ import { CheckCircle2, Circle, Loader2, ChevronDown, ChevronRight, Lock, ArrowRi
 // CC: when completing sprints, update item statuses here.
 // ═══════════════════════════════════════════════════════════════
 const ROADMAP_DATA = {
-  lastUpdated: '2026-03-24',
+  lastUpdated: '2026-03-25',
 
   phases: [
     {
@@ -87,7 +87,8 @@ const ROADMAP_DATA = {
         { label: 'IB paper testing (2 weeks) → live with $500-$1K', status: 'pending' },
         { label: 'HSHS dashboard page (5-dimension system health score)', status: 'pending' },
         { label: 'AI Council dashboard page — 7 agents for strategic decisions', status: 'pending' },
-        { label: 'Options flow data ($50/mo Unusual Whales)', status: 'pending' },
+        { label: 'Passive options data collection (EOD chains, VIX term structure, IV surfaces)', status: 'pending' },
+        { label: 'Options-as-equity-signal (IV rank, put/call ratio, skew → equity model)', status: 'pending' },
         { label: 'Scale to 3,000–5,000 training examples', status: 'pending' },
         { label: 'GRPO training (at 100+ closed trades)', status: 'pending' },
         { label: 'RTX 3090 upgrade (~$800)', status: 'pending' },
@@ -120,6 +121,9 @@ const ROADMAP_DATA = {
         { label: 'Qwen 2.5 14B production model', status: 'pending' },
         { label: 'Multi-teacher data generation', status: 'pending' },
         { label: 'Tiered data architecture (core/archive/recent)', status: 'pending' },
+        { label: 'Options: backtesting framework + strategy validation', status: 'pending' },
+        { label: 'Options: volatility analyst LoRA adapter training', status: 'pending' },
+        { label: 'Options: 15-check risk governor for non-linear risk', status: 'pending' },
       ],
     },
     {
@@ -145,6 +149,8 @@ const ROADMAP_DATA = {
         { label: 'Learned confidence calibration', status: 'pending' },
         { label: 'Institutional risk reporting (P&L attribution, factor exposure, stress tests)', status: 'pending' },
         { label: 'Verified track record export (IB statements, BarclayHedge)', status: 'pending' },
+        { label: 'Investor-ready documentation (compliance manual, risk templates, ODD materials)', status: 'pending' },
+        { label: 'Options: paper trading credit spreads + iron condors (3+ months)', status: 'pending' },
       ],
     },
     {
@@ -165,6 +171,8 @@ const ROADMAP_DATA = {
       items: [
         { label: 'Multi-setup families (breakout, momentum, mean reversion)', status: 'pending' },
         { label: 'S&P 500 expanded universe', status: 'pending' },
+        { label: 'Options: live trading credit spreads + iron condors ($2K+ dedicated capital)', status: 'pending' },
+        { label: 'Options: XSP/SPX index options via IB (Section 1256 tax treatment)', status: 'pending' },
         { label: 'Verified track record (Interactive Brokers or equivalent)', status: 'pending' },
         { label: 'Tax structure optimization (LLC, trader tax status, MTM election)', status: 'pending' },
         { label: 'Multi-account strategy isolation', status: 'pending' },
