@@ -100,8 +100,7 @@ def place_paper_entry(
     """Place a paper buy order. Returns order details dict."""
     _check_enabled()
 
-    logger.info(f"[SHADOW] Placing paper BUY: {shares} shares of {ticker}")
-    print(f"[SHADOW] Placing paper BUY: {shares} shares of {ticker}")
+    logger.info("[SHADOW] Placing paper BUY: %d shares of %s", shares, ticker)
 
     client = _get_trading_client()
 
@@ -139,8 +138,7 @@ def place_paper_exit(
     """Place a paper sell order. Returns order details dict."""
     _check_enabled()
 
-    logger.info(f"[SHADOW] Placing paper SELL: {shares} shares of {ticker}")
-    print(f"[SHADOW] Placing paper SELL: {shares} shares of {ticker}")
+    logger.info("[SHADOW] Placing paper SELL: %d shares of %s", shares, ticker)
 
     client = _get_trading_client()
 
@@ -187,7 +185,7 @@ def place_bracket_order(
     logger.info("[SHADOW] Placing BRACKET order: %d shares of %s "
                 "(TP=$%.2f, SL=$%.2f)", shares, ticker,
                 take_profit_price, stop_loss_price)
-    print(f"[SHADOW] Placing BRACKET order: {shares} shares of {ticker}")
+    logger.info("[SHADOW] Placing BRACKET order: %d shares of %s", shares, ticker)
 
     client = _get_trading_client()
 

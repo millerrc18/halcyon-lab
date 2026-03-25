@@ -134,7 +134,7 @@ def collect_training_examples_from_closed_trades(
             )
             conn.commit()
 
-        print(f"  [TRAINING] Generated blinded example for {trade.get('ticker')} ({source})")
+        logger.info("  [TRAINING] Generated blinded example for %s (%s)", trade.get('ticker'), source)
         count += 1
 
     return count

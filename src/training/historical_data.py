@@ -39,7 +39,7 @@ def fetch_historical_universe(lookback_years: int = 2) -> dict:
         cache_age = time.time() - os.path.getmtime(CACHE_FILE)
         if cache_age < 86400:  # 24 hours
             logger.info("[BACKFILL] Loading cached data from %s", CACHE_FILE)
-            print(f"[BACKFILL] Loading cached data (age: {cache_age / 3600:.1f}h)")
+            logger.info("[BACKFILL] Loading cached data (age: %.1fh)", cache_age / 3600)
             with open(CACHE_FILE, "rb") as f:
                 return pickle.load(f)
 
@@ -54,7 +54,7 @@ def fetch_historical_universe(lookback_years: int = 2) -> dict:
     start_str = start_date.strftime("%Y-%m-%d")
     end_str = end_date.strftime("%Y-%m-%d")
 
-    print(f"[BACKFILL] Downloading {lookback_years} years of data for {n} tickers...")
+    logger.info("[BACKFILL] Downloading %d years of data for %d tickers...", lookback_years, n)
     logger.info("[BACKFILL] Downloading %d tickers, %s to %s", n, start_str, end_str)
 
     raw = yf.download(
@@ -106,7 +106,7 @@ def fetch_historical_universe(lookback_years: int = 2) -> dict:
         "end_date": actual_end,
     }
 
-    print(f"[BACKFILL] Downloaded {len(tickers_data)} tickers, {actual_start} to {actual_end}")
+    logger.info("[BACKFILL] Downloaded %d tickers, %s to %s", len(tickers_data), actual_start, actual_end)
     logger.info("[BACKFILL] Downloaded %d tickers, %s to %s",
                 len(tickers_data), actual_start, actual_end)
 

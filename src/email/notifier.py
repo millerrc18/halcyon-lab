@@ -1,10 +1,12 @@
 """SMTP email notifier for the AI Research Desk."""
 
+import logging
 import smtplib
-import sys
 from email.mime.text import MIMEText
 
 from src.config import load_config
+
+logger = logging.getLogger(__name__)
 
 
 def send_email(subject: str, body: str, to_address: str | None = None) -> bool:
@@ -27,7 +29,7 @@ def send_email(subject: str, body: str, to_address: str | None = None) -> bool:
     cc_addresses = email_cfg.get("cc_addresses", [])
 
     if not smtp_server or not username or not password or not recipient:
-        print("ERROR: Email configuration is incomplete. Check your settings.", file=sys.stderr)
+        logger.warning("Email configuration is incomplete. Check your settings.")
         return False
 
     msg = MIMEText(body)
@@ -49,14 +51,14 @@ def send_email(subject: str, body: str, to_address: str | None = None) -> bool:
         server.quit()
         return True
     except smtplib.SMTPAuthenticationError:
-        print("ERROR: SMTP authentication failed. Check username/password.", file=sys.stderr)
+        logger.warning("SMTP authentication failed. Check username/password.")
         return False
     except smtplib.SMTPConnectError:
-        print("ERROR: Could not connect to SMTP server.", file=sys.stderr)
+        logger.warning("Could not connect to SMTP server.")
         return False
     except ConnectionRefusedError:
-        print("ERROR: Connection refused by SMTP server.", file=sys.stderr)
+        logger.warning("Connection refused by SMTP server.")
         return False
     except Exception as e:
-        print(f"ERROR: Failed to send email: {e}", file=sys.stderr)
+        logger.warning("Failed to send email: %s", e)
         return False

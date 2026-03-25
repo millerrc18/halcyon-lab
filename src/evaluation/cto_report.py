@@ -4,10 +4,8 @@ Produces a comprehensive structured report for CTO analysis,
 designed to be consumed by Claude for strategic recommendations.
 """
 
-import json
 import logging
-import sqlite3
-from collections import Counter, defaultdict
+from collections import defaultdict
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
@@ -467,15 +465,15 @@ def _compute_training_status(days: int, db_path: str) -> dict:
         validation = validate_training_dataset(db_path)
         training_data_quality["format_compliance"] = validation.get("format_breakdown", {})
         training_data_quality["average_process_score"] = validation.get("avg_quality_score")
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Training data validation failed: %s", e)
 
     try:
         from src.training.leakage_detector import check_outcome_leakage
         leakage = check_outcome_leakage(db_path)
-        training_data_quality["leakage_test_accuracy"] = leakage.get("test_accuracy")
-    except Exception:
-        pass
+        training_data_quality["leakage_test_accuracy"] = leakage.get("balanced_accuracy")
+    except Exception as e:
+        logger.debug("Leakage detection failed: %s", e)
 
     # Annie Duke quadrant distribution from source tags
     try:
@@ -506,8 +504,8 @@ def _compute_training_status(days: int, db_path: str) -> dict:
             elif not is_good_process and not is_win:
                 quadrants["bad_process_bad_outcome"] += 1
         training_data_quality["quadrant_distribution"] = quadrants
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Quadrant distribution computation failed: %s", e)
 
     return {
         "total_examples": counts.get("total", 0),
@@ -648,8 +646,10 @@ def _compute_fund_metrics(closed: list, trade_summary: dict) -> dict:
 
     # Total return (sum of all trade P&L as % of starting capital)
     total_pnl = sum(pnl_dollars)
-    # Assume $100k starting capital
-    total_return_pct = (total_pnl / 100000) * 100
+    from src.config import load_config
+    _cfg = load_config()
+    starting_capital = _cfg.get("risk", {}).get("starting_capital", 100000)
+    total_return_pct = (total_pnl / starting_capital) * 100
 
     return {
         "sortino_ratio": round(sortino, 2) if sortino != float('inf') else "inf",

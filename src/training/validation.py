@@ -1,6 +1,5 @@
 """Training dataset validation and quality checks."""
 
-import json
 import logging
 import math
 import sqlite3

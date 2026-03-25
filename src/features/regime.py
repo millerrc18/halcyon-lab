@@ -3,6 +3,8 @@
 import numpy as np
 import pandas as pd
 
+from src.features.engine import _slope_direction
+
 
 def _compute_rsi(close: pd.Series, period: int = 14) -> float:
     """Compute RSI for the most recent value."""
@@ -39,20 +41,6 @@ def _classify_market_trend(
     if price < sma50 and sma50 < sma200:
         return "downtrend"
     return "neutral"
-
-
-def _slope_direction(series: pd.Series, window: int = 10) -> str:
-    """Classify the slope of a series over the last `window` periods."""
-    if len(series) < window:
-        return "flat"
-    recent = series.iloc[-window:]
-    diff = recent.iloc[-1] - recent.iloc[0]
-    threshold = 0.001 * abs(recent.iloc[0]) if recent.iloc[0] != 0 else 0.01
-    if diff > threshold:
-        return "positive"
-    elif diff < -threshold:
-        return "negative"
-    return "flat"
 
 
 def compute_market_regime(spy: pd.DataFrame, ohlcv_data: dict[str, pd.DataFrame]) -> dict:

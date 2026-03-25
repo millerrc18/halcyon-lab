@@ -168,7 +168,7 @@ def enhance_packet_with_llm(packet: TradePacket, features: dict,
 
     if not is_llm_available():
         logger.warning("[LLM] Ollama not reachable — fallback to template for %s", packet.ticker)
-        print(f"  [LLM] Fallback to template for {packet.ticker}")
+        logger.info("  [LLM] Fallback to template for %s", packet.ticker)
         return packet
 
     prompt = _build_feature_prompt(packet, features)
@@ -176,14 +176,14 @@ def enhance_packet_with_llm(packet: TradePacket, features: dict,
 
     if response is None:
         logger.warning("[LLM] Generation failed — fallback to template for %s", packet.ticker)
-        print(f"  [LLM] Fallback to template for {packet.ticker}")
+        logger.info("  [LLM] Fallback to template for %s", packet.ticker)
         return packet
 
     conviction, why_now, deeper_analysis = _parse_llm_response(response)
 
     if why_now is None or deeper_analysis is None:
         logger.warning("[LLM] Failed to parse response — fallback to template for %s", packet.ticker)
-        print(f"  [LLM] Fallback to template for {packet.ticker}")
+        logger.info("  [LLM] Fallback to template for %s", packet.ticker)
         return packet
 
     # Only update prose fields — never touch deterministic fields
@@ -193,5 +193,5 @@ def enhance_packet_with_llm(packet: TradePacket, features: dict,
         packet.llm_conviction = conviction
     logger.info("[LLM] Enhanced packet for %s (conviction: %s)", packet.ticker,
                 conviction if conviction else "n/a")
-    print(f"  [LLM] Enhanced packet for {packet.ticker} (conviction: {conviction or 'n/a'})")
+    logger.info("  [LLM] Enhanced packet for %s (conviction: %s)", packet.ticker, conviction or 'n/a')
     return packet

@@ -1,9 +1,11 @@
 """Market data ingestion via yfinance."""
 
-import sys
+import logging
 
 import pandas as pd
 import yfinance as yf
+
+logger = logging.getLogger(__name__)
 
 # Tickers that need translation for yfinance compatibility
 TICKER_MAP = {
@@ -39,19 +41,19 @@ def fetch_ohlcv(tickers: list[str], period: str = "1y") -> dict[str, pd.DataFram
                 df = df[["Open", "High", "Low", "Close", "Volume"]]
                 result[orig_ticker] = df
             else:
-                print(f"WARNING: No data returned for {orig_ticker}", file=sys.stderr)
+                logger.warning("No data returned for %s", orig_ticker)
         except Exception as e:
-            print(f"WARNING: Failed to fetch {orig_ticker}: {e}", file=sys.stderr)
+            logger.warning("Failed to fetch %s: %s", orig_ticker, e)
         return result
 
     try:
         raw = yf.download(download_tickers, period=period, progress=False, auto_adjust=False, group_by="ticker")
     except Exception as e:
-        print(f"WARNING: Batch download failed: {e}", file=sys.stderr)
+        logger.warning("Batch download failed: %s", e)
         return result
 
     if raw is None or raw.empty:
-        print("WARNING: No data returned from batch download", file=sys.stderr)
+        logger.warning("No data returned from batch download")
         return result
 
     for dl_ticker in download_tickers:
@@ -65,9 +67,9 @@ def fetch_ohlcv(tickers: list[str], period: str = "1y") -> dict[str, pd.DataFram
             if not df.empty:
                 result[orig_ticker] = df
             else:
-                print(f"WARNING: No data for {orig_ticker}", file=sys.stderr)
+                logger.warning("No data for %s", orig_ticker)
         except Exception as e:
-            print(f"WARNING: Failed to extract data for {orig_ticker}: {e}", file=sys.stderr)
+            logger.warning("Failed to extract data for %s: %s", orig_ticker, e)
 
     return result
 

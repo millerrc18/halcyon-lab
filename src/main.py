@@ -113,7 +113,7 @@ def cmd_shadow_history(args):
 def cmd_shadow_close(args):
     from datetime import datetime
     from zoneinfo import ZoneInfo
-    from src.journal.store import get_open_shadow_trades, close_shadow_trade, update_recommendation, update_shadow_trade
+    from src.journal.store import get_open_shadow_trades, close_shadow_trade
     from src.shadow_trading.executor import _get_current_price_safe
     ticker = args.ticker.upper()
     reason = getattr(args, "reason", "manual")
@@ -272,7 +272,7 @@ def cmd_backfill_training(args):
 
 def cmd_train(args):
     from src.training.trainer import run_fine_tune, export_training_data, should_train
-    from src.training.versioning import get_active_model_version, rollback_model, get_model_history
+    from src.training.versioning import rollback_model
     if getattr(args, "rollback", False):
         restored = rollback_model()
         print(f"Rolled back to {restored['version_name']}" if restored else "Rollback failed.")

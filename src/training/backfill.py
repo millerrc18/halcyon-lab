@@ -209,22 +209,22 @@ def run_historical_backfill(
     init_training_tables(db_path)
 
     # Step 1: Download data
-    print("[BACKFILL] Step 1/10: Downloading historical data...")
+    logger.info("[BACKFILL] Step 1/10: Downloading historical data...")
     data = fetch_historical_universe(lookback_years=2)
     spy_df = data["spy"]
 
     # Step 2: Generate scan dates
-    print("[BACKFILL] Step 2/10: Generating scan dates...")
+    logger.info("[BACKFILL] Step 2/10: Generating scan dates...")
     end_date = datetime.now() - timedelta(days=20)  # 20-day buffer for outcomes
     start_date = end_date - timedelta(days=months * 30)
     scan_dates = _get_trading_days(
         spy_df, start_date.strftime("%Y-%m-%d"), end_date.strftime("%Y-%m-%d")
     )
     total_dates = len(scan_dates)
-    print(f"[BACKFILL] Will scan {total_dates} trading days")
+    logger.info("[BACKFILL] Will scan %d trading days", total_dates)
 
     # Step 3: Scan each date
-    print("[BACKFILL] Step 3/10: Scanning historical dates for qualifying setups...")
+    logger.info("[BACKFILL] Step 3/10: Scanning historical dates for qualifying setups...")
     all_candidates = []
     for i, scan_date in enumerate(scan_dates):
         candidates = scan_historical_date(data, scan_date)
@@ -233,13 +233,13 @@ def run_historical_backfill(
         all_candidates.extend(candidates)
 
         if (i + 1) % 20 == 0:
-            print(f"[BACKFILL] Scanned {i + 1}/{total_dates} dates, "
-                  f"{len(all_candidates)} candidates so far...")
+            logger.info("[BACKFILL] Scanned %d/%d dates, %d candidates so far...",
+                        i + 1, total_dates, len(all_candidates))
 
-    print(f"[BACKFILL] Scan complete: {len(all_candidates)} candidates from {total_dates} dates")
+    logger.info("[BACKFILL] Scan complete: %d candidates from %d dates", len(all_candidates), total_dates)
 
     # Step 4: Compute outcomes
-    print("[BACKFILL] Step 4/10: Computing trade outcomes...")
+    logger.info("[BACKFILL] Step 4/10: Computing trade outcomes...")
     candidates_with_outcomes = []
     for c in all_candidates:
         outcome = compute_outcome(
@@ -254,27 +254,27 @@ def run_historical_backfill(
             })
 
     total_with_outcomes = len(candidates_with_outcomes)
-    print(f"[BACKFILL] Outcomes computed: {total_with_outcomes} with valid outcomes")
+    logger.info("[BACKFILL] Outcomes computed: %d with valid outcomes", total_with_outcomes)
 
     # Step 5: Quality filter
-    print("[BACKFILL] Step 5/10: Applying quality filter...")
+    logger.info("[BACKFILL] Step 5/10: Applying quality filter...")
     quality_filtered = [
         e for e in candidates_with_outcomes
         if e["outcome"]["outcome_quality"] in quality_filter
     ]
-    print(f"[BACKFILL] Quality filtered: {len(quality_filtered)} "
-          f"({', '.join(quality_filter)})")
+    logger.info("[BACKFILL] Quality filtered: %d (%s)",
+                len(quality_filtered), ', '.join(quality_filter))
 
     # Step 6: Balance dataset
-    print("[BACKFILL] Step 6/10: Balancing win/loss ratio...")
+    logger.info("[BACKFILL] Step 6/10: Balancing win/loss ratio...")
     balanced = _balance_dataset(quality_filtered)
     outcome_counts = Counter(e["outcome"]["outcome_quality"] for e in balanced)
-    print(f"[BACKFILL] After balancing: {len(balanced)} "
-          f"(wins: {outcome_counts.get('clean_win', 0)}, "
-          f"losses: {outcome_counts.get('clean_loss', 0)})")
+    logger.info("[BACKFILL] After balancing: %d (wins: %d, losses: %d)",
+                len(balanced), outcome_counts.get('clean_win', 0),
+                outcome_counts.get('clean_loss', 0))
 
     # Step 7: Deduplicate
-    print("[BACKFILL] Step 7/10: Deduplicating consecutive entries...")
+    logger.info("[BACKFILL] Step 7/10: Deduplicating consecutive entries...")
     # Extract candidates for dedup, then reassemble
     candidate_list = [e["candidate"] for e in balanced]
     deduped_candidates = _deduplicate_candidates(candidate_list)
@@ -283,18 +283,18 @@ def run_historical_backfill(
         e for e in balanced
         if (e["candidate"]["ticker"], e["candidate"]["scan_date"]) in deduped_keys
     ]
-    print(f"[BACKFILL] After deduplication: {len(deduped)}")
+    logger.info("[BACKFILL] After deduplication: %d", len(deduped))
 
     # Step 8: Cap and diversify
-    print("[BACKFILL] Step 8/10: Capping and diversifying...")
+    logger.info("[BACKFILL] Step 8/10: Capping and diversifying...")
     final_examples = _cap_and_diversify(deduped, max_examples)
-    print(f"[BACKFILL] Final candidate count: {len(final_examples)}")
+    logger.info("[BACKFILL] Final candidate count: %d", len(final_examples))
 
     est_cost = estimate_backfill_cost(len(final_examples))
-    print(f"[BACKFILL] Estimated API cost: ${est_cost:.2f}")
+    logger.info("[BACKFILL] Estimated API cost: $%.2f", est_cost)
 
     # Step 9: Generate commentary via Claude API
-    print("[BACKFILL] Step 9/10: Generating commentary via Claude API...")
+    logger.info("[BACKFILL] Step 9/10: Generating commentary via Claude API...")
     examples_generated = 0
     examples_skipped = 0
     actual_outcomes: Counter = Counter()
@@ -379,8 +379,8 @@ def run_historical_backfill(
             spent = estimate_backfill_cost(examples_generated)
             total_target = len(final_examples) - examples_skipped
             pct = examples_generated / total_target * 100 if total_target > 0 else 0
-            print(f"[BACKFILL] Generated {examples_generated}/{total_target} "
-                  f"examples ({pct:.1f}%) — est. ${spent:.2f} spent")
+            logger.info("[BACKFILL] Generated %d/%d examples (%.1f%%) — est. $%.2f spent",
+                        examples_generated, total_target, pct, spent)
 
         # Rate limiting (doubled for 2-stage pipeline)
         time.sleep(1.0)
@@ -406,5 +406,5 @@ def run_historical_backfill(
         "elapsed_minutes": round(elapsed, 1),
     }
 
-    print(f"\n[BACKFILL] Step 10/10: Complete!")
+    logger.info("[BACKFILL] Step 10/10: Complete!")
     return stats

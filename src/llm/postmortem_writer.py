@@ -45,7 +45,7 @@ Original thesis: {trade.get('thesis_text', 'N/A')}"""
 
     if response:
         logger.info("[LLM] Enhanced postmortem for %s", trade.get('ticker', 'N/A'))
-        print(f"  [LLM] Enhanced postmortem for {trade.get('ticker', 'N/A')}")
+        logger.info("  [LLM] Enhanced postmortem for %s", trade.get('ticker', 'N/A'))
         return response
 
     logger.warning("[LLM] Postmortem generation failed — fallback to rule-based")
