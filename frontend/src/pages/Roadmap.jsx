@@ -130,18 +130,19 @@ const ROADMAP_DATA = {
     },
     {
       id: 'phase-5',
-      name: 'Phase 5 — Scale + monetize',
+      name: 'Phase 5 — Scale capital',
       status: 'locked',
-      capital: 'Variable',
-      monthlyCost: '$135/mo',
-      description: 'Multi-strategy, newsletter launch, expanded universe.',
+      capital: '$100K+',
+      monthlyCost: '$200/mo',
+      description: 'Grow capital under management. Build auditable track record. Multi-strategy diversification.',
       gate: null,
       items: [
-        { label: 'Multi-setup families (breakout, momentum, MR)', status: 'pending' },
-        { label: 'Newsletter launch ($29–99/mo)', status: 'pending' },
+        { label: 'Multi-setup families (breakout, momentum, mean reversion)', status: 'pending' },
         { label: 'S&P 500 expanded universe', status: 'pending' },
-        { label: 'Signal marketplace (Collective2)', status: 'pending' },
+        { label: 'Verified track record (Interactive Brokers or equivalent)', status: 'pending' },
+        { label: 'Tax structure optimization (LLC, trader tax status, MTM election)', status: 'pending' },
         { label: 'Multi-account strategy isolation', status: 'pending' },
+        { label: 'Regulatory research (RIA registration path for external capital)', status: 'pending' },
       ],
     },
   ],
@@ -154,8 +155,8 @@ const ROADMAP_DATA = {
   ],
 
   businessTarget: {
-    line1: 'Target: $500K–$1M ARR via newsletter ($29–99/mo) + signal marketplace',
-    line2: 'Breakeven at 41 subscribers. 50%+ margins at scale. $5–15M exit at $1M ARR.',
+    line1: 'Business model: compound returns on growing capital under management',
+    line2: 'Paper → $1K live → $25K → $100K+ → verified track record → external capital',
   },
 }
 
