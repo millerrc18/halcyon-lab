@@ -78,6 +78,7 @@ const ROADMAP_DATA = {
           { key: 'live_paper_delta', label: 'Live vs paper', target: 20, op: '<=', fmt: 'pctAbs' },
           { key: 'sharpe_ratio', label: 'Sharpe (live)', target: 0.75, op: '>=' },
           { key: 'max_drawdown_pct', label: 'Max DD', target: 20, op: '<=', fmt: 'pctVal' },
+          { key: 'beta', label: 'Beta', target: 0.5, op: '<=', fmt: '' },
         ],
       },
       items: [
@@ -133,7 +134,7 @@ const ROADMAP_DATA = {
         metrics: [
           { key: 'profitable_months', label: 'Profitable months', target: 6, op: '>=' },
           { key: 'sharpe_ratio', label: 'Sharpe', target: 1.2, op: '>=' },
-          { key: 'sortino_ratio', label: 'Sortino', target: 1.5, op: '>=' },
+          { key: 'sortino_ratio', label: 'Sortino', target: 2.0, op: '>=' },
           { key: 'max_drawdown_pct', label: 'Max DD', target: 12, op: '<=', fmt: 'pctVal' },
           { key: 'calmar_ratio', label: 'Calmar', target: 1.0, op: '>=' },
         ],
@@ -370,6 +371,7 @@ export default function Roadmap() {
     avg_rubric_score: ctoData?.headline_kpis?.avg_rubric_score || null,
     sortino_ratio: fm.sortino_ratio || null,
     calmar_ratio: fm.calmar_ratio || null,
+    beta: fm.beta || null,
     profitable_months: fm.monthly_batting_avg != null ? Math.round((fm.monthly_batting_avg / 100) * (fm.total_months || 0)) : null,
     live_trades: null,       // Phase 2+
     live_paper_delta: null,  // Phase 2+

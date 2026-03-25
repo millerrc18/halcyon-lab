@@ -95,27 +95,47 @@ export default function Docs() {
     enabled: !!activeDoc,
   })
 
+  const groups = [
+    { label: 'Core', ids: ['agents', 'readme', 'architecture', 'training-guide', 'roadmap'] },
+    { label: 'Research — Training', ids: ['research-training-formats', 'research-quality-rubric', 'research-self-blinding', 'research-model-degradation', 'research-training-gaps', 'research-grpo', 'research-qwen-selection'] },
+    { label: 'Research — Strategy', ids: ['research-alt-data', 'research-halcyon-framework'] },
+    { label: 'Research — Business', ids: ['research-fund-path', 'research-scaling-plan'] },
+  ]
+
+  const docMap = Object.fromEntries((docList || []).map(d => [d.id, d]))
+
   return (
     <div className="flex gap-6 max-w-5xl mx-auto">
-      <nav className="w-48 shrink-0">
+      <nav className="w-56 shrink-0">
         <h2 className="text-sm font-medium text-[var(--text-muted)] uppercase tracking-wide mb-3">Documentation</h2>
-        <div className="space-y-1">
-          {(docList || []).map(d => (
-            <button
-              key={d.id}
-              onClick={() => setActiveDoc(d.id)}
-              disabled={!d.available}
-              className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
-                activeDoc === d.id
-                  ? 'bg-[var(--bg-tertiary)] text-[var(--text-primary)]'
-                  : d.available
-                    ? 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)]/50'
-                    : 'text-[var(--text-muted)] opacity-50 cursor-not-allowed'
-              }`}
-            >
-              {d.title}
-            </button>
-          ))}
+        <div className="space-y-4">
+          {groups.map(g => {
+            const docs = g.ids.map(id => docMap[id]).filter(Boolean)
+            if (docs.length === 0) return null
+            return (
+              <div key={g.label}>
+                <div className="text-xs text-[var(--text-muted)] uppercase tracking-wide px-3 mb-1">{g.label}</div>
+                <div className="space-y-0.5">
+                  {docs.map(d => (
+                    <button
+                      key={d.id}
+                      onClick={() => setActiveDoc(d.id)}
+                      disabled={!d.available}
+                      className={`w-full text-left px-3 py-1.5 rounded-lg text-sm transition-colors ${
+                        activeDoc === d.id
+                          ? 'bg-[var(--bg-tertiary)] text-[var(--text-primary)]'
+                          : d.available
+                            ? 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)]/50'
+                            : 'text-[var(--text-muted)] opacity-50 cursor-not-allowed'
+                      }`}
+                    >
+                      {d.title.replace('Research: ', '')}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )
+          })}
         </div>
       </nav>
 
