@@ -89,6 +89,9 @@ def generate_cto_report(days: int = 7, db_path: str = "ai_research_desk.sqlite3"
     # Confidence calibration
     confidence_calibration = _compute_confidence_calibration(closed, recommendations)
 
+    # Fund-level metrics
+    fund_metrics = _compute_fund_metrics(closed, trade_summary)
+
     # Build headline KPIs — the 5 numbers that matter most
     headline_kpis = {
         "sharpe_ratio": trade_summary.get("sharpe_ratio", 0),
@@ -107,11 +110,11 @@ def generate_cto_report(days: int = 7, db_path: str = "ai_research_desk.sqlite3"
             "total_pnl": trade_summary.get("total_pnl", 0),
             "expectancy_dollars": trade_summary.get("expectancy_dollars", 0),
             "profit_factor": trade_summary.get("profit_factor", 0),
-            "sortino_ratio": trade_summary.get("fund_metrics", {}).get("sortino_ratio", 0),
-            "calmar_ratio": trade_summary.get("fund_metrics", {}).get("calmar_ratio", 0),
-            "monthly_batting_avg": trade_summary.get("fund_metrics", {}).get("monthly_batting_avg", 0),
-            "var_95_pct": trade_summary.get("fund_metrics", {}).get("var_95_pct", 0),
-            "total_return_pct": trade_summary.get("fund_metrics", {}).get("total_return_pct", 0),
+            "sortino_ratio": fund_metrics.get("sortino_ratio", 0),
+            "calmar_ratio": fund_metrics.get("calmar_ratio", 0),
+            "monthly_batting_avg": fund_metrics.get("monthly_batting_avg", 0),
+            "var_95_pct": fund_metrics.get("var_95", 0),
+            "total_return_pct": fund_metrics.get("total_return_pct", 0),
             "dataset_size": dataset_size,
         }
         save_metric_snapshot(snapshot, db_path)
@@ -142,6 +145,7 @@ def generate_cto_report(days: int = 7, db_path: str = "ai_research_desk.sqlite3"
         "feature_correlations": feature_correlations,
         "training_status": training_status,
         "confidence_calibration": confidence_calibration,
+        "fund_metrics": fund_metrics,
     }
 
 
@@ -199,80 +203,6 @@ def _compute_trade_summary(closed: list, open_trades: list, all_trades: list) ->
         else:
             current_streak = 0
 
-    # ── Fund-grade metrics ──────────────────────────────────────
-    # Sortino ratio (penalizes downside volatility only)
-    downside_returns = [r for r in pnl_pcts if r < 0]
-    if len(downside_returns) >= 2 and mean_r is not None:
-        downside_std = (sum(r ** 2 for r in downside_returns) / len(downside_returns)) ** 0.5
-        sortino = (mean_r / downside_std) * math.sqrt(150) if downside_std > 0 else 0
-    else:
-        sortino = 0
-
-    # Calmar ratio (CAGR / max drawdown)
-    # Approximate CAGR from cumulative returns
-    total_return_pct = sum(pnl_pcts) if pnl_pcts else 0
-    calmar = abs(total_return_pct / max_dd_pct) if max_dd_pct > 0 else 0
-
-    # Beta (correlation with market — requires SPY returns, approximate from regime data)
-    beta = 0.0  # Populated when we have SPY daily returns to correlate against
-
-    # Alpha (excess return over market, approximate)
-    alpha = 0.0  # Populated when beta is computed
-
-    # Max drawdown duration (days from peak to recovery)
-    dd_start = None
-    dd_duration = 0
-    max_dd_duration = 0
-    cum = 0
-    pk = 0
-    for t in closed:
-        cum += t.get("pnl_dollars", 0) or 0
-        if cum > pk:
-            pk = cum
-            if dd_start is not None:
-                max_dd_duration = max(max_dd_duration, dd_duration)
-            dd_start = None
-            dd_duration = 0
-        elif dd_start is None:
-            dd_start = t.get("actual_exit_time", "")
-            dd_duration = t.get("duration_days", 0) or 0
-        else:
-            dd_duration += t.get("duration_days", 0) or 0
-    if dd_start is not None:
-        max_dd_duration = max(max_dd_duration, dd_duration)
-
-    # Monthly batting average (% of profitable months)
-    monthly_pnl = {}
-    for t in closed:
-        exit_time = t.get("actual_exit_time", "") or ""
-        month_key = exit_time[:7]  # YYYY-MM
-        if month_key:
-            monthly_pnl[month_key] = monthly_pnl.get(month_key, 0) + (t.get("pnl_dollars", 0) or 0)
-    profitable_months = sum(1 for v in monthly_pnl.values() if v > 0)
-    total_months = len(monthly_pnl)
-    monthly_batting_avg = profitable_months / total_months if total_months > 0 else 0
-
-    # Return distribution stats
-    if len(pnl_pcts) >= 3:
-        sorted_pnls = sorted(pnl_pcts)
-        n = len(sorted_pnls)
-        # Skewness (positive = more big winners than big losers)
-        skewness = (n / ((n - 1) * (n - 2))) * sum(((r - mean_r) / std_r) ** 3 for r in pnl_pcts) if std_r > 0 and n > 2 else 0
-        # Worst day/trade
-        worst_trade_pct = sorted_pnls[0]
-        best_trade_pct = sorted_pnls[-1]
-        # VaR 95% (5th percentile loss)
-        var_95_idx = max(0, int(n * 0.05))
-        var_95 = sorted_pnls[var_95_idx]
-    else:
-        skewness = 0
-        worst_trade_pct = min(pnl_pcts) if pnl_pcts else 0
-        best_trade_pct = max(pnl_pcts) if pnl_pcts else 0
-        var_95 = 0
-
-    # Average holding period
-    avg_hold_days = sum(t.get("duration_days", 0) or 0 for t in closed) / len(closed) if closed else 0
-
     return {
         "trades_opened": len(all_trades),
         "trades_closed": len(closed),
@@ -287,22 +217,6 @@ def _compute_trade_summary(closed: list, open_trades: list, all_trades: list) ->
         "avg_loser_pct": round(avg_loser, 1),
         "expectancy_dollars": round(expectancy, 2),
         "total_pnl": round(total_pnl, 2),
-        "fund_metrics": {
-            "sortino_ratio": round(sortino, 2),
-            "calmar_ratio": round(calmar, 2),
-            "beta": round(beta, 2),
-            "alpha_pct": round(alpha, 2),
-            "max_dd_duration_days": max_dd_duration,
-            "monthly_batting_avg": round(monthly_batting_avg, 3),
-            "profitable_months": profitable_months,
-            "total_months": total_months,
-            "skewness": round(skewness, 2),
-            "var_95_pct": round(var_95, 2),
-            "best_trade_pct": round(best_trade_pct, 1),
-            "worst_trade_pct": round(worst_trade_pct, 1),
-            "avg_hold_days": round(avg_hold_days, 1),
-            "total_return_pct": round(total_return_pct, 2),
-        },
         "max_single_win": {
             "ticker": max_win.get("ticker", ""),
             "pnl_pct": round(max_win.get("pnl_pct", 0) or 0, 1),
@@ -661,6 +575,94 @@ def _compute_confidence_calibration(closed: list, recommendations: list) -> dict
         "is_calibrated": is_calibrated,
         "overconfidence_rate": round(overconfidence, 2),
         "total_with_conviction": len(convictions),
+    }
+
+
+def _compute_fund_metrics(closed: list, trade_summary: dict) -> dict:
+    """Compute fund-level performance metrics (Sortino, Calmar, VaR, etc.)."""
+    import math
+
+    pnl_pcts = [t.get("pnl_pct", 0) or 0 for t in closed]
+    pnl_dollars = [t.get("pnl_dollars", 0) or 0 for t in closed]
+    durations = [t.get("duration_days", 0) or 0 for t in closed]
+
+    if len(pnl_pcts) < 2:
+        return {
+            "sortino_ratio": None,
+            "calmar_ratio": None,
+            "var_95": None,
+            "monthly_batting_avg": None,
+            "avg_hold_period_days": None,
+            "return_skewness": None,
+            "best_trade_pct": None,
+            "worst_trade_pct": None,
+            "total_return_pct": None,
+            "beta": None,
+            "alpha": None,
+        }
+
+    mean_r = sum(pnl_pcts) / len(pnl_pcts)
+
+    # Sortino ratio — only penalizes downside volatility
+    downside = [r for r in pnl_pcts if r < 0]
+    if downside:
+        downside_dev = (sum(r ** 2 for r in downside) / len(downside)) ** 0.5
+        sortino = (mean_r / downside_dev) * math.sqrt(150) if downside_dev > 0 else 0
+    else:
+        sortino = float('inf') if mean_r > 0 else 0
+
+    # Calmar ratio — return / max drawdown
+    max_dd_pct = trade_summary.get("max_drawdown_pct", 0)
+    calmar = (mean_r * 150) / max_dd_pct if max_dd_pct > 0 else 0
+
+    # VaR 95% — 5th percentile of returns
+    sorted_pnl = sorted(pnl_pcts)
+    var_idx = max(0, int(len(sorted_pnl) * 0.05) - 1)
+    var_95 = sorted_pnl[var_idx] if sorted_pnl else 0
+
+    # Monthly batting average — % of months with positive P&L
+    monthly_pnl = defaultdict(float)
+    for t in closed:
+        month_key = (t.get("created_at") or "")[:7]
+        if month_key:
+            monthly_pnl[month_key] += t.get("pnl_dollars", 0) or 0
+    positive_months = sum(1 for v in monthly_pnl.values() if v > 0)
+    monthly_batting = (positive_months / len(monthly_pnl) * 100) if monthly_pnl else None
+
+    # Average hold period
+    avg_hold = sum(durations) / len(durations) if durations else 0
+
+    # Return skewness
+    if len(pnl_pcts) >= 3:
+        std_r = (sum((r - mean_r) ** 2 for r in pnl_pcts) / (len(pnl_pcts) - 1)) ** 0.5
+        if std_r > 0:
+            skew = (sum((r - mean_r) ** 3 for r in pnl_pcts) / len(pnl_pcts)) / (std_r ** 3)
+        else:
+            skew = 0
+    else:
+        skew = None
+
+    # Best / worst trade
+    best = max(pnl_pcts) if pnl_pcts else None
+    worst = min(pnl_pcts) if pnl_pcts else None
+
+    # Total return (sum of all trade P&L as % of starting capital)
+    total_pnl = sum(pnl_dollars)
+    # Assume $100k starting capital
+    total_return_pct = (total_pnl / 100000) * 100
+
+    return {
+        "sortino_ratio": round(sortino, 2) if sortino != float('inf') else "inf",
+        "calmar_ratio": round(calmar, 2),
+        "var_95": round(var_95, 2),
+        "monthly_batting_avg": round(monthly_batting, 1) if monthly_batting is not None else None,
+        "avg_hold_period_days": round(avg_hold, 1),
+        "return_skewness": round(skew, 2) if skew is not None else None,
+        "best_trade_pct": round(best, 2) if best is not None else None,
+        "worst_trade_pct": round(worst, 2) if worst is not None else None,
+        "total_return_pct": round(total_return_pct, 2),
+        "beta": None,
+        "alpha": None,
     }
 
 

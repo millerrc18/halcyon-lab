@@ -102,7 +102,7 @@ def run_daily_audit(db_path: str = "ai_research_desk.sqlite3") -> dict:
 
     # Send to Claude for analysis
     audit_input = json.dumps(cto_data, indent=2, default=str)
-    response = generate_training_example(AUDITOR_SYSTEM_PROMPT, audit_input)
+    response = generate_training_example(AUDITOR_SYSTEM_PROMPT, audit_input, purpose="audit")
 
     if not response:
         # Return a minimal green audit if Claude is unavailable
@@ -189,7 +189,7 @@ def run_weekly_audit(days: int = 7, db_path: str = "ai_research_desk.sqlite3") -
         "daily_audits": daily_summaries,
     }, indent=2, default=str)
 
-    response = generate_training_example(WEEKLY_AUDITOR_PROMPT, audit_input)
+    response = generate_training_example(WEEKLY_AUDITOR_PROMPT, audit_input, purpose="audit")
 
     if not response:
         return {"overall_assessment": "green", "summary": "Weekly audit unavailable.",

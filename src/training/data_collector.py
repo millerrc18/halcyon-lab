@@ -99,7 +99,7 @@ def collect_training_examples_from_closed_trades(
         # ═══ STAGE 1: BLINDED GENERATION ═══
         # Claude sees ONLY the setup data — ZERO outcome information
         blinded_prompt = BLINDED_ANALYSIS_PROMPT.format(date=rec_date)
-        stage1_response = generate_training_example(blinded_prompt, feature_input)
+        stage1_response = generate_training_example(blinded_prompt, feature_input, purpose="backfill_blinded")
         if stage1_response is None:
             logger.warning("[TRAINING] Stage 1 failed for %s, skipping", trade.get("ticker"))
             continue
@@ -107,7 +107,7 @@ def collect_training_examples_from_closed_trades(
         # ═══ STAGE 2: QUALITY ENHANCEMENT ═══
         # Claude sees ONLY the Stage 1 output — still no outcome
         enhancement_input = f"ORIGINAL INPUT DATA:\n{feature_input}\n\nDRAFT ANALYSIS:\n{stage1_response}"
-        stage2_response = generate_training_example(QUALITY_ENHANCEMENT_PROMPT, enhancement_input)
+        stage2_response = generate_training_example(QUALITY_ENHANCEMENT_PROMPT, enhancement_input, purpose="backfill_enhancement")
 
         # Use Stage 2 if successful, fall back to Stage 1
         final_output = stage2_response if stage2_response else stage1_response

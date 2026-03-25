@@ -47,6 +47,12 @@ def cto_report(days: int = 7):
     return generate_cto_report(days=days)
 
 
+@router.get("/costs")
+def api_costs(days: int = 30):
+    from src.training.versioning import get_cost_summary
+    return get_cost_summary(days=days)
+
+
 @router.post("/halt-trading")
 def halt_trading():
     """Emergency halt — stops all new trade entry immediately."""
@@ -121,6 +127,66 @@ def audit_history(days: int = 7):
                     pass
         results.append(r)
     return results
+
+
+@router.get("/metric-history")
+def metric_history(days: int = 90):
+    """Get rolling metric snapshots computed from closed trade history."""
+    from src.journal.store import get_closed_shadow_trades
+    from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
+    import math
+
+    et = ZoneInfo("America/New_York")
+    closed = get_closed_shadow_trades(days=days)
+
+    if not closed:
+        return []
+
+    # Sort by created_at ascending
+    closed.sort(key=lambda t: t.get("created_at", ""))
+
+    # Build rolling snapshots: for each trade, compute metrics up to that point
+    snapshots = []
+    cumulative_pnl = 0
+    peak = 0
+    all_pnl_pcts = []
+    wins = 0
+
+    for i, t in enumerate(closed):
+        pnl = t.get("pnl_dollars", 0) or 0
+        pnl_pct = t.get("pnl_pct", 0) or 0
+        cumulative_pnl += pnl
+        all_pnl_pcts.append(pnl_pct)
+        if pnl > 0:
+            wins += 1
+
+        if cumulative_pnl > peak:
+            peak = cumulative_pnl
+        drawdown = peak - cumulative_pnl
+
+        trade_count = i + 1
+        win_rate = wins / trade_count
+
+        # Rolling Sharpe
+        if len(all_pnl_pcts) >= 2:
+            mean_r = sum(all_pnl_pcts) / len(all_pnl_pcts)
+            std_r = (sum((r - mean_r) ** 2 for r in all_pnl_pcts) / (len(all_pnl_pcts) - 1)) ** 0.5
+            sharpe = (mean_r / std_r) * math.sqrt(150) if std_r > 0 else 0
+        else:
+            sharpe = 0
+
+        snapshots.append({
+            "date": (t.get("created_at") or "")[:10],
+            "trade_number": trade_count,
+            "cumulative_pnl": round(cumulative_pnl, 2),
+            "win_rate": round(win_rate, 3),
+            "sharpe_ratio": round(sharpe, 2),
+            "max_drawdown": round(drawdown, 2),
+            "expectancy": round(cumulative_pnl / trade_count, 2),
+        })
+
+    return snapshots
 
 
 @router.put("/config")

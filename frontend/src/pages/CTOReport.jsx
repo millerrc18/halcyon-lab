@@ -1,7 +1,9 @@
 import { useQuery } from '@tanstack/react-query'
+import { api } from '../api'
 import LoadingSpinner from '../components/LoadingSpinner'
 import EmptyState from '../components/EmptyState'
 import MetricCard from '../components/MetricCard'
+import MetricTrend from '../components/MetricTrend'
 
 function KpiCard({ label, value, target, good }) {
   return (
@@ -49,8 +51,8 @@ function SectionTable({ title, headers, rows }) {
 export default function CTOReport() {
   const { data, isLoading, error } = useQuery({
     queryKey: ['cto-report'],
-    queryFn: () => fetch('/api/cto-report?days=7').then(r => r.json()),
-    refetchInterval: 60000,
+    queryFn: () => api.getCtoReport(7),
+    refetchInterval: 120000,
   })
 
   if (isLoading) return <LoadingSpinner />
@@ -229,6 +231,27 @@ export default function CTOReport() {
           <MetricCard label="Avg MFE (winners)" value={data.execution_analysis.avg_mfe_winners != null ? `$${data.execution_analysis.avg_mfe_winners.toFixed(2)}` : 'n/a'} />
         </div>
       )}
+
+      {/* Fund metrics */}
+      {data.fund_metrics && (
+        <div className="mb-6">
+          <h2 className="text-sm font-medium text-[var(--text-secondary)] mb-3">Fund metrics</h2>
+          <div className="grid grid-cols-3 gap-3">
+            <MetricCard label="Sortino ratio" value={data.fund_metrics.sortino_ratio != null ? data.fund_metrics.sortino_ratio : 'n/a'} />
+            <MetricCard label="Calmar ratio" value={data.fund_metrics.calmar_ratio != null ? data.fund_metrics.calmar_ratio.toFixed(2) : 'n/a'} />
+            <MetricCard label="VaR 95%" value={data.fund_metrics.var_95 != null ? `${data.fund_metrics.var_95.toFixed(2)}%` : 'n/a'} />
+            <MetricCard label="Monthly batting avg" value={data.fund_metrics.monthly_batting_avg != null ? `${data.fund_metrics.monthly_batting_avg.toFixed(1)}%` : 'n/a'} />
+            <MetricCard label="Avg hold period" value={data.fund_metrics.avg_hold_period_days != null ? `${data.fund_metrics.avg_hold_period_days.toFixed(1)}d` : 'n/a'} />
+            <MetricCard label="Return skewness" value={data.fund_metrics.return_skewness != null ? data.fund_metrics.return_skewness.toFixed(2) : 'n/a'} />
+            <MetricCard label="Best trade" value={data.fund_metrics.best_trade_pct != null ? `${data.fund_metrics.best_trade_pct >= 0 ? '+' : ''}${data.fund_metrics.best_trade_pct.toFixed(2)}%` : 'n/a'} />
+            <MetricCard label="Worst trade" value={data.fund_metrics.worst_trade_pct != null ? `${data.fund_metrics.worst_trade_pct.toFixed(2)}%` : 'n/a'} />
+            <MetricCard label="Total return" value={data.fund_metrics.total_return_pct != null ? `${data.fund_metrics.total_return_pct >= 0 ? '+' : ''}${data.fund_metrics.total_return_pct.toFixed(2)}%` : 'n/a'} />
+          </div>
+        </div>
+      )}
+
+      {/* Metric trend charts */}
+      <MetricTrend />
     </div>
   )
 }

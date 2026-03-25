@@ -57,6 +57,7 @@ class WatchLoop:
         self._training_collection_done = False
         self._training_run_done = False
         self._saturday_reports_done = False
+        self._daily_audit_done = False
         self._consecutive_errors = 0
 
     def _reset_daily_state(self):

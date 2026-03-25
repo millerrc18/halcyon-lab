@@ -115,7 +115,7 @@ def _score_output(judge_prompt: str, output: str) -> float | None:
     """Score an output using Claude as judge."""
     from src.training.claude_client import generate_training_example
     try:
-        result = generate_training_example(judge_prompt, f"ANALYSIS:\n{output}")
+        result = generate_training_example(judge_prompt, f"ANALYSIS:\n{output}", purpose="ab_evaluation")
         if result:
             # Extract number from response
             import re

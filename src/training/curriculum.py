@@ -288,6 +288,7 @@ def generate_contrastive_training_data(max_pairs: int = 50,
         response = generate_training_example(
             "You are a senior equity analyst writing contrastive training data.",
             prompt,
+            purpose="contrastive",
         )
 
         if not response:
