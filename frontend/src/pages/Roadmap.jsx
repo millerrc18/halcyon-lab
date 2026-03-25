@@ -66,6 +66,7 @@ const ROADMAP_DATA = {
         { label: 'Merge-and-reset LoRA protocol', status: 'pending' },
         { label: 'Golden ratio data mixing (62/38)', status: 'pending' },
         { label: 'Live Alpaca account + reconciliation', status: 'pending' },
+        { label: 'Research Analyst — 2nd paper account for max training data volume', status: 'pending' },
         { label: 'Google Trends + GSCPI signals', status: 'pending' },
       ],
     },
