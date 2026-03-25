@@ -69,22 +69,43 @@ if __name__ == "__main__":
 '''
 
 CURRICULUM_TRAIN_SCRIPT = '''
-import json, sys, os
-os.environ["UNSLOTH_DISABLE_FUSED_CROSS_ENTROPY"] = "1"
+import json, sys, os, torch
 
 def main():
-    from unsloth import FastLanguageModel
-    from datasets import Dataset
+    from transformers import AutoModelForCausalLM, AutoTokenizer, TrainingArguments, BitsAndBytesConfig
+    from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
     from trl import SFTTrainer
-    from transformers import TrainingArguments
+    from datasets import Dataset
 
-    model, tokenizer = FastLanguageModel.from_pretrained(
-        model_name="unsloth/Qwen3-8B", max_seq_length=1024, dtype=None, load_in_4bit=True)
+    print(f"[TRAIN] CUDA: {torch.cuda.is_available()}, GPU: {torch.cuda.get_device_name(0)}")
+    print(f"[TRAIN] Free VRAM: {torch.cuda.mem_get_info()[0]/1e9:.1f}GB")
 
-    model = FastLanguageModel.get_peft_model(model,
-        r=8, lora_alpha=16, lora_dropout=0,
+    bnb_config = BitsAndBytesConfig(
+        load_in_4bit=True,
+        bnb_4bit_quant_type="nf4",
+        bnb_4bit_compute_dtype=torch.bfloat16,
+        bnb_4bit_use_double_quant=True,
+    )
+
+    model = AutoModelForCausalLM.from_pretrained(
+        "Qwen/Qwen3-8B",
+        quantization_config=bnb_config,
+        device_map="auto",
+        torch_dtype=torch.bfloat16,
+    )
+    tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen3-8B")
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+
+    model = prepare_model_for_kbit_training(model)
+    lora_config = LoraConfig(
+        r=16, lora_alpha=32, lora_dropout=0,
         target_modules=["q_proj","k_proj","v_proj","o_proj","gate_proj","up_proj","down_proj"],
-        bias="none", use_gradient_checkpointing="unsloth")
+        bias="none", task_type="CAUSAL_LM",
+    )
+    model = get_peft_model(model, lora_config)
+    model.print_trainable_parameters()
+    model.gradient_checkpointing_enable()
 
     def load_stage(fn):
         examples = []
@@ -114,18 +135,31 @@ def main():
             print(f"  Empty dataset for {name}, skipping")
             continue
         trainer = SFTTrainer(model=model, tokenizer=tokenizer,
-            train_dataset=ds, dataset_text_field="text", max_seq_length=1024,
+            train_dataset=ds, dataset_text_field="text", max_seq_length=512,
             args=TrainingArguments(
                 per_device_train_batch_size=1, gradient_accumulation_steps=16,
                 num_train_epochs=1, learning_rate=lr, bf16=True,
                 logging_steps=10, output_dir=f"training_data/checkpoints/{name.lower()}",
+                optim="paged_adamw_8bit",
                 report_to="none"))
         trainer.train()
         print(f"  {name} complete: {len(ds)} examples")
 
+    # Save LoRA adapter
     model.save_pretrained("training_data/lora_adapter")
     tokenizer.save_pretrained("training_data/lora_adapter")
-    model.save_pretrained_gguf("training_data/halcyon-latest", tokenizer, quantization_method="q5_k_m")
+
+    # Merge and export GGUF
+    print("[TRAIN] Merging LoRA and exporting GGUF...")
+    try:
+        from unsloth import FastLanguageModel
+        merged_model, merged_tok = FastLanguageModel.from_pretrained(
+            model_name="training_data/lora_adapter", max_seq_length=512, dtype=None, load_in_4bit=True)
+        merged_model.save_pretrained_gguf("training_data/halcyon-latest", merged_tok, quantization_method="q5_k_m")
+    except Exception as e:
+        print(f"[TRAIN] GGUF export via Unsloth failed: {e}")
+        print("[TRAIN] LoRA adapter saved. Convert to GGUF manually with llama.cpp if needed.")
+
     print("TRAINING COMPLETE")
 
 if __name__ == "__main__":
