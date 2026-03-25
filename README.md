@@ -1,26 +1,29 @@
 # Halcyon Lab
 
-An autonomous AI trading desk that scans the S&P 100, generates institutional-quality trade commentary using a fine-tuned LLM, executes bracket orders via Alpaca paper trading, and continuously improves through a self-training pipeline with quality gates.
+An autonomous AI trading system that scans equities, generates institutional-quality trade commentary using a fine-tuned Qwen3 8B model, executes bracket orders via Alpaca paper trading, and continuously improves through a self-blinding training pipeline with quality gates. Business model: investing returns, not newsletter.
 
 ## Features
 
 - **Systematic Scoring**: 0-100 composite score from 20+ technical indicators
 - **7+ Data Sources**: Technical, regime, sector, fundamentals, insiders, news, macro
-- **LLM Commentary**: Ollama/Qwen3-8B generates analyst-style trade packets
+- **Fine-Tuned LLM**: halcyon-v1 (Qwen3 8B fine-tuned on 790 self-blinded examples)
 - **Bracket Orders**: Automated entry + stop + target via Alpaca paper trading
-- **Risk Governor**: 7 safety checks + kill switch to halt all trading
-- **Training Pipeline**: Three-stage curriculum SFT + DPO with quality gates
+- **Risk Governor**: 8 safety checks + kill switch to halt all trading
+- **Self-Blinding Pipeline**: Claude generates training data WITHOUT seeing outcomes
+- **Training Pipeline**: Score → leakage check → classify → 3-stage curriculum SFT
 - **Walk-Forward Backtesting**: Validate model performance on historical data
 - **A/B Model Evaluation**: Shadow evaluation before model promotion
-- **Dashboard**: React web interface with WebSocket live updates
-- **Auditor Agent**: Daily and weekly automated system health checks
-- **CTO Report**: Comprehensive performance analytics
+- **Dashboard**: React web interface with 9 pages, WebSocket live updates, action buttons
+- **24/7 Operations**: Overnight schedule for data collection, training, and enrichment
+- **Data Collection**: Options chains, VIX term structure, macro indicators, Google Trends
+- **13 Research Documents**: Training methodology, strategy, business/fund path, options
 
 ## Prerequisites
 
 - Python 3.12+
 - Node.js 18+ (for dashboard)
 - Ollama (for local LLM inference)
+- NVIDIA GPU with 12GB+ VRAM (RTX 3060 minimum)
 - Alpaca paper trading account
 - API keys: Finnhub (free), FRED (free), Anthropic (for training data generation)
 
@@ -38,9 +41,8 @@ cp config/settings.example.yaml config/settings.local.yaml
 
 # 3. Initialize
 python -m src.main init-db
-python -m src.main preflight
 
-# 4. Pull LLM model
+# 4. Pull LLM model (or use fine-tuned halcyon-v1)
 ollama pull qwen3:8b
 
 # 5. Run a scan
@@ -50,27 +52,32 @@ python -m src.main scan --verbose --dry-run
 cd frontend && npm install && npm run build && cd ..
 python -m src.main dashboard
 
-# 7. Start the automated watch loop
-python -m src.main watch
+# 7. Start the automated watch loop (with overnight schedule)
+python -m src.main watch --email-mode daily_summary --overnight
 ```
 
-## Training Data Generation
+## Training
 
 ```bash
-# Historical backfill (generates training examples from real outcomes)
-python -m src.main backfill-training --months 12 --yes
+# Full unified pipeline (recommended)
+python -m src.main train-pipeline --force
 
-# Classify difficulty and curriculum stage
-python -m src.main classify-training-data
+# Or step by step:
+python -m src.main backfill-training --months 12 --yes   # Generate training data
+python -m src.main score-training-data                      # Score with LLM-as-judge
+python -m src.main check-leakage                            # Verify no outcome leakage
+python -m src.main classify-training-data                   # Assign curriculum stages
+python -m src.main train --force                            # Fine-tune
+```
 
-# Score quality with LLM-as-judge
-python -m src.main score-training-data
+## Data Collection
 
-# Validate dataset health
-python -m src.main validate-training-data
+```bash
+# Run all data collection manually
+python -m src.main collect-data
 
-# Fine-tune
-python -m src.main train --force
+# Runs automatically at 9:30 PM ET with --overnight flag
+# Collects: options chains, VIX term structure, CBOE ratios, FRED macro, Google Trends
 ```
 
 ## Architecture

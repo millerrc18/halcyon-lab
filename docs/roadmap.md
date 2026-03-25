@@ -1,101 +1,158 @@
 # Halcyon Lab — Development Roadmap
 
-## Phase 1: Bootcamp (Current)
+**Last Updated:** 2026-03-25
+**Principle:** Every gate is performance-based, not time-based.
 
-**Status**: Active
+## Phase 1: Bootcamp (ACTIVE)
 
-**What's Built**:
-- Full scan pipeline with 7+ data sources
-- Shadow paper trading with bracket orders
-- Risk governor with 7 checks + kill switch
-- Training pipeline: backfill, curriculum SFT, DPO, quality scoring
-- Holdout validation and A/B model evaluation
-- Learned confidence output with calibration tracking
-- Walk-forward backtester and feature importance tracking
-- Daily/weekly auditor agent with escalation rules
-- CTO performance report
-- React dashboard with WebSocket live updates
-- 30+ CLI commands
+**Capital:** Paper ($100K Alpaca)
+**Monthly Cost:** $5/mo
+**Goal:** Prove the system has an edge over 50+ closed trades.
 
-**Criteria to Move to Phase 2**:
-- ≥ 200 training examples with quality scores
-- Win rate ≥ 55% over 50+ shadow trades
-- Holdout score ≥ 3.5/5.0
-- CTO report shows positive expectancy over 30 days
-- No risk governor incidents in past 14 days
+### Gate Metrics
+| Metric | Target |
+|--------|--------|
+| Closed trades | ≥ 50 |
+| Win rate | ≥ 45% |
+| Sharpe ratio | ≥ 0.5 |
+| Expectancy | > $0 |
+| Avg rubric score | ≥ 3.5 |
+
+### Completed
+- 7-source data enrichment, bracket orders, risk governor (8 checks)
+- Auditor agent, validation holdout, A/B eval, walk-forward backtester
+- Curriculum SFT (3-stage), news enrichment, quality pipeline + LLM-as-judge
+- Dashboard + WebSocket, XML output format, self-blinding pipeline, process-first rubric
+- Re-run backfill (976 examples), score + classify + fine-tune halcyon-v1
+- Fund metrics + metric history trending, API cost tracking
+- Database indexes + codebase audit, leakage detector (balanced accuracy)
+- 24/7 overnight schedule (Phase A), unified train-pipeline command
+- Dashboard action buttons, live activity feed
+- Comprehensive data collection pipeline (options, VIX, macro, trends)
 
 ## Phase 2: Micro Live
 
-**Scope**: Small real-money trades with tight risk limits
+**Capital:** $500–$1,000
+**Monthly Cost:** ~$350/mo
+**Goal:** Expand to ~325 stocks. Auto-execute with risk governor. No human approval.
 
-**Additions**:
-- Real Alpaca execution (not paper)
-- Tighter risk governor: max $50/trade risk, 2 positions max
-- Hardware upgrade: RTX 4070 or better for faster training
-- Live P&L tracking and real tax reporting
-- Enhanced auditor with email alerts
+### Gate Metrics
+| Metric | Target |
+|--------|--------|
+| Live trades | ≥ 50 |
+| Live vs paper delta | ≤ 20% |
+| Sharpe (live) | ≥ 0.75 |
+| Max drawdown | ≤ 20% |
+| Beta | ≤ 0.5 |
 
-**Decision Gate**: Positive expectancy over 100 real trades
+### Items
+- Expand universe: S&P 100 → ~325 stocks (S&P 500 filtered by $100M+ ADV)
+- Add GICS sector as input feature (sector conditioning)
+- Upgrade data API to Polygon.io ($199/mo)
+- LLC formation + trader tax status consultation
+- Interactive Brokers account + IB adapter
+- IB paper testing (2 weeks) → live with $500-$1K
+- HSHS dashboard page (5-dimension system health score)
+- AI Council dashboard page — 7 agents for strategic decisions
+- Passive options data collection (EOD chains, VIX term structure, IV surfaces)
+- Options-as-equity-signal (IV rank, put/call ratio, skew → equity model)
+- Scale to 3,000–5,000 training examples
+- GRPO training (at 100+ closed trades)
+- RTX 3090 upgrade (~$800)
+- Merge-and-reset LoRA protocol
+- Golden ratio data mixing (62/38)
+- Research Analyst — 2nd paper account for training data volume
+- Google Trends + GSCPI signals
+- 24/7 overnight schedule (Phase B + C)
 
 ## Phase 3: Growth
 
-**Scope**: Scale position sizes and model sophistication
+**Capital:** $5K–$25K
+**Monthly Cost:** ~$135/mo
+**Goal:** Institutional-quality risk-adjusted returns.
 
-**Additions**:
-- GRPO reinforcement learning from trade outcomes
-- Regime-specific LoRA adapters (bull/bear/sideways)
-- Data subscriptions: Polygon.io ($29/mo) for real-time data
-- Expanded to additional data sources
-- Sector-specific model fine-tuning
+### Gate Metrics
+| Metric | Target |
+|--------|--------|
+| Sharpe | ≥ 1.0 |
+| Sortino | ≥ 1.5 |
+| Max drawdown | ≤ 15% |
+| Profitable months | ≥ 3 |
 
-**Decision Gate**: Sharpe ratio > 1.0 over 6 months
+### Items
+- Regime-specific LoRA adapters (HMM)
+- Sector-specific LoRA adapters (Tech, Healthcare, Energy, Financials)
+- FMP consensus/fundamentals data ($29/mo)
+- Qwen 2.5 14B production model
+- Multi-teacher data generation
+- Tiered data architecture (core/archive/recent)
+- Options: backtesting framework + strategy validation
+- Options: volatility analyst LoRA adapter training
+- Options: 15-check risk governor for non-linear risk
 
 ## Phase 4: Full Autonomous
 
-**Scope**: Portfolio-level optimization and deep automation
+**Capital:** $25K+
+**Monthly Cost:** ~$135/mo
+**Goal:** Investor-ready track record across market regimes.
 
-**Additions**:
-- Portfolio-level risk management (correlation matrix, VAR)
-- Weekly deep audit with performance attribution
-- Multi-timeframe analysis
-- Automated parameter optimization
+### Gate Metrics
+| Metric | Target |
+|--------|--------|
+| Profitable months | ≥ 6 |
+| Sharpe | ≥ 1.2 |
+| Sortino | ≥ 2.0 |
+| Max drawdown | ≤ 12% |
+| Calmar | ≥ 1.0 |
 
-**Decision Gate**: Consistent outperformance vs SPY over 12 months
+### Items
+- Portfolio-level risk (correlation, concentration)
+- Weekly deep audit with trend analysis
+- Learned confidence calibration
+- Institutional risk reporting (P&L attribution, factor exposure, stress tests)
+- Verified track record export (IB statements, BarclayHedge)
+- Investor-ready documentation (compliance manual, risk templates, ODD materials)
+- Options: paper trading credit spreads + iron condors (3+ months)
 
-## Phase 5: Scale
+## Phase 5: Scale Capital
 
-**Scope**: Multi-strategy and expanded universe
+**Capital:** $100K+
+**Monthly Cost:** ~$200/mo
+**Goal:** Grow capital under management. Multi-strategy diversification.
 
-**Additions**:
-- S&P 500 universe expansion
-- Multiple strategy types (momentum, mean-reversion, event-driven)
-- Model ensemble approach
-- Cloud deployment option
+### Gate Metrics
+| Metric | Target |
+|--------|--------|
+| Audited months | ≥ 12 |
+| Sharpe | ≥ 1.5 |
+| Max drawdown | ≤ 10% |
+
+### Items
+- Multi-setup families (breakout, momentum, mean reversion)
+- Russell 1000 expansion (~500-700 stocks) if alpha proven at 325
+- Options: live trading credit spreads + iron condors ($2K+ dedicated capital)
+- Options: XSP/SPX index options via IB (Section 1256 tax treatment)
+- Verified track record (Interactive Brokers or equivalent)
+- Tax structure optimization (LLC, trader tax status, MTM election)
+- Multi-account strategy isolation
+- Regulatory research (RIA registration path for external capital)
+- Family LP structure (General Partner + Limited Partners)
 
 ## Hardware Scaling Plan
 
-| Phase | GPU | VRAM | Training Speed |
-|-------|-----|------|----------------|
-| 1 (Current) | RTX 3060 | 12GB | ~45 min/epoch |
-| 2 | RTX 4070 | 12GB | ~20 min/epoch |
-| 3 | RTX 4090 | 24GB | ~10 min/epoch |
-| 4+ | Cloud A100 | 40GB+ | ~5 min/epoch |
+| Phase | GPU | VRAM | Notes |
+|-------|-----|------|-------|
+| 1 (Current) | RTX 3060 | 12GB | Training at 512 seq_len via PEFT |
+| 2 | RTX 3090 | 24GB | Full Unsloth training at 2048, GGUF export |
+| 3 | RTX 3090 | 24GB | Qwen 14B feasible |
+| 4+ | Cloud A100 | 40GB+ | For ensemble/large-scale experiments |
 
 ## Data Subscription Plan
 
 | Phase | Monthly Cost | Sources |
 |-------|-------------|---------|
-| 1 (Current) | $0 | yfinance, Finnhub free, FRED free, SEC EDGAR |
-| 2 | $0 | Same |
-| 3 | $29 | + Polygon.io Basic |
-| 4 | $51 | + Polygon.io Starter |
-| 5 | $79 | + Polygon.io Developer |
-
-## Decision Gates
-
-All phase transitions are **performance-gated**, not time-gated. The system must demonstrate measurable improvement before advancing. No phase is skipped. Each gate requires:
-
-1. Statistical significance (enough trades)
-2. Risk-adjusted returns (not just raw P&L)
-3. Model quality metrics (holdout scores)
-4. System reliability (no incidents)
+| 1 (Current) | $5 | yfinance, Finnhub free, FRED free, SEC EDGAR, Anthropic Haiku |
+| 2 | ~$350 | + Polygon.io ($199), Unusual Whales ($50) |
+| 3 | ~$400 | + FMP ($29) |
+| 4 | ~$400 | Same |
+| 5 | ~$500 | + additional data as needed |

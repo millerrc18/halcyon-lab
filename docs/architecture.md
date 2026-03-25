@@ -6,7 +6,7 @@
 ┌─────────────────────────────────────────────────────────┐
 │                    SCAN CYCLE (30min)                     │
 ├─────────────────────────────────────────────────────────┤
-│ Universe (S&P 100, 103 tickers)                         │
+│ Universe (S&P 100 → ~325 stocks in Phase 2)             │
 │   ↓                                                     │
 │ Data Ingestion (yfinance OHLCV + SPY benchmark)         │
 │   ↓                                                     │
@@ -18,61 +18,48 @@
 │   ↓                                                     │
 │ Qualification (packet-worthy ≥70, watchlist ≥45)         │
 │   ↓                                                     │
-│ Risk Governor (7 checks + kill switch)                   │
+│ Risk Governor (8 checks + kill switch)                   │
 │   ↓                                                     │
-│ LLM Packet Writer (Ollama → prose commentary)           │
+│ LLM Packet Writer (Ollama/halcyon-v1 → prose commentary)│
 │   ↓                                                     │
 │ Shadow Execution (Alpaca bracket orders)                │
 │   ↓                                                     │
-│ Journal + Email + Dashboard                              │
+│ Journal + Email + Dashboard + WebSocket Broadcast        │
 └─────────────────────────────────────────────────────────┘
 ```
 
-## Database Schema
+## Database Schema (15 tables)
 
-### recommendations
-Core journal table. One row per trade recommendation.
-- `recommendation_id` TEXT PK, `ticker`, `company_name`, `created_at`
-- `score`, `qualification`, `confidence_score`, `entry_zone`, `stop_level`, `target_1`, `target_2`
-- `thesis_text`, `deeper_analysis`, `event_risk`
-- `model_version`, `enriched_prompt`, `llm_conviction`
-- `shadow_entry_price`, `shadow_exit_price`, `shadow_pnl_dollars`, `shadow_pnl_pct`
-- `user_grade`, `ryan_notes`, `repeatable_setup`, `assistant_postmortem`
+### Core Trading
+- **recommendations** — Trade recommendations with scores, thesis, outcomes
+- **shadow_trades** — Paper trade execution tracking with MFE/MAE/P&L
 
-### shadow_trades
-Paper trade execution tracking.
-- `trade_id` TEXT PK, `recommendation_id`, `ticker`, `direction`, `status`
-- `entry_price`, `stop_price`, `target_1`, `target_2`, `planned_shares`
-- `actual_entry_price`, `actual_exit_price`, `pnl_dollars`, `pnl_pct`
-- `max_favorable_excursion`, `max_adverse_excursion`, `duration_days`
-- `exit_reason`, `earnings_adjacent`
+### Training Pipeline
+- **training_examples** — Training data with input/output/scores/curriculum stage
+- **model_versions** — Model registry with versioning, holdout scores, status
+- **model_evaluations** — A/B testing between models
+- **preference_pairs** — DPO training data (chosen vs rejected)
 
-### training_examples
-Training data store.
-- `example_id` TEXT PK, `created_at`, `source`, `ticker`, `recommendation_id`
-- `instruction`, `input_text`, `output_text`
-- `quality_score`, `quality_score_auto`, `difficulty`, `curriculum_stage`
+### Evaluation
+- **audit_reports** — Daily and weekly system audit results
+- **metric_snapshots** — Historical metrics for trending
 
-### model_versions
-Model registry with versioning and holdout scores.
-- `version_id` TEXT PK, `version_name`, `created_at`, `status`
-- `training_examples_count`, `model_file_path`
-- `holdout_score`, `holdout_details`
+### Operations
+- **api_costs** — API call token usage and cost tracking
 
-### model_evaluations
-A/B testing between current and new models.
-
-### preference_pairs
-DPO training data (chosen vs rejected outputs).
-
-### audit_reports
-Daily and weekly system audit results.
+### Data Collection (overnight pipeline)
+- **options_chains** — EOD options chain snapshots (strikes, IV, Greeks, OI)
+- **options_metrics** — Derived per-ticker signals (IV rank, put/call ratios, skew)
+- **vix_term_structure** — VIX family snapshots with term structure ratios
+- **cboe_ratios** — Market-wide put/call ratios
+- **macro_snapshots** — FRED macro indicator snapshots (14 series)
+- **google_trends** — Retail attention signal by ticker
 
 ## API Routes
 
 | Route | Method | Description |
 |-------|--------|-------------|
-| `/api/status` | GET | System status (preflight) |
+| `/api/status` | GET | System status |
 | `/api/scan` | POST | Trigger scan |
 | `/api/scan/latest` | GET | Most recent scan results |
 | `/api/shadow/open` | GET | Open shadow trades |
@@ -84,20 +71,31 @@ Daily and weekly system audit results.
 | `/api/review/{id}` | GET/POST | Get or submit review |
 | `/api/packets` | GET | Recent trade packets |
 | `/api/cto-report` | GET | CTO performance report |
+| `/api/costs` | GET | API cost summary |
+| `/api/metric-history` | GET | Rolling metric snapshots |
+| `/api/data-collection-stats` | GET | Data collection pipeline stats |
+| `/api/docs` | GET | Documentation list |
+| `/api/docs/{id}` | GET | Document content |
+| `/api/actions/scan` | POST | Trigger scan (background) |
+| `/api/actions/cto-report` | POST | Generate CTO report (background) |
+| `/api/actions/collect-training` | POST | Collect training data (background) |
+| `/api/actions/train-pipeline` | POST | Run full training pipeline (background) |
+| `/api/actions/score` | POST | Score unscored examples (background) |
+| `/api/actions/collect-data` | POST | Run data collection (background) |
+| `/api/halt-trading` | POST | Emergency halt |
+| `/api/resume-trading` | POST | Resume trading |
 | `/ws/live` | WebSocket | Real-time event stream |
 
 ## Training Pipeline Flow
 
 ```
-Historical Backfill → Training Examples DB
+Self-Blinding Generation (Claude — NO outcome visibility)
                          ↓
-                  Classify Difficulty (easy/medium/hard)
+               Quality Scoring (LLM-as-judge, 6 dimensions)
                          ↓
-                  Assign Curriculum Stage (structure/evidence/decision)
+               Outcome Leakage Detection (balanced accuracy)
                          ↓
-                  LLM-as-Judge Quality Score (1-5 on 6 dimensions)
-                         ↓
-                  Quality Filter (score ≥ 3.0)
+               Classify Difficulty → Assign Curriculum Stage
                          ↓
               ┌──────────┼──────────┐
               ↓          ↓          ↓
@@ -115,12 +113,26 @@ Historical Backfill → Training Examples DB
                    Promote or Rollback
 ```
 
-## Risk Governor Checks
+## Risk Governor Checks (8)
 
-1. **Max Open Positions** — Reject if at position limit
-2. **Max Sector Concentration** — No sector > 30% of portfolio
-3. **Max Correlated** — No more than 3 positions in same sector
-4. **Daily Loss Limit** — Halt if portfolio drops 3% in a day
-5. **Volatility Halt** — No new longs if VIX proxy > 35%
-6. **Max Position Size** — No single position > 10% of equity
-7. **Kill Switch** — Manual or automated halt status
+1. **Emergency Halt** — Kill switch check (file-based persistence)
+2. **Daily Loss Limit** — Halt if portfolio drops 3% in a day
+3. **Position Size** — No single position > 10% of equity
+4. **Max Open Positions** — Reject if at position limit
+5. **Sector Concentration** — No sector > 30% of portfolio
+6. **Correlation** — No more than 3 positions in same sector
+7. **Volatility Halt** — No new longs if VIX proxy > 35%
+8. **Duplicate Check** — No duplicate positions in same ticker
+
+## 24/7 Overnight Schedule
+
+```
+5:30 PM  Post-close capture (final prices, MFE/MAE update)
+6:00 PM  Training data collection (closed trade → training example)
+9:30 PM  Data collection (options chains, VIX, macro, trends, CBOE)
+10:00 PM News ingestion (full universe, Finnhub)
+11:00 PM Enrichment pre-cache (fundamentals, insiders, macro)
+6:00 AM  Pre-market refresh
+```
+
+Activated with `python -m src.main watch --overnight`

@@ -23,10 +23,10 @@ alpaca:
   base_url: https://paper-api.alpaca.markets
 
 risk:
-  starting_capital: 1000
+  starting_capital: 100000    # Should match your paper/live trading account
   planned_risk_pct_min: 0.005
   planned_risk_pct_max: 0.01
-  max_open_positions: 2
+  max_open_positions: 10
 
 shadow_trading:
   enabled: false  # Set to true to enable paper trading
