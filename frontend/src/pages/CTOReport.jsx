@@ -1,8 +1,50 @@
 import { useQuery } from '@tanstack/react-query'
-import { api } from '../api'
 import LoadingSpinner from '../components/LoadingSpinner'
 import EmptyState from '../components/EmptyState'
 import MetricCard from '../components/MetricCard'
+
+function KpiCard({ label, value, target, good }) {
+  return (
+    <div className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg p-4">
+      <div className="text-xs text-[var(--text-muted)] uppercase tracking-wide">{label}</div>
+      <div className={`text-2xl font-mono font-medium mt-1 ${good === true ? 'text-emerald-400' : good === false ? 'text-red-400' : 'text-[var(--text-primary)]'}`}>
+        {value}
+      </div>
+      {target && <div className="text-xs text-[var(--text-muted)] mt-1">{target}</div>}
+    </div>
+  )
+}
+
+function SectionTable({ title, headers, rows }) {
+  if (!rows || rows.length === 0) return null
+  return (
+    <div className="mb-6">
+      <h2 className="text-sm font-medium text-[var(--text-secondary)] mb-3">{title}</h2>
+      <div className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg overflow-hidden">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-[var(--border)]">
+              {headers.map((h, i) => (
+                <th key={i} className={`p-3 text-[var(--text-muted)] ${i === 0 ? 'text-left' : 'text-right'}`}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, i) => (
+              <tr key={i} className="border-b border-[var(--border)]/50">
+                {row.map((cell, j) => (
+                  <td key={j} className={`p-3 ${j === 0 ? 'text-[var(--text-primary)]' : 'text-right'} ${cell.color || ''}`}>
+                    {cell.text != null ? cell.text : cell}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
 
 export default function CTOReport() {
   const { data, isLoading, error } = useQuery({
@@ -22,75 +64,169 @@ export default function CTOReport() {
   if (!data) return <EmptyState message="No report data available" />
 
   const period = data.report_period || {}
-  const perf = data.performance || {}
-  const risk = data.risk_metrics || {}
+  const kpis = data.headline_kpis || {}
+  const ts = data.trade_summary || {}
+  const status = data.system_status || {}
+
+  const sharpe = kpis.sharpe_ratio || 0
+  const winRate = kpis.win_rate || 0
+  const maxDD = kpis.max_drawdown_pct || 0
+  const cal = kpis.confidence_calibration || 0
+  const rubric = kpis.avg_rubric_score
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-6">
+    <div className="max-w-4xl mx-auto space-y-6">
+      <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-medium text-[var(--text-primary)]">CTO Performance Report</h1>
+          <h1 className="text-xl font-medium text-[var(--text-primary)]">CTO performance report</h1>
           <p className="text-sm text-[var(--text-muted)]">
-            {period.start} to {period.end}
+            {period.start} to {period.end} | {status.model_version || 'base'} | {status.dataset_size || 0} examples
           </p>
         </div>
         <button
-          onClick={() => {
-            navigator.clipboard.writeText(JSON.stringify(data, null, 2))
-          }}
+          onClick={() => navigator.clipboard.writeText(JSON.stringify(data, null, 2))}
           className="px-3 py-1.5 text-xs bg-[var(--bg-tertiary)] border border-[var(--border)] rounded hover:bg-[var(--bg-secondary)]"
         >
           Copy JSON
         </button>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        <MetricCard label="Total Trades" value={perf.total_trades || 0} />
-        <MetricCard label="Win Rate" value={perf.win_rate ? `${perf.win_rate.toFixed(0)}%` : 'n/a'} />
-        <MetricCard label="Expectancy" value={perf.expectancy ? `$${perf.expectancy.toFixed(2)}` : 'n/a'} />
-        <MetricCard label="Total P&L" value={perf.total_pnl ? `$${perf.total_pnl.toFixed(2)}` : 'n/a'} />
+      {/* Headline KPIs */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <KpiCard
+          label="Sharpe ratio"
+          value={sharpe.toFixed(2)}
+          target="> 0.5 (P1) | > 1.0 (P3)"
+          good={ts.trades_closed >= 5 ? (sharpe > 0.5 ? true : sharpe < 0 ? false : null) : null}
+        />
+        <KpiCard
+          label="Win rate"
+          value={`${(winRate * 100).toFixed(1)}%`}
+          target="> 45%"
+          good={ts.trades_closed >= 5 ? (winRate > 0.45 ? true : false) : null}
+        />
+        <KpiCard
+          label="Max drawdown"
+          value={`${maxDD.toFixed(1)}%`}
+          target="< 15%"
+          good={ts.trades_closed >= 5 ? (maxDD < 15 ? true : false) : null}
+        />
+        <KpiCard
+          label="Confidence cal."
+          value={cal.toFixed(3)}
+          target="> 0.3"
+          good={ts.trades_closed >= 10 ? (cal > 0.3 ? true : cal < 0 ? false : null) : null}
+        />
+        <KpiCard
+          label="Rubric score"
+          value={rubric != null ? `${rubric.toFixed(1)}/5` : 'n/a'}
+          target="> 3.5"
+          good={rubric != null ? (rubric >= 3.5 ? true : rubric < 2.5 ? false : null) : null}
+        />
       </div>
 
-      {data.score_band_performance && (
+      {/* Trade summary */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <MetricCard label="Trades closed" value={ts.trades_closed || 0} />
+        <MetricCard label="Trades open" value={ts.trades_open || 0} />
+        <MetricCard label="Profit factor" value={ts.profit_factor || 'n/a'} />
+        <MetricCard label="Expectancy" value={ts.expectancy_dollars != null ? `$${ts.expectancy_dollars.toFixed(2)}` : 'n/a'} />
+        <MetricCard label="Total P&L" value={ts.total_pnl != null ? `$${ts.total_pnl.toFixed(2)}` : 'n/a'} />
+        <MetricCard label="Avg winner" value={ts.avg_winner_pct != null ? `${ts.avg_winner_pct.toFixed(1)}%` : 'n/a'} />
+        <MetricCard label="Avg loser" value={ts.avg_loser_pct != null ? `${ts.avg_loser_pct.toFixed(1)}%` : 'n/a'} />
+        <MetricCard label="Max consec. losses" value={ts.max_consecutive_losses || 0} />
+      </div>
+
+      {/* By score band */}
+      {data.by_score_band && (
+        <SectionTable
+          title="Performance by score band"
+          headers={['Band', 'Trades', 'Win rate', 'Avg P&L']}
+          rows={Object.entries(data.by_score_band).map(([band, s]) => [
+            band,
+            s.trades || 0,
+            s.trades > 0 ? `${(s.win_rate * 100).toFixed(0)}%` : 'n/a',
+            { text: s.avg_pnl != null ? `${s.avg_pnl >= 0 ? '+' : ''}${s.avg_pnl.toFixed(1)}%` : 'n/a', color: (s.avg_pnl || 0) >= 0 ? 'text-emerald-400' : 'text-red-400' },
+          ])}
+        />
+      )}
+
+      {/* By exit reason */}
+      {data.by_exit_reason && Object.keys(data.by_exit_reason).length > 0 && (
+        <SectionTable
+          title="By exit reason"
+          headers={['Reason', 'Count', 'Avg P&L']}
+          rows={Object.entries(data.by_exit_reason).map(([reason, s]) => [
+            reason,
+            s.count || 0,
+            { text: `${s.avg_pnl >= 0 ? '+' : ''}${s.avg_pnl.toFixed(1)}%`, color: (s.avg_pnl || 0) >= 0 ? 'text-emerald-400' : 'text-red-400' },
+          ])}
+        />
+      )}
+
+      {/* By sector */}
+      {data.by_sector && Object.keys(data.by_sector).length > 0 && (
+        <SectionTable
+          title="By sector"
+          headers={['Sector', 'Trades', 'Win rate']}
+          rows={Object.entries(data.by_sector)
+            .sort((a, b) => (b[1].trades || 0) - (a[1].trades || 0))
+            .map(([sector, s]) => [
+              sector,
+              s.trades || 0,
+              s.trades > 0 ? `${(s.win_rate * 100).toFixed(0)}%` : 'n/a',
+            ])}
+        />
+      )}
+
+      {/* By regime */}
+      {data.by_regime && Object.keys(data.by_regime).length > 0 && (
+        <SectionTable
+          title="By market regime"
+          headers={['Regime', 'Trades', 'Win rate']}
+          rows={Object.entries(data.by_regime)
+            .sort((a, b) => (b[1].trades || 0) - (a[1].trades || 0))
+            .map(([regime, s]) => [
+              regime,
+              s.trades || 0,
+              s.trades > 0 ? `${(s.win_rate * 100).toFixed(0)}%` : 'n/a',
+            ])}
+        />
+      )}
+
+      {/* Confidence calibration */}
+      {data.confidence_calibration && (
         <div className="mb-6">
-          <h2 className="text-sm font-medium text-[var(--text-secondary)] mb-3">Performance by Score Band</h2>
-          <div className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-[var(--border)]">
-                  <th className="text-left p-3 text-[var(--text-muted)]">Score Band</th>
-                  <th className="text-right p-3 text-[var(--text-muted)]">Trades</th>
-                  <th className="text-right p-3 text-[var(--text-muted)]">Win Rate</th>
-                  <th className="text-right p-3 text-[var(--text-muted)]">Avg P&L</th>
-                </tr>
-              </thead>
-              <tbody>
-                {Object.entries(data.score_band_performance).map(([band, stats]) => (
-                  <tr key={band} className="border-b border-[var(--border)]/50">
-                    <td className="p-3 text-[var(--text-primary)]">{band}</td>
-                    <td className="p-3 text-right">{stats.count || 0}</td>
-                    <td className="p-3 text-right">{stats.win_rate ? `${stats.win_rate.toFixed(0)}%` : 'n/a'}</td>
-                    <td className={`p-3 text-right ${(stats.avg_pnl || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                      {stats.avg_pnl ? `$${stats.avg_pnl.toFixed(2)}` : 'n/a'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <h2 className="text-sm font-medium text-[var(--text-secondary)] mb-3">Confidence calibration</h2>
+          <div className="grid grid-cols-3 gap-3 mb-3">
+            {Object.entries(data.confidence_calibration.by_conviction_band || {}).map(([band, s]) => (
+              <div key={band} className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg p-3 text-center">
+                <div className="text-xs text-[var(--text-muted)]">Conviction {band}</div>
+                <div className="text-lg font-mono mt-1">{s.trades > 0 ? `${(s.win_rate * 100).toFixed(0)}%` : 'n/a'}</div>
+                <div className="text-xs text-[var(--text-muted)]">{s.trades} trades</div>
+              </div>
+            ))}
+          </div>
+          <div className="text-sm text-[var(--text-secondary)]">
+            Correlation: {data.confidence_calibration.correlation_with_outcomes?.toFixed(3) || 'n/a'}
+            {data.confidence_calibration.is_calibrated != null && (
+              <span className="ml-3">
+                {data.confidence_calibration.is_calibrated
+                  ? <span className="text-emerald-400">Calibrated</span>
+                  : <span className="text-amber-400">Not calibrated</span>}
+              </span>
+            )}
           </div>
         </div>
       )}
 
-      {data.recommendations && data.recommendations.length > 0 && (
-        <div>
-          <h2 className="text-sm font-medium text-[var(--text-secondary)] mb-3">Recommendations</h2>
-          <ul className="space-y-2">
-            {data.recommendations.map((rec, i) => (
-              <li key={i} className="text-sm text-[var(--text-secondary)] bg-[var(--bg-secondary)] border border-[var(--border)] rounded p-3">
-                {rec}
-              </li>
-            ))}
-          </ul>
+      {/* Execution analysis */}
+      {data.execution_analysis && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <MetricCard label="Avg hold (days)" value={data.execution_analysis.avg_hold_period_days?.toFixed(1) || 'n/a'} />
+          <MetricCard label="Targets hit" value={data.execution_analysis.targets_hit_pct != null ? `${(data.execution_analysis.targets_hit_pct * 100).toFixed(0)}%` : 'n/a'} />
+          <MetricCard label="Timeouts" value={data.execution_analysis.timeout_pct != null ? `${(data.execution_analysis.timeout_pct * 100).toFixed(0)}%` : 'n/a'} />
+          <MetricCard label="Avg MFE (winners)" value={data.execution_analysis.avg_mfe_winners != null ? `$${data.execution_analysis.avg_mfe_winners.toFixed(2)}` : 'n/a'} />
         </div>
       )}
     </div>

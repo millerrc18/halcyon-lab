@@ -16,6 +16,7 @@ export default function Dashboard() {
   const { data: packets } = useQuery({ queryKey: ['packets'], queryFn: () => api.getPackets({ days: 1 }) })
   const { data: haltData } = useQuery({ queryKey: ['halt-status'], queryFn: api.getHaltStatus, refetchInterval: 30000 })
   const { data: auditData } = useQuery({ queryKey: ['audit-latest'], queryFn: api.getLatestAudit })
+  const { data: ctoData } = useQuery({ queryKey: ['cto-report'], queryFn: () => fetch('/api/cto-report?days=7').then(r => r.json()), refetchInterval: 60000 })
 
   const haltMutation = useMutation({
     mutationFn: () => haltData?.halted ? api.resumeTrading() : api.haltTrading(),
@@ -90,7 +91,48 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Metric cards */}
+      {/* Headline KPIs */}
+      {(() => {
+        const kpis = ctoData?.headline_kpis || {}
+        const ts = ctoData?.trade_summary || {}
+        const hasTrades = (ts.trades_closed || 0) >= 5
+        return (
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+            <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-lg p-3">
+              <div className="text-xs text-[var(--text-muted)]">Sharpe ratio</div>
+              <div className={`text-xl font-mono font-medium ${hasTrades ? ((kpis.sharpe_ratio || 0) > 0.5 ? 'text-emerald-400' : (kpis.sharpe_ratio || 0) < 0 ? 'text-red-400' : '') : ''}`}>
+                {hasTrades ? (kpis.sharpe_ratio || 0).toFixed(2) : '--'}
+              </div>
+            </div>
+            <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-lg p-3">
+              <div className="text-xs text-[var(--text-muted)]">Win rate</div>
+              <div className={`text-xl font-mono font-medium ${hasTrades ? ((kpis.win_rate || 0) > 0.45 ? 'text-emerald-400' : 'text-red-400') : ''}`}>
+                {hasTrades ? `${((kpis.win_rate || 0) * 100).toFixed(1)}%` : '--'}
+              </div>
+            </div>
+            <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-lg p-3">
+              <div className="text-xs text-[var(--text-muted)]">Max drawdown</div>
+              <div className={`text-xl font-mono font-medium ${hasTrades ? ((kpis.max_drawdown_pct || 0) < 15 ? 'text-emerald-400' : 'text-red-400') : ''}`}>
+                {hasTrades ? `${(kpis.max_drawdown_pct || 0).toFixed(1)}%` : '--'}
+              </div>
+            </div>
+            <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-lg p-3">
+              <div className="text-xs text-[var(--text-muted)]">Confidence cal.</div>
+              <div className="text-xl font-mono font-medium">
+                {(ts.trades_closed || 0) >= 10 ? (kpis.confidence_calibration || 0).toFixed(3) : '--'}
+              </div>
+            </div>
+            <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-lg p-3">
+              <div className="text-xs text-[var(--text-muted)]">Rubric score</div>
+              <div className="text-xl font-mono font-medium">
+                {kpis.avg_rubric_score != null ? `${kpis.avg_rubric_score.toFixed(1)}/5` : 'n/a'}
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
+      {/* System status cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <MetricCard label="Shadow Equity" value={equity.toLocaleString(undefined, { minimumFractionDigits: 0 })} prefix="$" delta={equityDelta} />
         <MetricCard label="Open Trades" value={openTrades?.open_count || 0} />
