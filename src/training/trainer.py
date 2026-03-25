@@ -34,9 +34,9 @@ def main():
     from transformers import TrainingArguments
 
     model, tokenizer = FastLanguageModel.from_pretrained(
-        model_name="unsloth/Qwen3-8B", max_seq_length=2048, dtype=None, load_in_4bit=True)
+        model_name="unsloth/Qwen3-8B", max_seq_length=1024, dtype=None, load_in_4bit=True)
     model = FastLanguageModel.get_peft_model(model,
-        r=16, lora_alpha=32, lora_dropout=0,
+        r=8, lora_alpha=16, lora_dropout=0,
         target_modules=["q_proj","k_proj","v_proj","o_proj","gate_proj","up_proj","down_proj"],
         bias="none", use_gradient_checkpointing="unsloth")
 
@@ -52,7 +52,7 @@ def main():
 
     dataset = Dataset.from_list(examples).map(fmt)
     trainer = SFTTrainer(model=model, tokenizer=tokenizer,
-        train_dataset=dataset, dataset_text_field="text", max_seq_length=2048,
+        train_dataset=dataset, dataset_text_field="text", max_seq_length=1024,
         args=TrainingArguments(per_device_train_batch_size=1, gradient_accumulation_steps=16,
             num_train_epochs=1, learning_rate=2e-4, bf16=True, logging_steps=10,
             output_dir="training_data/checkpoints", report_to="none"))
@@ -77,10 +77,10 @@ def main():
     from transformers import TrainingArguments
 
     model, tokenizer = FastLanguageModel.from_pretrained(
-        model_name="unsloth/Qwen3-8B", max_seq_length=2048, dtype=None, load_in_4bit=True)
+        model_name="unsloth/Qwen3-8B", max_seq_length=1024, dtype=None, load_in_4bit=True)
 
     model = FastLanguageModel.get_peft_model(model,
-        r=16, lora_alpha=32, lora_dropout=0,
+        r=8, lora_alpha=16, lora_dropout=0,
         target_modules=["q_proj","k_proj","v_proj","o_proj","gate_proj","up_proj","down_proj"],
         bias="none", use_gradient_checkpointing="unsloth")
 
@@ -112,7 +112,7 @@ def main():
             print(f"  Empty dataset for {name}, skipping")
             continue
         trainer = SFTTrainer(model=model, tokenizer=tokenizer,
-            train_dataset=ds, dataset_text_field="text", max_seq_length=2048,
+            train_dataset=ds, dataset_text_field="text", max_seq_length=1024,
             args=TrainingArguments(
                 per_device_train_batch_size=1, gradient_accumulation_steps=16,
                 num_train_epochs=1, learning_rate=lr, bf16=True,
