@@ -46,6 +46,7 @@ const ROADMAP_DATA = {
         { label: 'Process-first quality rubric', status: 'in-progress' },
         { label: 'Re-run backfill with new methodology', status: 'pending' },
         { label: 'Score + classify + fine-tune halcyon-v1', status: 'pending' },
+        { label: 'Unified train-pipeline command (score → leakage → classify → train)', status: 'pending' },
       ],
     },
     {
