@@ -16,6 +16,8 @@ email:
   password: your-app-password-here
   from_address: your-assistant-email@gmail.com
   to_address: your.work@email.com
+  cc_addresses:                                # Optional: CC additional emails
+    - your.personal@email.com
 
 alpaca:
   api_key: YOUR_PAPER_API_KEY
