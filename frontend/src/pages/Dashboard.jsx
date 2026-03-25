@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../api'
 import MetricCard from '../components/MetricCard'
@@ -5,6 +6,7 @@ import DataTable from '../components/DataTable'
 import LoadingSpinner from '../components/LoadingSpinner'
 import PnlText from '../components/PnlText'
 import StatusBadge from '../components/StatusBadge'
+import ActivityFeed from '../components/ActivityFeed'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Area, AreaChart } from 'recharts'
 
 export default function Dashboard() {
@@ -18,9 +20,28 @@ export default function Dashboard() {
   const { data: auditData } = useQuery({ queryKey: ['audit-latest'], queryFn: api.getLatestAudit, refetchInterval: 60000 })
   const { data: ctoData } = useQuery({ queryKey: ['cto-report'], queryFn: () => api.getCtoReport(7), refetchInterval: 60000 })
 
+  const [toast, setToast] = useState(null)
+  const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(null), 3000) }
+
   const haltMutation = useMutation({
     mutationFn: () => haltData?.halted ? api.resumeTrading() : api.haltTrading(),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['halt-status'] }),
+  })
+
+  const scanMutation = useMutation({
+    mutationFn: api.triggerActionScan,
+    onSuccess: () => showToast('Scan started...'),
+    onError: (e) => showToast(`Scan failed: ${e.message}`),
+  })
+  const ctoMutation = useMutation({
+    mutationFn: api.triggerCtoReport,
+    onSuccess: () => showToast('CTO report generating...'),
+    onError: (e) => showToast(`CTO report failed: ${e.message}`),
+  })
+  const collectMutation = useMutation({
+    mutationFn: api.triggerCollectTraining,
+    onSuccess: () => showToast('Training data collection started...'),
+    onError: (e) => showToast(`Collection failed: ${e.message}`),
   })
 
   const isHalted = haltData?.halted || false
@@ -90,6 +111,30 @@ export default function Dashboard() {
           {auditSummary && <span className="ml-2">— {auditSummary.slice(0, 200)}</span>}
         </div>
       )}
+
+      {/* Toast notification */}
+      {toast && (
+        <div className="fixed top-4 right-4 z-50 bg-[var(--bg-card)] border border-[var(--border)] rounded-lg px-4 py-2 text-sm shadow-lg">
+          {toast}
+        </div>
+      )}
+
+      {/* Actions */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-xs text-[var(--text-muted)] uppercase tracking-wide mr-2">Actions</span>
+        <button onClick={() => scanMutation.mutate()} disabled={scanMutation.isPending}
+          className="px-3 py-1.5 text-xs rounded-md bg-[var(--bg-tertiary)] border border-[var(--border)] hover:border-[var(--blue)] disabled:opacity-50">
+          {scanMutation.isPending ? 'Scanning...' : 'Run Scan'}
+        </button>
+        <button onClick={() => ctoMutation.mutate()} disabled={ctoMutation.isPending}
+          className="px-3 py-1.5 text-xs rounded-md bg-[var(--bg-tertiary)] border border-[var(--border)] hover:border-[var(--blue)] disabled:opacity-50">
+          {ctoMutation.isPending ? 'Generating...' : 'Generate CTO Report'}
+        </button>
+        <button onClick={() => collectMutation.mutate()} disabled={collectMutation.isPending}
+          className="px-3 py-1.5 text-xs rounded-md bg-[var(--bg-tertiary)] border border-[var(--border)] hover:border-[var(--blue)] disabled:opacity-50">
+          {collectMutation.isPending ? 'Collecting...' : 'Collect Training Data'}
+        </button>
+      </div>
 
       {/* Headline KPIs */}
       {(() => {
@@ -177,6 +222,9 @@ export default function Dashboard() {
           )}
         </div>
       </div>
+
+      {/* Live Activity Feed */}
+      <ActivityFeed />
 
       {/* Open trades table */}
       <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-lg p-4">

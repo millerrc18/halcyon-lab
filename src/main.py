@@ -441,10 +441,58 @@ def cmd_preflight(args):
     print(f"  Training:  {'Enabled ('+str(s['training_examples'])+' examples)' if s['training_enabled'] else 'Disabled'}")
     print(f"  Bootcamp:  {'Phase '+str(s['bootcamp_phase']) if s['bootcamp_enabled'] else 'Disabled'}")
 
+def cmd_train_pipeline(args):
+    """Run the complete training pipeline end-to-end."""
+    from src.training.quality_filter import score_all_unscored
+    from src.training.leakage_detector import check_outcome_leakage
+    from src.training.curriculum import classify_all_examples
+    from src.training.trainer import run_fine_tune
+
+    print("\n=== HALCYON TRAINING PIPELINE ===\n")
+
+    # Step 1: Score unscored examples
+    print("[1/5] Scoring unscored training examples...")
+    result = score_all_unscored()
+    scored = result.get("scored", 0)
+    print(f"  Scored {scored} examples")
+
+    # Step 2: Check for outcome leakage
+    print("\n[2/5] Running outcome leakage test...")
+    leakage = check_outcome_leakage()
+    if leakage.get("is_leaking"):
+        print(f"  LEAKING — balanced accuracy {leakage['balanced_accuracy']:.1%}")
+        if not args.force:
+            print("  ABORT: Fix leakage before training. Use --force to override.")
+            return
+        print("  --force: Proceeding despite leakage warning")
+    else:
+        ba = leakage.get("balanced_accuracy")
+        status = leakage.get("status", "CLEAN")
+        print(f"  {status} — balanced accuracy {ba:.1%}" if ba else f"  {status}")
+
+    # Step 3: Classify examples into curriculum stages
+    print("\n[3/5] Classifying training examples...")
+    classify_result = classify_all_examples()
+    print(f"  Classified {classify_result.get('classified', 0)} examples")
+
+    # Step 4: Export training data (handled inside run_fine_tune)
+    print("\n[4/5] Exporting training data...")
+
+    # Step 5: Fine-tune
+    print("\n[5/5] Starting fine-tuning...")
+    ft_result = run_fine_tune()
+    if ft_result:
+        print(f"\n  Model registered: {ft_result.get('version_name', 'halcyon-latest')}")
+        print("  TRAINING PIPELINE COMPLETE")
+    else:
+        print("\n  Training failed. Check logs.")
+
+
 def cmd_watch(args):
     from src.config import load_config
     from src.scheduler.watch import WatchLoop
-    WatchLoop(load_config(), email_mode=getattr(args, "email_mode", None)).run()
+    WatchLoop(load_config(), email_mode=getattr(args, "email_mode", None),
+              overnight=getattr(args, "overnight", False)).run()
 
 def cmd_dashboard(args):
     import uvicorn
@@ -490,6 +538,7 @@ def build_parser() -> argparse.ArgumentParser:
     _p = sp.add_parser("bootstrap-training"); _p.add_argument("--count", type=int, default=500); _p.add_argument("--yes", action="store_true"); _p.set_defaults(func=cmd_bootstrap_training)
     _p = sp.add_parser("backfill-training"); _p.add_argument("--months", type=int, default=12); _p.add_argument("--max-examples", type=int, default=2000); _p.add_argument("--min-score", type=float, default=70); _p.add_argument("--include-messy", action="store_true"); _p.add_argument("--yes", action="store_true"); _p.set_defaults(func=cmd_backfill_training)
     _p = sp.add_parser("train"); _p.add_argument("--force", action="store_true"); _p.add_argument("--rollback", action="store_true"); _p.add_argument("--export", action="store_true"); _p.set_defaults(func=cmd_train)
+    _p = sp.add_parser("train-pipeline", help="Run complete training pipeline (score → leakage → classify → train)"); _p.add_argument("--force", action="store_true", help="Continue even if leakage detected"); _p.set_defaults(func=cmd_train_pipeline)
 
     # Training — quality
     sp.add_parser("classify-training-data").set_defaults(func=cmd_classify_training)
@@ -512,7 +561,7 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_parser("halt-trading").set_defaults(func=cmd_halt_trading)
     sp.add_parser("resume-trading").set_defaults(func=cmd_resume_trading)
     sp.add_parser("preflight").set_defaults(func=cmd_preflight)
-    _p = sp.add_parser("watch"); _p.add_argument("--email-mode", choices=["full_stream", "daily_summary", "silent"]); _p.set_defaults(func=cmd_watch)
+    _p = sp.add_parser("watch"); _p.add_argument("--email-mode", choices=["full_stream", "daily_summary", "silent"]); _p.add_argument("--overnight", action="store_true", help="Enable overnight schedule (post-close, news, enrichment, pre-market)"); _p.set_defaults(func=cmd_watch)
     _p = sp.add_parser("dashboard"); _p.add_argument("--port", type=int, default=8000); _p.set_defaults(func=cmd_dashboard)
 
     return p

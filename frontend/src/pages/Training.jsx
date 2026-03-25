@@ -1,4 +1,5 @@
-import { useQuery } from '@tanstack/react-query'
+import { useState } from 'react'
+import { useQuery, useMutation } from '@tanstack/react-query'
 import { api } from '../api'
 import MetricCard from '../components/MetricCard'
 import StatusBadge from '../components/StatusBadge'
@@ -7,6 +8,19 @@ import LoadingSpinner from '../components/LoadingSpinner'
 export default function Training() {
   const { data: status, isLoading } = useQuery({ queryKey: ['training-status'], queryFn: api.getTrainingStatus, refetchInterval: 60000 })
   const { data: history } = useQuery({ queryKey: ['training-versions'], queryFn: api.getTrainingVersions, refetchInterval: 60000 })
+  const [toast, setToast] = useState(null)
+  const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(null), 3000) }
+
+  const trainMutation = useMutation({
+    mutationFn: api.triggerTrainPipeline,
+    onSuccess: () => showToast('Training pipeline started (this will take a while)...'),
+    onError: (e) => showToast(`Training failed: ${e.message}`),
+  })
+  const scoreMutation = useMutation({
+    mutationFn: api.triggerScore,
+    onSuccess: () => showToast('Scoring started...'),
+    onError: (e) => showToast(`Scoring failed: ${e.message}`),
+  })
 
   if (isLoading) return <LoadingSpinner />
 
@@ -14,7 +28,26 @@ export default function Training() {
 
   return (
     <div className="space-y-6">
-      <h2 className="text-xl font-medium">Training Pipeline</h2>
+      {toast && (
+        <div className="fixed top-4 right-4 z-50 bg-[var(--bg-card)] border border-[var(--border)] rounded-lg px-4 py-2 text-sm shadow-lg">
+          {toast}
+        </div>
+      )}
+
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-medium">Training Pipeline</h2>
+        <div className="flex items-center gap-2">
+          <button onClick={() => scoreMutation.mutate()} disabled={scoreMutation.isPending}
+            className="px-3 py-1.5 text-xs rounded-md bg-[var(--bg-tertiary)] border border-[var(--border)] hover:border-[var(--blue)] disabled:opacity-50">
+            {scoreMutation.isPending ? 'Scoring...' : 'Score Unscored'}
+          </button>
+          <button onClick={() => { if (confirm('This will run the full training pipeline and may take a long time. Continue?')) trainMutation.mutate() }}
+            disabled={trainMutation.isPending}
+            className="px-3 py-1.5 text-xs rounded-md bg-[var(--blue)] text-white hover:opacity-90 disabled:opacity-50">
+            {trainMutation.isPending ? 'Training...' : 'Run Training Pipeline'}
+          </button>
+        </div>
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <MetricCard label="Active Model" value={status?.model_name || 'base'} />
