@@ -9,7 +9,7 @@ import logging
 import pandas as pd
 
 from src.features.engine import compute_features
-from src.llm.prompts import BLINDED_ANALYSIS_PROMPT, HISTORICAL_TRAINING_PROMPT
+from src.llm.prompts import BLINDED_ANALYSIS_PROMPT
 from src.ranking.ranker import _score_ticker
 from src.training.historical_data import slice_to_date
 from src.universe.company_names import get_company_name

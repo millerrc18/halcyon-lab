@@ -66,10 +66,9 @@ def get_system_status(config: dict) -> dict:
     try:
         db_path = Path("ai_research_desk.sqlite3")
         if db_path.exists():
-            conn = sqlite3.connect(str(db_path))
-            journal_recs = conn.execute("SELECT COUNT(*) FROM recommendations").fetchone()[0]
-            journal_trades = conn.execute("SELECT COUNT(*) FROM shadow_trades").fetchone()[0]
-            conn.close()
+            with sqlite3.connect(str(db_path)) as conn:
+                journal_recs = conn.execute("SELECT COUNT(*) FROM recommendations").fetchone()[0]
+                journal_trades = conn.execute("SELECT COUNT(*) FROM shadow_trades").fetchone()[0]
     except Exception as e:
         logger.debug("Journal DB query failed: %s", e)
 

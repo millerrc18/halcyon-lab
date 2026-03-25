@@ -180,11 +180,14 @@ def get_metric_history(days: int = 90, db_path: str = "ai_research_desk.sqlite3"
     """
     import json
     init_training_tables(db_path)
+    cutoff = (datetime.now(ZoneInfo("America/New_York")) - timedelta(days=days)).strftime("%Y-%m-%d")
     with sqlite3.connect(db_path) as conn:
         conn.row_factory = sqlite3.Row
         rows = conn.execute(
             "SELECT snapshot_date, metrics_json FROM metric_snapshots "
-            "ORDER BY snapshot_date ASC"
+            "WHERE snapshot_date >= ? "
+            "ORDER BY snapshot_date ASC",
+            (cutoff,),
         ).fetchall()
 
     result = []

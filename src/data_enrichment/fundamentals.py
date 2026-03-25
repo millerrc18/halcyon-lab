@@ -205,10 +205,10 @@ def fetch_fundamental_snapshot(ticker: str, cache_hours: int = 24) -> dict | Non
 
         # Compute margins
         gross_margin = None
-        operating_margin = None
+        net_margin = None
         if revenue_ttm and revenue_ttm > 0:
             if net_income_ttm:
-                operating_margin = round(net_income_ttm / revenue_ttm, 3)
+                net_margin = round(net_income_ttm / revenue_ttm, 3)
             # Gross margin — try GrossProfit concept
             gross_data = _fetch_concept(cik, "GrossProfit")
             time.sleep(0.1)
@@ -233,7 +233,7 @@ def fetch_fundamental_snapshot(ticker: str, cache_hours: int = 24) -> dict | Non
             "revenue_yoy_growth": revenue_yoy,
             "net_income_ttm": net_income_ttm,
             "gross_margin": gross_margin,
-            "operating_margin": operating_margin,
+            "operating_margin": net_margin,  # Actually net margin (net_income/revenue)
             "eps_diluted_ttm": float(eps_val) if eps_val else None,
             "pe_ratio": None,  # Computed externally if price available
             "last_filing_date": filing_date,
@@ -271,9 +271,9 @@ def format_fundamental_summary(data: dict | None, price: float | None = None) ->
     if gm is not None:
         parts.append(f"Gross Margin: {gm:.1%}")
 
-    om = data.get("operating_margin")
+    om = data.get("operating_margin")  # Actually net margin
     if om is not None:
-        parts.append(f"Op Margin: {om:.1%}")
+        parts.append(f"Net Margin: {om:.1%}")
 
     eps = data.get("eps_diluted_ttm")
     if eps is not None:

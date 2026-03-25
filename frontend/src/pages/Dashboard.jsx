@@ -19,6 +19,7 @@ export default function Dashboard() {
   const { data: haltData } = useQuery({ queryKey: ['halt-status'], queryFn: api.getHaltStatus, refetchInterval: 30000 })
   const { data: auditData } = useQuery({ queryKey: ['audit-latest'], queryFn: api.getLatestAudit, refetchInterval: 60000 })
   const { data: ctoData } = useQuery({ queryKey: ['cto-report'], queryFn: () => api.getCtoReport(7), refetchInterval: 60000 })
+  const { data: configData } = useQuery({ queryKey: ['config'], queryFn: api.getConfig, refetchInterval: 300000 })
 
   const [toast, setToast] = useState(null)
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(null), 3000) }
@@ -50,8 +51,9 @@ export default function Dashboard() {
 
   if (statusLoading) return <LoadingSpinner />
 
+  const startingCapital = configData?.risk?.starting_capital || 100000
   const equity = status?.alpaca_equity || 0
-  const equityDelta = equity - 100000
+  const equityDelta = equity - startingCapital
 
   // Build cumulative P&L chart data
   const chartData = (closedData?.trades || [])
