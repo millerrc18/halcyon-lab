@@ -10,6 +10,7 @@
  */
 
 import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { CheckCircle2, Circle, Loader2, ChevronDown, ChevronRight, Lock, ArrowRight } from 'lucide-react'
 
 // ═══════════════════════════════════════════════════════════════
@@ -29,6 +30,12 @@ const ROADMAP_DATA = {
       description: '30-day intensive paper trading. Prove the system has an edge.',
       gate: {
         label: '50+ closed trades, positive expectancy, win rate > 45%',
+        metrics: [
+          { key: 'trades_closed', label: 'Closed trades', target: 50, op: '>=' },
+          { key: 'win_rate', label: 'Win rate', target: 0.45, op: '>=', fmt: 'pct' },
+          { key: 'sharpe_ratio', label: 'Sharpe', target: 0.5, op: '>=' },
+          { key: 'expectancy_dollars', label: 'Expectancy', target: 0, op: '>', fmt: 'dollar' },
+        ],
       },
       items: [
         { label: '7-source data enrichment', status: 'done' },
@@ -60,6 +67,10 @@ const ROADMAP_DATA = {
       description: 'Auto-execute with risk governor. No human approval. Shadow runs in parallel.',
       gate: {
         label: 'Live matches paper within 20%, 50+ live trades',
+        metrics: [
+          { key: 'live_trades', label: 'Live trades', target: 50, op: '>=' },
+          { key: 'live_paper_delta', label: 'Live vs paper', target: 20, op: '<=', fmt: 'pctAbs' },
+        ],
       },
       items: [
         { label: 'Options flow data ($50/mo Unusual Whales)', status: 'pending' },
@@ -82,6 +93,11 @@ const ROADMAP_DATA = {
       description: 'Tiered autonomy by conviction level. Multiple data feeds.',
       gate: {
         label: '3 months profitable, Sharpe > 1.0, max drawdown < 15%',
+        metrics: [
+          { key: 'sharpe_ratio', label: 'Sharpe', target: 1.0, op: '>=' },
+          { key: 'max_drawdown_pct', label: 'Max DD', target: 15, op: '<=', fmt: 'pctVal' },
+          { key: 'profitable_months', label: 'Profitable months', target: 3, op: '>=' },
+        ],
       },
       items: [
         { label: 'Regime-specific LoRA adapters (HMM)', status: 'pending' },
@@ -100,6 +116,10 @@ const ROADMAP_DATA = {
       description: 'All trades auto-executed within hard risk limits.',
       gate: {
         label: '6 months profitable, consistent across market regimes',
+        metrics: [
+          { key: 'profitable_months', label: 'Profitable months', target: 6, op: '>=' },
+          { key: 'sharpe_ratio', label: 'Sharpe', target: 1.0, op: '>=' },
+        ],
       },
       items: [
         { label: 'Portfolio-level risk (correlation, concentration)', status: 'pending' },
@@ -176,7 +196,49 @@ const phaseColors = {
   locked: 'border-l-[var(--border)]',
 }
 
-function PhaseCard({ phase }) {
+function GateMetric({ metric, currentValue }) {
+  const val = currentValue
+  const hasData = val != null && val !== undefined
+
+  let passed = false
+  if (hasData) {
+    if (metric.op === '>=') passed = val >= metric.target
+    else if (metric.op === '>') passed = val > metric.target
+    else if (metric.op === '<=') passed = val <= metric.target
+  }
+
+  let displayVal = '--'
+  let displayTarget = `${metric.target}`
+  if (hasData) {
+    if (metric.fmt === 'pct') {
+      displayVal = `${(val * 100).toFixed(1)}%`
+      displayTarget = `${(metric.target * 100).toFixed(0)}%`
+    } else if (metric.fmt === 'dollar') {
+      displayVal = `$${val.toFixed(2)}`
+      displayTarget = `$${metric.target}`
+    } else if (metric.fmt === 'pctVal' || metric.fmt === 'pctAbs') {
+      displayVal = `${val.toFixed(1)}%`
+      displayTarget = `${metric.target}%`
+    } else {
+      displayVal = typeof val === 'number' ? (Number.isInteger(val) ? `${val}` : val.toFixed(2)) : `${val}`
+    }
+  }
+
+  const opSymbol = metric.op === '>=' ? '≥' : metric.op === '>' ? '>' : metric.op === '<=' ? '≤' : metric.op
+
+  return (
+    <div className="flex items-center gap-2 text-xs">
+      <div className={`w-2 h-2 rounded-full shrink-0 ${hasData ? (passed ? 'bg-emerald-500' : 'bg-red-400') : 'bg-[var(--text-muted)]'}`} />
+      <span className="text-[var(--text-muted)] w-28">{metric.label}</span>
+      <span className={`font-mono font-medium ${hasData ? (passed ? 'text-emerald-400' : 'text-red-400') : 'text-[var(--text-muted)]'}`}>
+        {displayVal}
+      </span>
+      <span className="text-[var(--text-muted)]">{opSymbol} {displayTarget}</span>
+    </div>
+  )
+}
+
+function PhaseCard({ phase, kpis }) {
   const [expanded, setExpanded] = useState(phase.status === 'active')
   const isLocked = phase.status === 'locked'
 
@@ -223,9 +285,20 @@ function PhaseCard({ phase }) {
       )}
 
       {phase.gate && (
-        <div className="px-4 py-2.5 bg-[var(--bg-tertiary)] border-t border-[var(--border)] flex items-center gap-2 text-xs">
-          <Lock size={12} className="text-amber-500 shrink-0" />
-          <span className="text-[var(--text-secondary)]">Gate: {phase.gate.label}</span>
+        <div className="px-4 py-3 bg-[var(--bg-tertiary)] border-t border-[var(--border)]">
+          <div className="flex items-center gap-2 text-xs mb-2">
+            <Lock size={12} className="text-amber-500 shrink-0" />
+            <span className="text-[var(--text-secondary)] font-medium">Gate</span>
+          </div>
+          {phase.gate.metrics ? (
+            <div className="space-y-1.5 ml-5">
+              {phase.gate.metrics.map((m, i) => (
+                <GateMetric key={i} metric={m} currentValue={kpis ? kpis[m.key] : null} />
+              ))}
+            </div>
+          ) : (
+            <div className="text-xs text-[var(--text-muted)] ml-5">{phase.gate.label}</div>
+          )}
         </div>
       )}
     </div>
@@ -250,6 +323,25 @@ function PipelineStep({ step, isLast }) {
 
 export default function Roadmap() {
   const data = ROADMAP_DATA
+
+  const { data: ctoData } = useQuery({
+    queryKey: ['cto-report'],
+    queryFn: () => fetch('/api/cto-report?days=30').then(r => r.json()),
+    refetchInterval: 60000,
+  })
+
+  // Build a flat kpis object from CTO report data
+  const ts = ctoData?.trade_summary || {}
+  const kpis = {
+    trades_closed: ts.trades_closed || 0,
+    win_rate: ts.win_rate || 0,
+    sharpe_ratio: ts.sharpe_ratio || 0,
+    expectancy_dollars: ts.expectancy_dollars || 0,
+    max_drawdown_pct: ts.max_drawdown_pct || 0,
+    profitable_months: null, // computed later when we have monthly data
+    live_trades: null,       // Phase 2+
+    live_paper_delta: null,  // Phase 2+
+  }
 
   const totalItems = data.phases.flatMap(p => p.items)
   const doneCount = totalItems.filter(i => i.status === 'done').length
@@ -277,7 +369,7 @@ export default function Roadmap() {
 
       <div className="space-y-3">
         {data.phases.map(phase => (
-          <PhaseCard key={phase.id} phase={phase} />
+          <PhaseCard key={phase.id} phase={phase} kpis={kpis} />
         ))}
       </div>
 
