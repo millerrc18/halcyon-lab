@@ -24,7 +24,9 @@ logger = logging.getLogger(__name__)
 
 ET = ZoneInfo("America/New_York")
 
-TRAIN_SCRIPT = '''# training_data/train.py — legacy single-stage (kept for backward compat)
+TRAIN_SCRIPT = '''# training_data/train.py — DEPRECATED: legacy single-stage trainer
+# Uses old Unsloth API. The curriculum script (CURRICULUM_TRAIN_SCRIPT) is the
+# primary training path and uses standard PEFT/TRL 0.24 API instead.
 import json, sys, os
 os.environ["UNSLOTH_DISABLE_FUSED_CROSS_ENTROPY"] = "1"
 

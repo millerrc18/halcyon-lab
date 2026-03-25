@@ -23,7 +23,7 @@ alpaca:
   base_url: https://paper-api.alpaca.markets
 
 risk:
-  starting_capital: 1000
+  starting_capital: 100000  # Should match your paper trading account equity
   planned_risk_pct_min: 0.005
   planned_risk_pct_max: 0.01
   max_open_positions: 2
