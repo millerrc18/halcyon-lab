@@ -22,8 +22,8 @@ Each desk is gated: the PREVIOUS desk must be profitable before the next desk la
 
 ## Phase 1: Bootcamp — Equity Swing Desk (ACTIVE)
 
-**Capital:** Paper ($100K Alpaca)
-**Monthly Cost:** $5/mo
+**Capital:** Paper ($100K Alpaca) + Live ($100 Alpaca, fractional shares)
+**Monthly Cost:** ~$43/mo (Render $7, Polygon $29 planned, domain $7)
 **Goal:** Prove the swing pullback strategy has an edge over 50+ closed trades.
 
 **Desk: Equity Swing**
@@ -33,9 +33,11 @@ Each desk is gated: the PREVIOUS desk must be profitable before the next desk la
 | Universe | S&P 100 (~103 tickers) |
 | Timeframe | 2–15 day holds, daily bars |
 | Strategy | Pullback in uptrend to moving average support |
-| Account | Alpaca Paper #1 ($100K) |
+| Paper Account | Alpaca Paper ($100K), 50 max positions |
+| Live Account | Alpaca Live ($100), 2 max positions, fractional shares |
 | Entry | Bracket orders (entry + stop + target via Alpaca) |
 | Exit | Mechanical: stop-loss (1-2 ATR), target (2-3 ATR), or 15-day timeout |
+| Live Exit | Tighter: 1 ATR stop, 2 ATR target, 7-day timeout |
 
 ### Gate Metrics
 | Metric | Target |
@@ -45,6 +47,15 @@ Each desk is gated: the PREVIOUS desk must be profitable before the next desk la
 | Sharpe ratio | ≥ 0.5 |
 | Expectancy | > $0 |
 | Avg rubric score | ≥ 3.5 |
+
+### Cloud & Mobile
+| Platform | URL | Status |
+|----------|-----|--------|
+| Cloud Dashboard | halcyonlab.app | ✅ LIVE (Render, password-protected) |
+| Cloud API | api.halcyonlab.app | ✅ LIVE (read-only, bearer token auth) |
+| Cloud Database | Render Postgres ($7/mo) | ✅ Synced every 2 min from local SQLite |
+| iOS/iPad PWA | halcyonlab.app (Add to Home Screen) | ✅ Installable as app |
+| Telegram Bot | @HalcyonLabBot | ✅ 24 notification types + 12 commands |
 
 ### Completed
 - 7-source data enrichment, bracket orders, risk governor (8 checks)
@@ -57,11 +68,16 @@ Each desk is gated: the PREVIOUS desk must be profitable before the next desk la
 - 24/7 compute scheduler: between-scan scoring, VRAM handoffs, overnight training, pre-market inference (2%→73% GPU target)
 - Comprehensive data collection pipeline (options, VIX, macro, trends, CBOE, earnings)
 - Tech debt audit: 16 issues fixed, 257→363 tests passing
-- Telegram push notifications for trade alerts and system events
+- Telegram: 24 notification types (scheduled + event-triggered) + 12 interactive commands
 - Earnings calendar with scan-time proximity checks
 - 19 FRED series including credit spreads, financial conditions, breakeven inflation
-- 22 research documents (regime timeline, company profiles, compute schedule, API comparison, options, fund path, market assessment, v2 training spec, master business plan)
+- 29 research documents across strategy, training, infrastructure, market, branding, competitive analysis
 - Email CC support for secondary notification address
+- **Mega Sprint:** AI Council (5-agent Modified Delphi), Render cloud deployment, setup classifier + signal zoo, options/events/sector in features, regime-adaptive thresholds, canary set + quality drift monitoring
+- **Cleanup Sprint:** Flywheel fix (scan→trade→close→training connected), live trading dual execution ($100), activity logging, command reference docs, AuthGate cloud authentication
+- **Brand Sprint:** Kingfisher palette (teal/amber/slate), Space Grotesk + Inter + JetBrains Mono, all 11 pages + 12 components themed
+- **PWA:** Installable on iPhone/iPad via Add to Home Screen, service worker for offline shell caching
+- **Competitive benchmark:** 28/100 overall score (honest baseline), 15-dimension scorecard tracking monthly
 
 ---
 
@@ -101,12 +117,13 @@ Each desk is gated: the PREVIOUS desk must be profitable before the next desk la
 
 ### Items
 - **Platform:** `--desk` flag for watch loop, desk-specific config/DB prefix/P&L tracking
-- **Swing Desk:** Universe expansion to ~325 stocks, GICS sector conditioning, IB adapter
+- **Swing Desk:** Universe expansion to ~325 stocks, IB adapter
 - **Research Desk:** Second Alpaca paper account, relaxed thresholds, silent mode, research_mode tags
-- **Infrastructure:** Polygon.io ($199/mo), RTX 3090 (~$800), LLC formation + trader tax consultation
+- **Infrastructure:** Polygon.io Starter ($29/mo → Developer $79/mo), RTX 3090 (~$800), LLC formation + trader tax consultation
 - **Training:** Scale to 3,000–5,000 examples, GRPO (at 100+ closed trades), golden ratio mixing, merge-and-reset LoRA
-- **Dashboard:** HSHS health score page, AI Council page, desk-level P&L views
-- **Data:** Options-as-equity-signal (IV rank, put/call ratio, skew → equity model features)
+- **Dashboard:** ~~HSHS health score page, AI Council page~~ (DONE in Phase 1), desk-level P&L views
+- **Data:** ~~Options-as-equity-signal~~ (DONE in Phase 1), SEC EDGAR (free), FINRA short interest (free), deprecate Google Trends per-ticker
+- **Mobile:** Capacitor wrapper for native iOS/iPad App Store distribution (optional — PWA already live)
 
 ---
 
