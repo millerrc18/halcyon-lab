@@ -1,0 +1,112 @@
+{
+  "Technology": {
+    "typical_pullback_depth": "7-15%",
+    "typical_recovery_days": "5-15",
+    "recovery_speed": "FAST",
+    "key_factors": [
+      "AI capex cycle driving semis and cloud",
+      "Earnings sensitivity to guidance revisions",
+      "High beta — amplifies market moves"
+    ]
+  },
+  "Financials": {
+    "typical_pullback_depth": "5-12%",
+    "typical_recovery_days": "7-20",
+    "recovery_speed": "MODERATE",
+    "key_factors": [
+      "Rate-sensitive — Fed policy drives NIM",
+      "Credit cycle exposure",
+      "Capital return programs (buybacks, dividends)"
+    ]
+  },
+  "Health Care": {
+    "typical_pullback_depth": "5-10%",
+    "typical_recovery_days": "5-12",
+    "recovery_speed": "MODERATE",
+    "key_factors": [
+      "Drug pipeline catalysts (FDA dates)",
+      "Patent cliff risk for pharma",
+      "Defensive characteristics in downturns"
+    ]
+  },
+  "Consumer Discretionary": {
+    "typical_pullback_depth": "8-15%",
+    "typical_recovery_days": "7-18",
+    "recovery_speed": "MODERATE",
+    "key_factors": [
+      "Consumer spending cycle dependent",
+      "E-commerce secular growth",
+      "Tariff and input cost sensitivity"
+    ]
+  },
+  "Consumer Staples": {
+    "typical_pullback_depth": "3-8%",
+    "typical_recovery_days": "5-10",
+    "recovery_speed": "SLOW",
+    "key_factors": [
+      "Defensive — outperforms in volatility",
+      "Pricing power in inflationary environments",
+      "Dividend stability attracts rotation flows"
+    ]
+  },
+  "Industrials": {
+    "typical_pullback_depth": "5-10%",
+    "typical_recovery_days": "5-12",
+    "recovery_speed": "MODERATE",
+    "key_factors": [
+      "Defense spending and reshoring tailwinds",
+      "Capex cycle and PMI sensitivity",
+      "Backlog visibility provides earnings floor"
+    ]
+  },
+  "Energy": {
+    "typical_pullback_depth": "10-20%",
+    "typical_recovery_days": "10-25",
+    "recovery_speed": "VARIABLE",
+    "key_factors": [
+      "Oil/gas price directly drives earnings",
+      "Geopolitical risk premium (Hormuz, OPEC+)",
+      "Capital discipline era — less supply response"
+    ]
+  },
+  "Communication Services": {
+    "typical_pullback_depth": "8-15%",
+    "typical_recovery_days": "7-15",
+    "recovery_speed": "MODERATE",
+    "key_factors": [
+      "Ad revenue sensitivity to macro cycle",
+      "AI monetization narrative drives re-rating",
+      "Regulatory overhang (antitrust)"
+    ]
+  },
+  "Utilities": {
+    "typical_pullback_depth": "3-7%",
+    "typical_recovery_days": "5-10",
+    "recovery_speed": "SLOW",
+    "key_factors": [
+      "Rate-sensitive bond proxy",
+      "Data center power demand secular growth",
+      "Regulated returns provide earnings visibility"
+    ]
+  },
+  "Materials": {
+    "typical_pullback_depth": "8-15%",
+    "typical_recovery_days": "10-20",
+    "recovery_speed": "MODERATE",
+    "key_factors": [
+      "Commodity price driven",
+      "China demand sensitivity",
+      "Inflation hedge characteristics"
+    ]
+  },
+  "Real Estate": {
+    "typical_pullback_depth": "5-12%",
+    "typical_recovery_days": "10-20",
+    "recovery_speed": "SLOW",
+    "key_factors": [
+      "Interest rate sensitivity (cap rates)",
+      "Property type matters — data centers vs office",
+      "Dividend yield floor provides support"
+    ]
+  }
+}

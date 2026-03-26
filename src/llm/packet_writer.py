@@ -38,11 +38,16 @@ SPY: {features.get('spy_20d_return', 0):+.1f}% (20d) | {features.get('spy_drawdo
 Breadth: {features.get('market_breadth_label', 'n/a')} ({features.get('market_breadth_pct', 0):.0f}% above 50d MA)
 Regime: {features.get('regime_label', 'n/a')}"""
 
-    # SECTION 3: Sector Context (new)
+    # SECTION 3: Sector Context (enhanced 9C)
+    sector_factors = features.get('sector_key_factors', [])
+    factors_str = "\n".join(f"  - {f}" for f in sector_factors) if sector_factors else "  No sector-specific factors available"
     prompt += f"""
 
 === SECTOR CONTEXT ===
-Sector: {features.get('sector', 'n/a')} | Rank: {features.get('sector_rs_rank', 'n/a')} | Sector Avg Score: {features.get('sector_avg_score', 0):.0f}"""
+Sector: {features.get('sector', 'n/a')} | Rank: {features.get('sector_rs_rank', 'n/a')} | Sector Avg Score: {features.get('sector_avg_score', 0):.0f}
+Typical pullback depth: {features.get('sector_pullback_depth', 'n/a')} | Recovery: {features.get('sector_recovery_speed', 'n/a')}
+Sector-specific factors:
+{factors_str}"""
 
     # SECTION 4: Fundamental Snapshot (new)
     fundamental_text = features.get('fundamental_summary', 'No fundamental data available')
@@ -71,6 +76,24 @@ Sector: {features.get('sector', 'n/a')} | Rank: {features.get('sector_rs_rank', 
 
 === MACRO CONTEXT ===
 {macro_text}"""
+
+    # SECTION 7.5: Options Context (9A)
+    iv_rank = features.get('iv_rank')
+    if iv_rank is not None:
+        prompt += f"""
+
+=== OPTIONS CONTEXT ===
+IV Rank: {iv_rank:.0f} | Put/Call Vol: {features.get('put_call_vol_ratio', 0):.2f} | Put/Call OI: {features.get('put_call_oi_ratio', 0):.2f}
+IV Skew: {features.get('iv_skew', 0):.2f} | Unusual Activity: {'YES' if features.get('unusual_options_activity') else 'No'}"""
+
+    # SECTION 7.6: Event Context (9B)
+    event_type = features.get('event_proximity_type')
+    if event_type:
+        prompt += f"""
+
+=== EVENT CONTEXT ===
+{event_type} in {features.get('event_proximity_days', '?')} day(s): {features.get('event_proximity_desc', '')}
+Events within 3 days: {features.get('events_within_3d', 0)}"""
 
     # SECTION 8: Entry/Stop/Targets
     prompt += f"""

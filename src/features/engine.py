@@ -173,6 +173,15 @@ def compute_all_features(ohlcv_data: dict[str, pd.DataFrame],
         logger.warning("Failed to compute market regime: %s", e)
         regime = {}
 
+    # Load options metrics ONCE for all tickers
+    options_data = _load_options_metrics()
+
+    # Load event proximity features ONCE
+    event_features = _load_event_proximity()
+
+    # Load sector profiles ONCE
+    sector_profiles = _load_sector_profiles()
+
     results = {}
     for ticker, df in ohlcv_data.items():
         if len(df) < 200:
@@ -192,7 +201,92 @@ def compute_all_features(ohlcv_data: dict[str, pd.DataFrame],
             # Merge market regime into every ticker's features
             feat.update(regime)
 
+            # Options metrics (9A)
+            if ticker in options_data:
+                feat.update(options_data[ticker])
+
+            # Event proximity (9B) — same for all tickers
+            feat.update(event_features)
+
+            # Sector conditioning (9C)
+            _add_sector_features(feat, ticker, sector_profiles)
+
             results[ticker] = feat
         except Exception as e:
             logger.warning("Failed to compute features for %s: %s", ticker, e)
     return results
+
+
+def _load_options_metrics() -> dict[str, dict]:
+    """Load latest options metrics per ticker from the database."""
+    import sqlite3
+    result = {}
+    try:
+        with sqlite3.connect("ai_research_desk.sqlite3") as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                """SELECT ticker, iv_rank, pc_vol_ratio, pc_oi_ratio,
+                          iv_skew, unusual_flag
+                   FROM options_metrics
+                   WHERE collected_at = (SELECT MAX(collected_at) FROM options_metrics)"""
+            ).fetchall()
+            for row in rows:
+                result[row["ticker"]] = {
+                    "iv_rank": row["iv_rank"],
+                    "put_call_vol_ratio": row["pc_vol_ratio"],
+                    "put_call_oi_ratio": row["pc_oi_ratio"],
+                    "iv_skew": row["iv_skew"],
+                    "unusual_options_activity": bool(row["unusual_flag"]),
+                }
+    except Exception as e:
+        logger.debug("Options metrics not available: %s", e)
+    return result
+
+
+def _load_event_proximity() -> dict:
+    """Load event proximity features (shared across all tickers)."""
+    try:
+        from src.features.event_proximity import get_event_proximity_features
+        return get_event_proximity_features()
+    except Exception as e:
+        logger.debug("Event proximity not available: %s", e)
+        return {
+            "event_proximity_type": None,
+            "event_proximity_days": None,
+            "event_proximity_desc": None,
+            "events_within_3d": 0,
+        }
+
+
+def _load_sector_profiles() -> dict:
+    """Load sector profiles from JSON reference file."""
+    import json
+    from pathlib import Path
+
+    path = Path("data/reference/sector_profiles.json")
+    if not path.exists():
+        return {}
+    try:
+        with open(path, encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        logger.debug("Sector profiles not available: %s", e)
+        return {}
+
+
+def _add_sector_features(feat: dict, ticker: str, sector_profiles: dict):
+    """Add GICS sector and sector-specific context to feature dict."""
+    try:
+        from src.universe.sectors import SECTOR_MAP
+        sector = SECTOR_MAP.get(ticker, "Unknown")
+        feat["sector"] = sector
+
+        profile = sector_profiles.get(sector, {})
+        feat["sector_pullback_depth"] = profile.get("typical_pullback_depth", "n/a")
+        feat["sector_recovery_speed"] = profile.get("recovery_speed", "n/a")
+        feat["sector_key_factors"] = profile.get("key_factors", [])
+    except Exception:
+        feat["sector"] = "Unknown"
+        feat["sector_pullback_depth"] = "n/a"
+        feat["sector_recovery_speed"] = "n/a"
+        feat["sector_key_factors"] = []

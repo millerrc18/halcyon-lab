@@ -102,6 +102,15 @@ def _score_ticker(features: dict) -> float:
     if vol_ratio < 0.8:
         score += 10
 
+    # Options sentiment (9A) — IV rank and put/call as signals
+    iv_rank = features.get("iv_rank")
+    pc_vol = features.get("put_call_vol_ratio")
+    if iv_rank is not None:
+        if iv_rank < 25:
+            score += 3  # Cheap options = less fear
+        elif iv_rank > 75 and pc_vol and pc_vol > 1.2:
+            score -= 3  # High IV + bearish flow = caution
+
     # Regime adjustment
     adj = _regime_adjustment(features)
     score += adj
