@@ -49,8 +49,9 @@ Universe (S&P 100 → expanding to ~325 stocks)
 2. **Options Metrics** — Derived signals: IV rank, put/call ratios, IV skew, unusual activity
 3. **VIX Term Structure** — VIX, VIX9D, VIX3M, VIX1Y + contango/backwardation classification
 4. **CBOE Ratios** — Equity, index, and total put/call ratios
-5. **FRED Macro (expanded)** — 14 series including GSCPI, yield curve, credit spreads, crude oil
+5. **FRED Macro (expanded)** — 19 series including GSCPI, yield curve, credit spreads, financial conditions, crude oil
 6. **Google Trends** — Retail attention signal, batched rotation across universe
+7. **Earnings Calendar** — Next earnings date for every ticker, flagging imminent reports
 
 ## Execution
 
@@ -91,9 +92,9 @@ Universe (S&P 100 → expanding to ~325 stocks)
 - **CTO Report** — Performance analytics, fund metrics, metric trends
 - **Settings** — Configuration, API costs, data collection stats, system health
 - **Roadmap** — 5-phase plan with live gate metrics
-- **Docs** — 13 research documents + core documentation
+- **Docs** — 19 research documents + core documentation
 
-## CLI Commands (39)
+## CLI Commands (44)
 
 ### Core Pipeline
 `scan`, `morning-watchlist`, `eod-recap`, `ingest`, `send-test-email`, `init-db`, `demo-packet`
@@ -162,10 +163,10 @@ Universe (S&P 100 → expanding to ~325 stocks)
 - **Anthropic Claude API (Haiku 4.5)** — Training data generation, quality scoring
 - **Alpaca Markets API** — Paper trading execution
 - **Finnhub API** — Insider activity, company news
-- **FRED API** — Macroeconomic indicators (14 series)
+- **FRED API** — Macroeconomic indicators (19 series)
 - **SEC EDGAR** — Fundamental data
 
-## Research Library (13 documents)
+## Research Library (19 documents)
 
 See the dashboard Docs page for the complete research library covering:
 - Training methodology (formats, rubric, self-blinding, degradation prevention, gaps/innovation, GRPO)

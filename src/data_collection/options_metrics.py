@@ -201,8 +201,8 @@ def _compute_iv_skew(
     best_put = min(puts, key=lambda r: abs(r["strike"] - put_target))
     best_call = min(calls, key=lambda r: abs(r["strike"] - call_target))
 
-    put_iv = best_put.get("implied_volatility")
-    call_iv = best_call.get("implied_volatility")
+    put_iv = best_put["implied_volatility"]
+    call_iv = best_call["implied_volatility"]
 
     if put_iv is not None and call_iv is not None:
         return round(put_iv - call_iv, 4)

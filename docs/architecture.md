@@ -28,7 +28,7 @@
 └─────────────────────────────────────────────────────────┘
 ```
 
-## Database Schema (15 tables)
+## Database Schema (16 tables)
 
 ### Core Trading
 - **recommendations** — Trade recommendations with scores, thesis, outcomes
@@ -46,13 +46,14 @@
 
 ### Operations
 - **api_costs** — API call token usage and cost tracking
+- **earnings_calendar** — Upcoming earnings dates per ticker
 
 ### Data Collection (overnight pipeline)
 - **options_chains** — EOD options chain snapshots (strikes, IV, Greeks, OI)
 - **options_metrics** — Derived per-ticker signals (IV rank, put/call ratios, skew)
 - **vix_term_structure** — VIX family snapshots with term structure ratios
 - **cboe_ratios** — Market-wide put/call ratios
-- **macro_snapshots** — FRED macro indicator snapshots (14 series)
+- **macro_snapshots** — FRED macro indicator snapshots (19 series)
 - **google_trends** — Retail attention signal by ticker
 
 ## API Routes
@@ -82,6 +83,7 @@
 | `/api/actions/train-pipeline` | POST | Run full training pipeline (background) |
 | `/api/actions/score` | POST | Score unscored examples (background) |
 | `/api/actions/collect-data` | POST | Run data collection (background) |
+| `/api/earnings` | GET | Upcoming earnings calendar |
 | `/api/halt-trading` | POST | Emergency halt |
 | `/api/resume-trading` | POST | Resume trading |
 | `/ws/live` | WebSocket | Real-time event stream |
@@ -129,7 +131,7 @@ Self-Blinding Generation (Claude — NO outcome visibility)
 ```
 5:30 PM  Post-close capture (final prices, MFE/MAE update)
 6:00 PM  Training data collection (closed trade → training example)
-9:30 PM  Data collection (options chains, VIX, macro, trends, CBOE)
+9:30 PM  Data collection (options, VIX, macro, trends, CBOE, earnings)
 10:00 PM News ingestion (full universe, Finnhub)
 11:00 PM Enrichment pre-cache (fundamentals, insiders, macro)
 6:00 AM  Pre-market refresh
