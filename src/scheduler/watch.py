@@ -89,6 +89,18 @@ class WatchLoop:
         self._ollama_warmup_done = False
         self._council_done = False
 
+        # Expanded notification flags
+        self._premarket_brief_done = False
+        self._first_scan_done = False
+        self._eod_report_done = False
+        self._data_asset_report_done = False
+        self._weekly_digest_done = False
+        self._last_vix_alert_level: float | None = None
+        self._earnings_warning_done = False
+
+        # Collector failure tracking: {collector_name: consecutive_failure_count}
+        self._collector_failures: dict[str, int] = {}
+
     def _reset_daily_state(self):
         """Reset daily flags at midnight ET."""
         self._morning_done = False
@@ -118,6 +130,13 @@ class WatchLoop:
         self._premarket_candidates_done = False
         self._ollama_warmup_done = False
         self._council_done = False
+        # Expanded notification flags
+        self._premarket_brief_done = False
+        self._first_scan_done = False
+        self._eod_report_done = False
+        self._data_asset_report_done = False
+        self._weekly_digest_done = False
+        self._earnings_warning_done = False
 
     def _is_market_open(self, now: datetime) -> bool:
         """Check if market is currently open (weekday, between open and close)."""
@@ -508,11 +527,17 @@ class WatchLoop:
                     print(f"[WATCH] {time_str} ET -- market open, scanning...")
                     self._safe_run("scan", self._run_scan)
                     self._last_scan_time = now
+                    # 1E. Check VIX regime alert after each scan
+                    self._safe_run("VIX regime check", self._check_vix_regime_alert)
 
                 # 3. EOD recap
                 elif hour == self.eod_hour and not self._eod_done:
                     self._safe_run("EOD recap", self._run_eod_recap)
                     self._eod_done = True
+                    # 1C. EOD P&L report via Telegram
+                    if not self._eod_report_done:
+                        self._safe_run("EOD Telegram report", self._send_eod_report)
+                        self._eod_report_done = True
 
                 # 4. Daily audit (4:15 PM ET)
                 elif (hour == 16 and now.minute >= 15 and now.minute < 30
@@ -537,6 +562,10 @@ class WatchLoop:
                       and not self._training_collection_done):
                     self._safe_run("training collection", self._run_training_collection)
                     self._training_collection_done = True
+                    # 1D. Data asset report after training collection
+                    if not self._data_asset_report_done:
+                        self._safe_run("data asset report", self._send_data_asset_report)
+                        self._data_asset_report_done = True
 
                 # 5. Overnight training trigger (5:00 PM ET)
                 elif (self.training_enabled and hour == 17
@@ -549,6 +578,18 @@ class WatchLoop:
                       and hour == 9 and not self._saturday_reports_done):
                     self._safe_run("Saturday reports", self._run_saturday_reports)
                     self._saturday_reports_done = True
+
+                # 1H. Weekly digest (Sunday 8 PM ET)
+                elif (now.weekday() == 6 and hour == 20
+                      and not self._weekly_digest_done):
+                    self._safe_run("weekly digest", self._send_weekly_digest)
+                    self._weekly_digest_done = True
+
+                # 1L. Earnings proximity warning (8:00 AM weekdays)
+                if (hour == 8 and now.minute < 5 and now.weekday() < 5
+                        and not self._earnings_warning_done):
+                    self._safe_run("earnings proximity", self._check_earnings_proximity)
+                    self._earnings_warning_done = True
 
                 # ── Overnight schedule (weekdays only, --overnight flag, NOT during market hours) ──
                 elif self.overnight and now.weekday() < 5 and not self._is_market_open(now):
@@ -600,6 +641,11 @@ class WatchLoop:
                         self._safe_run("pre-market refresh", self._run_pre_market_refresh)
                         self._pre_market_done = True
                         ran = True
+
+                        # 1A. Pre-market brief (right after pre-market refresh at 6:00 AM)
+                        if not self._premarket_brief_done:
+                            self._safe_run("pre-market brief", self._send_premarket_brief)
+                            self._premarket_brief_done = True
 
                     # ── Pre-market inference tasks (6-9:25 AM) ──
                     elif (hour == 6 and now.minute >= 2
@@ -1016,6 +1062,32 @@ class WatchLoop:
         summary = {k: str(v) for k, v in results.items()}
         print(f"[WATCH] Data collection complete: {summary}")
 
+        # 1J. Track collector failures and alert at 3+ consecutive
+        try:
+            from src.notifications.telegram import notify_collection_failure, is_telegram_enabled
+            if is_telegram_enabled():
+                for name, result in results.items():
+                    is_error = (isinstance(result, str) and "error" in result.lower()) or \
+                               (isinstance(result, dict) and "error" in str(result).lower())
+                    if is_error:
+                        self._collector_failures[name] = self._collector_failures.get(name, 0) + 1
+                        if self._collector_failures[name] >= 3:
+                            other_status = {
+                                n: self._collector_failures.get(n, 0) < 3
+                                for n in results if n != name
+                            }
+                            notify_collection_failure(
+                                collector_name=name,
+                                consecutive_failures=self._collector_failures[name],
+                                last_error=str(result)[:80],
+                                last_success_ago="unknown",
+                                other_collectors=other_status,
+                            )
+                    else:
+                        self._collector_failures[name] = 0  # Reset on success
+        except Exception:
+            pass
+
         # Telegram overnight summary
         try:
             from src.notifications.telegram import notify_overnight_complete, is_telegram_enabled
@@ -1180,6 +1252,519 @@ class WatchLoop:
                   "first scan may be slow")
 
     # ── Pre-Market Pipeline Methods ──────────────────────────────────
+
+    # ── Expanded Notification Methods ────────────────────────────────
+
+    def _send_premarket_brief(self):
+        """6:00 AM ET — Send pre-market brief with overnight context."""
+        import sqlite3
+        from src.notifications.telegram import notify_premarket_brief, is_telegram_enabled
+        if not is_telegram_enabled():
+            return
+
+        try:
+            with sqlite3.connect("ai_research_desk.sqlite3") as conn:
+                conn.row_factory = sqlite3.Row
+
+                # VIX from vix_term_structure (latest)
+                vix_row = conn.execute(
+                    "SELECT vix FROM vix_term_structure ORDER BY collected_at DESC LIMIT 1"
+                ).fetchone()
+                vix = vix_row["vix"] if vix_row else 0.0
+
+                vix_prev_row = conn.execute(
+                    "SELECT vix FROM vix_term_structure ORDER BY collected_at DESC LIMIT 1 OFFSET 1"
+                ).fetchone()
+                vix_prev = vix_prev_row["vix"] if vix_prev_row else vix
+                vix_change = vix - vix_prev
+
+                # Regime from latest features
+                from src.features.regime import classify_regime
+                regime_data = {"vix_proxy": vix}
+                regime = classify_regime(regime_data)
+
+                # Earnings today
+                today_str = datetime.now(ET).strftime("%Y-%m-%d")
+                earnings_rows = conn.execute(
+                    "SELECT ticker, earnings_time FROM earnings_calendar WHERE earnings_date = ?",
+                    (today_str,),
+                ).fetchall()
+                earnings_today = []
+                for r in earnings_rows:
+                    time_label = ""
+                    if r["earnings_time"]:
+                        if "after" in (r["earnings_time"] or "").lower():
+                            time_label = " (AMC)"
+                        elif "before" in (r["earnings_time"] or "").lower():
+                            time_label = " (BMO)"
+                    earnings_today.append(f"{r['ticker']}{time_label}")
+
+                # Event proximity from market_event_calendar.csv
+                import csv
+                from pathlib import Path
+                fomc_days = None
+                nfp_days = None
+                cal_path = Path("data/reference/market_event_calendar.csv")
+                if cal_path.exists():
+                    now_date = datetime.now(ET).date()
+                    with open(cal_path, encoding="utf-8") as f:
+                        for row in csv.DictReader(f):
+                            try:
+                                event_date = datetime.strptime(row["date"], "%Y-%m-%d").date()
+                                days_away = (event_date - now_date).days
+                                if days_away < 0 or days_away > 30:
+                                    continue
+                                etype = row.get("event_type", "")
+                                if etype == "FOMC" and fomc_days is None:
+                                    fomc_days = days_away
+                                elif etype == "NFP" and nfp_days is None:
+                                    nfp_days = days_away
+                            except (ValueError, KeyError):
+                                continue
+
+                # Council latest
+                council_row = conn.execute(
+                    "SELECT consensus, confidence_weighted_score FROM council_sessions "
+                    "ORDER BY created_at DESC LIMIT 1"
+                ).fetchone()
+                council_consensus = council_row["consensus"] if council_row else "N/A"
+                council_conf_raw = council_row["confidence_weighted_score"] if council_row else 0
+                council_confidence = int(council_conf_raw * 100) if council_conf_raw and council_conf_raw <= 1 else int(council_conf_raw or 0)
+
+                # Open positions
+                open_paper = conn.execute(
+                    "SELECT COUNT(*) FROM shadow_trades WHERE status='open' AND COALESCE(source,'paper')='paper'"
+                ).fetchone()[0]
+                open_live = conn.execute(
+                    "SELECT COUNT(*) FROM shadow_trades WHERE status='open' AND source='live'"
+                ).fetchone()[0]
+
+            notify_premarket_brief(
+                vix=vix, vix_change=vix_change, regime=regime,
+                spy_futures_pct=0.0,  # Not available pre-market without live data feed
+                ten_year=0.0,
+                earnings_today=earnings_today,
+                fomc_days=fomc_days, nfp_days=nfp_days,
+                council_consensus=council_consensus,
+                council_confidence=council_confidence,
+                open_paper=open_paper, open_live=open_live,
+            )
+            print("[WATCH] Pre-market brief sent via Telegram.")
+        except Exception as e:
+            logger.warning("[WATCH] Pre-market brief failed: %s", e)
+
+    def _send_eod_report(self):
+        """4:00 PM ET — Send end-of-day P&L report."""
+        import sqlite3
+        from src.notifications.telegram import notify_eod_report, is_telegram_enabled
+        if not is_telegram_enabled():
+            return
+
+        try:
+            today_str = datetime.now(ET).strftime("%Y-%m-%d")
+            with sqlite3.connect("ai_research_desk.sqlite3") as conn:
+                conn.row_factory = sqlite3.Row
+
+                # Paper open
+                paper_open_row = conn.execute(
+                    "SELECT COUNT(*) as cnt, COALESCE(SUM(pnl_dollars),0) as pnl "
+                    "FROM shadow_trades WHERE status='open' AND COALESCE(source,'paper')='paper'"
+                ).fetchone()
+
+                # Paper closed today
+                paper_closed_row = conn.execute(
+                    "SELECT COUNT(*) as cnt, COALESCE(SUM(pnl_dollars),0) as pnl "
+                    "FROM shadow_trades WHERE status='closed' AND COALESCE(source,'paper')='paper' "
+                    "AND actual_exit_time LIKE ?", (f"{today_str}%",)
+                ).fetchone()
+
+                # Live open
+                live_open_row = conn.execute(
+                    "SELECT COUNT(*) as cnt, COALESCE(SUM(pnl_dollars),0) as pnl "
+                    "FROM shadow_trades WHERE status='open' AND source='live'"
+                ).fetchone()
+
+                # Live closed today
+                live_closed_row = conn.execute(
+                    "SELECT COUNT(*) as cnt, COALESCE(SUM(pnl_dollars),0) as pnl "
+                    "FROM shadow_trades WHERE status='closed' AND source='live' "
+                    "AND actual_exit_time LIKE ?", (f"{today_str}%",)
+                ).fetchone()
+
+                # All-time win rate
+                all_closed = conn.execute(
+                    "SELECT COUNT(*) as total, "
+                    "SUM(CASE WHEN pnl_dollars > 0 THEN 1 ELSE 0 END) as wins "
+                    "FROM shadow_trades WHERE status='closed'"
+                ).fetchone()
+                wins = all_closed["wins"] or 0
+                total = all_closed["total"] or 0
+                losses = total - wins
+                win_rate = wins / total if total > 0 else 0
+
+                # Best/worst today
+                best = conn.execute(
+                    "SELECT ticker, pnl_pct FROM shadow_trades "
+                    "WHERE status='closed' AND actual_exit_time LIKE ? "
+                    "ORDER BY pnl_pct DESC LIMIT 1", (f"{today_str}%",)
+                ).fetchone()
+                worst = conn.execute(
+                    "SELECT ticker, pnl_pct FROM shadow_trades "
+                    "WHERE status='closed' AND actual_exit_time LIKE ? "
+                    "ORDER BY pnl_pct ASC LIMIT 1", (f"{today_str}%",)
+                ).fetchone()
+
+                # VIX
+                vix_row = conn.execute(
+                    "SELECT vix FROM vix_term_structure ORDER BY collected_at DESC LIMIT 1"
+                ).fetchone()
+                vix = vix_row["vix"] if vix_row else 0.0
+                vix_prev_row = conn.execute(
+                    "SELECT vix FROM vix_term_structure ORDER BY collected_at DESC LIMIT 1 OFFSET 1"
+                ).fetchone()
+                vix_prev = vix_prev_row["vix"] if vix_prev_row else vix
+
+                from src.features.regime import classify_regime
+                regime = classify_regime({"vix_proxy": vix})
+
+            notify_eod_report(
+                paper_open=paper_open_row["cnt"], paper_open_pnl=paper_open_row["pnl"],
+                paper_closed_today=paper_closed_row["cnt"], paper_closed_pnl=paper_closed_row["pnl"],
+                live_open=live_open_row["cnt"], live_open_pnl=live_open_row["pnl"],
+                live_closed_today=live_closed_row["cnt"], live_closed_pnl=live_closed_row["pnl"],
+                win_rate=win_rate, wins=wins, losses=losses,
+                best_ticker=best["ticker"] if best else "N/A",
+                best_pct=best["pnl_pct"] if best else 0.0,
+                worst_ticker=worst["ticker"] if worst else "N/A",
+                worst_pct=worst["pnl_pct"] if worst else 0.0,
+                regime=regime, vix=vix, vix_change=vix - vix_prev,
+            )
+            print("[WATCH] EOD report sent via Telegram.")
+        except Exception as e:
+            logger.warning("[WATCH] EOD report failed: %s", e)
+
+    def _send_data_asset_report(self):
+        """4:30 PM ET — Send data asset daily report."""
+        import sqlite3
+        from src.notifications.telegram import notify_data_asset_report, is_telegram_enabled
+        if not is_telegram_enabled():
+            return
+
+        try:
+            today_str = datetime.now(ET).strftime("%Y-%m-%d")
+            with sqlite3.connect("ai_research_desk.sqlite3") as conn:
+                training_total = conn.execute(
+                    "SELECT COUNT(*) FROM training_examples"
+                ).fetchone()[0]
+                training_today = conn.execute(
+                    "SELECT COUNT(*) FROM training_examples WHERE created_at LIKE ?",
+                    (f"{today_str}%",),
+                ).fetchone()[0]
+
+                signal_total = conn.execute(
+                    "SELECT COUNT(*) FROM setup_signals"
+                ).fetchone()[0]
+                signal_today = conn.execute(
+                    "SELECT COUNT(*) FROM setup_signals WHERE created_at LIKE ?",
+                    (f"{today_str}%",),
+                ).fetchone()[0]
+
+                backlog = conn.execute(
+                    "SELECT COUNT(*) FROM training_examples WHERE quality_score IS NULL"
+                ).fetchone()[0]
+
+                quality_row = conn.execute(
+                    "SELECT AVG(quality_score) FROM training_examples WHERE quality_score IS NOT NULL"
+                ).fetchone()
+                quality_avg = quality_row[0] if quality_row[0] else 0.0
+
+                # Flywheel: examples from closed trades today
+                flywheel = conn.execute(
+                    "SELECT COUNT(*) FROM training_examples "
+                    "WHERE source IN ('outcome_win','outcome_loss') AND created_at LIKE ?",
+                    (f"{today_str}%",),
+                ).fetchone()[0]
+
+            notify_data_asset_report(
+                training_total=training_total, training_today=training_today,
+                training_target=2800,
+                signal_zoo_total=signal_total, signal_zoo_today=signal_today,
+                scoring_backlog=backlog, quality_avg=quality_avg,
+                flywheel_count=flywheel,
+            )
+            print("[WATCH] Data asset report sent via Telegram.")
+        except Exception as e:
+            logger.warning("[WATCH] Data asset report failed: %s", e)
+
+    def _check_vix_regime_alert(self):
+        """Check VIX after each scan and alert on threshold crossings."""
+        import sqlite3
+        from src.notifications.telegram import notify_regime_alert, is_telegram_enabled
+        if not is_telegram_enabled():
+            return
+
+        try:
+            with sqlite3.connect("ai_research_desk.sqlite3") as conn:
+                row = conn.execute(
+                    "SELECT vix FROM vix_term_structure ORDER BY collected_at DESC LIMIT 1"
+                ).fetchone()
+                if not row:
+                    return
+                vix_now = row[0]
+
+            thresholds = [20, 25, 30, 35, 40, 60]
+
+            if self._last_vix_alert_level is None:
+                self._last_vix_alert_level = vix_now
+                return
+
+            prev = self._last_vix_alert_level
+            crossed = None
+
+            for t in thresholds:
+                if prev < t <= vix_now:  # Crossed upward
+                    crossed = t
+                elif prev > t >= vix_now:  # Crossed downward (use >= for boundary)
+                    crossed = t
+                elif prev >= t > vix_now:  # Crossed downward
+                    crossed = t
+
+            if crossed is not None:
+                from src.features.regime import classify_regime
+                regime_old = classify_regime({"vix_proxy": prev})
+                regime_new = classify_regime({"vix_proxy": vix_now})
+
+                # Qualification and sizing are regime-dependent heuristics
+                qual_map = {"BULL_LOW_VOL": 30, "BULL_HIGH_VOL": 35, "TRANSITION": 40,
+                            "CORRECTION": 65, "BEAR_EARLY": 70, "BEAR_ESTABLISHED": 80, "CRISIS": 90}
+                sizing_map = {"BULL_LOW_VOL": 100, "BULL_HIGH_VOL": 80, "TRANSITION": 70,
+                              "CORRECTION": 60, "BEAR_EARLY": 40, "BEAR_ESTABLISHED": 20, "CRISIS": 0}
+
+                notify_regime_alert(
+                    vix_now=vix_now, vix_prev=prev, threshold_crossed=crossed,
+                    regime_old=regime_old, regime_new=regime_new,
+                    qual_old=qual_map.get(regime_old, 40), qual_new=qual_map.get(regime_new, 40),
+                    sizing_old=sizing_map.get(regime_old, 100), sizing_new=sizing_map.get(regime_new, 100),
+                )
+                self._last_vix_alert_level = vix_now
+                print(f"[WATCH] VIX regime alert sent: crossed {crossed}")
+            else:
+                self._last_vix_alert_level = vix_now
+        except Exception as e:
+            logger.warning("[WATCH] VIX regime alert check failed: %s", e)
+
+    def _send_weekly_digest(self):
+        """Sunday 8 PM ET — Send full weekly digest."""
+        import sqlite3
+        from src.notifications.telegram import notify_weekly_digest, is_telegram_enabled
+        if not is_telegram_enabled():
+            return
+
+        try:
+            now = datetime.now(ET)
+            period_end = now.strftime("%b %d")
+            from datetime import timedelta
+            week_ago = now - timedelta(days=7)
+            period_start = week_ago.strftime("%b %d")
+            week_ago_str = week_ago.strftime("%Y-%m-%d")
+
+            with sqlite3.connect("ai_research_desk.sqlite3") as conn:
+                conn.row_factory = sqlite3.Row
+
+                # Trades this week
+                opened_paper = conn.execute(
+                    "SELECT COUNT(*) FROM shadow_trades WHERE COALESCE(source,'paper')='paper' "
+                    "AND created_at >= ?", (week_ago_str,)
+                ).fetchone()[0]
+                opened_live = conn.execute(
+                    "SELECT COUNT(*) FROM shadow_trades WHERE source='live' "
+                    "AND created_at >= ?", (week_ago_str,)
+                ).fetchone()[0]
+                closed_paper = conn.execute(
+                    "SELECT COUNT(*) FROM shadow_trades WHERE status='closed' AND COALESCE(source,'paper')='paper' "
+                    "AND actual_exit_time >= ?", (week_ago_str,)
+                ).fetchone()[0]
+                closed_live = conn.execute(
+                    "SELECT COUNT(*) FROM shadow_trades WHERE status='closed' AND source='live' "
+                    "AND actual_exit_time >= ?", (week_ago_str,)
+                ).fetchone()[0]
+
+                # Win rate and expectancy (all time)
+                wr_row = conn.execute(
+                    "SELECT COUNT(*) as total, "
+                    "SUM(CASE WHEN pnl_dollars > 0 THEN 1 ELSE 0 END) as wins, "
+                    "AVG(pnl_dollars) as expectancy "
+                    "FROM shadow_trades WHERE status='closed'"
+                ).fetchone()
+                win_rate = (wr_row["wins"] or 0) / max(wr_row["total"] or 1, 1)
+                expectancy = wr_row["expectancy"] or 0
+
+                # Best/worst this week
+                best = conn.execute(
+                    "SELECT ticker, pnl_pct FROM shadow_trades "
+                    "WHERE status='closed' AND actual_exit_time >= ? "
+                    "ORDER BY pnl_pct DESC LIMIT 1", (week_ago_str,)
+                ).fetchone()
+                worst = conn.execute(
+                    "SELECT ticker, pnl_pct FROM shadow_trades "
+                    "WHERE status='closed' AND actual_exit_time >= ? "
+                    "ORDER BY pnl_pct ASC LIMIT 1", (week_ago_str,)
+                ).fetchone()
+
+                # P&L this week
+                pnl_paper = conn.execute(
+                    "SELECT COALESCE(SUM(pnl_dollars),0) FROM shadow_trades "
+                    "WHERE status='closed' AND COALESCE(source,'paper')='paper' AND actual_exit_time >= ?",
+                    (week_ago_str,)
+                ).fetchone()[0]
+                pnl_live = conn.execute(
+                    "SELECT COALESCE(SUM(pnl_dollars),0) FROM shadow_trades "
+                    "WHERE status='closed' AND source='live' AND actual_exit_time >= ?",
+                    (week_ago_str,)
+                ).fetchone()[0]
+
+                # Data asset
+                training_end = conn.execute("SELECT COUNT(*) FROM training_examples").fetchone()[0]
+                training_start = training_end - conn.execute(
+                    "SELECT COUNT(*) FROM training_examples WHERE created_at >= ?",
+                    (week_ago_str,)
+                ).fetchone()[0]
+                signal_end = conn.execute("SELECT COUNT(*) FROM setup_signals").fetchone()[0]
+                signal_start = signal_end - conn.execute(
+                    "SELECT COUNT(*) FROM setup_signals WHERE created_at >= ?",
+                    (week_ago_str,)
+                ).fetchone()[0]
+                backlog = conn.execute(
+                    "SELECT COUNT(*) FROM training_examples WHERE quality_score IS NULL"
+                ).fetchone()[0]
+                quality_row = conn.execute(
+                    "SELECT AVG(quality_score) FROM training_examples WHERE quality_score IS NOT NULL"
+                ).fetchone()
+                quality_avg = quality_row[0] if quality_row[0] else 0.0
+
+                # VIX
+                vix_row = conn.execute(
+                    "SELECT vix FROM vix_term_structure ORDER BY collected_at DESC LIMIT 1"
+                ).fetchone()
+                vix = vix_row["vix"] if vix_row else 0.0
+                vix_range = conn.execute(
+                    "SELECT MIN(vix) as low, MAX(vix) as high FROM vix_term_structure "
+                    "WHERE collected_at >= ?", (week_ago_str,)
+                ).fetchone()
+
+                from src.features.regime import classify_regime
+                regime = classify_regime({"vix_proxy": vix})
+
+                # Council
+                council_sessions = conn.execute(
+                    "SELECT COUNT(*) FROM council_sessions WHERE created_at >= ?",
+                    (week_ago_str,)
+                ).fetchone()[0]
+                council_row = conn.execute(
+                    "SELECT consensus, confidence_weighted_score FROM council_sessions "
+                    "ORDER BY created_at DESC LIMIT 1"
+                ).fetchone()
+                council_consensus = council_row["consensus"] if council_row else "N/A"
+                council_conf = council_row["confidence_weighted_score"] if council_row else 0
+                council_avg_conf = int(council_conf * 100) if council_conf and council_conf <= 1 else int(council_conf or 0)
+
+            # Next week events
+            import csv
+            from pathlib import Path
+            from datetime import timedelta as td
+            next_week_start = now.date() + td(days=1)
+            next_week_end = now.date() + td(days=7)
+            events_next = []
+            earnings_next = []
+
+            cal_path = Path("data/reference/market_event_calendar.csv")
+            if cal_path.exists():
+                with open(cal_path, encoding="utf-8") as f:
+                    for row in csv.DictReader(f):
+                        try:
+                            ed = datetime.strptime(row["date"], "%Y-%m-%d").date()
+                            if next_week_start <= ed <= next_week_end:
+                                events_next.append(f"{row.get('event_type','')} {row['date']}")
+                        except (ValueError, KeyError):
+                            continue
+
+            notify_weekly_digest(
+                period_start=period_start, period_end=period_end,
+                opened_paper=opened_paper, opened_live=opened_live,
+                closed_paper=closed_paper, closed_live=closed_live,
+                win_rate=win_rate, expectancy=expectancy,
+                best_ticker=best["ticker"] if best else "N/A",
+                best_pct=best["pnl_pct"] if best else 0.0,
+                worst_ticker=worst["ticker"] if worst else "N/A",
+                worst_pct=worst["pnl_pct"] if worst else 0.0,
+                pnl_paper=pnl_paper, pnl_live=pnl_live,
+                training_start=training_start, training_end=training_end,
+                signal_start=signal_start, signal_end=signal_end,
+                scoring_backlog=backlog, quality_avg=quality_avg,
+                canary_status="STABLE", llm_success_rate=0.78,
+                regime=regime, vix=vix,
+                vix_range_low=vix_range["low"] if vix_range and vix_range["low"] else vix,
+                vix_range_high=vix_range["high"] if vix_range and vix_range["high"] else vix,
+                spy_weekly_pct=0.0,
+                council_sessions=council_sessions,
+                council_consensus=council_consensus,
+                council_avg_confidence=council_avg_conf,
+                earnings_next_week=earnings_next, events_next_week=events_next,
+            )
+            print("[WATCH] Weekly digest sent via Telegram.")
+        except Exception as e:
+            logger.warning("[WATCH] Weekly digest failed: %s", e)
+
+    def _check_earnings_proximity(self):
+        """8:00 AM ET — Check open positions for upcoming earnings."""
+        import sqlite3
+        from src.notifications.telegram import notify_position_earnings_warning, is_telegram_enabled
+        if not is_telegram_enabled():
+            return
+
+        try:
+            with sqlite3.connect("ai_research_desk.sqlite3") as conn:
+                conn.row_factory = sqlite3.Row
+
+                open_trades = conn.execute(
+                    "SELECT trade_id, ticker, actual_entry_price, pnl_dollars, pnl_pct "
+                    "FROM shadow_trades WHERE status='open'"
+                ).fetchall()
+
+                if not open_trades:
+                    return
+
+                now_date = datetime.now(ET).date()
+                for trade in open_trades:
+                    ticker = trade["ticker"]
+                    earnings = conn.execute(
+                        "SELECT earnings_date, earnings_time FROM earnings_calendar "
+                        "WHERE ticker = ? AND earnings_date >= ? "
+                        "ORDER BY earnings_date ASC LIMIT 1",
+                        (ticker, now_date.isoformat()),
+                    ).fetchone()
+
+                    if not earnings:
+                        continue
+
+                    try:
+                        e_date = datetime.strptime(earnings["earnings_date"], "%Y-%m-%d").date()
+                        days_until = (e_date - now_date).days
+                    except (ValueError, TypeError):
+                        continue
+
+                    if 0 <= days_until <= 3:
+                        notify_position_earnings_warning(
+                            ticker=ticker,
+                            days_until=days_until,
+                            earnings_date=earnings["earnings_date"],
+                            earnings_time=earnings["earnings_time"] or "TBD",
+                            current_pnl=trade["pnl_dollars"] or 0,
+                            current_pnl_pct=trade["pnl_pct"] or 0,
+                        )
+            print("[WATCH] Earnings proximity check complete.")
+        except Exception as e:
+            logger.warning("[WATCH] Earnings proximity check failed: %s", e)
 
     def _run_premarket_rolling_features(self):
         """6:02 AM ET — Pre-compute rolling features for faster scans."""

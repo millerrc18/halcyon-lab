@@ -4,11 +4,11 @@ import LoadingSpinner from '../components/LoadingSpinner'
 import StatusBadge from '../components/StatusBadge'
 
 const VOTE_COLORS = {
-  strong_buy: 'text-emerald-400',
-  buy: 'text-green-400',
-  hold: 'text-yellow-400',
-  sell: 'text-orange-400',
-  strong_sell: 'text-red-400',
+  strong_buy: 'var(--teal-400)',
+  buy: 'var(--bullish)',
+  hold: 'var(--amber-400)',
+  sell: 'var(--amber-600)',
+  strong_sell: 'var(--danger)',
 }
 
 const VOTE_VARIANTS = {
@@ -28,28 +28,29 @@ function VoteBadge({ vote }) {
 function AgentCard({ agent }) {
   const isDissenter = agent.role === 'devils_advocate' || agent.is_dissenter
   return (
-    <div className={`bg-[var(--bg-card)] border rounded-lg p-4 ${
-      isDissenter ? 'border-orange-500/60' : 'border-[var(--border)]'
-    }`}>
+    <div className="rounded-lg p-4" style={{
+      background: 'var(--slate-700)',
+      border: isDissenter ? '1px solid var(--amber-500)' : '1px solid var(--slate-600)',
+    }}>
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
           <span className="font-medium text-sm">{agent.name || agent.agent_id}</span>
           {isDissenter && (
-            <span className="text-xs bg-orange-500/20 text-orange-400 px-2 py-0.5 rounded-full">
+            <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: 'rgba(245, 158, 11, 0.2)', color: 'var(--amber-400)' }}>
               Devil's Advocate
             </span>
           )}
         </div>
         <VoteBadge vote={agent.vote} />
       </div>
-      <div className="text-xs text-[var(--text-muted)] mb-1">{agent.role || 'analyst'}</div>
+      <div className="text-xs mb-1" style={{ color: 'var(--slate-400)' }}>{agent.role || 'analyst'}</div>
       {agent.confidence != null && (
-        <div className="text-xs text-[var(--text-secondary)] mb-2">
-          Confidence: <span className="font-mono">{(agent.confidence * 100).toFixed(0)}%</span>
+        <div className="text-xs mb-2" style={{ color: 'var(--slate-300)' }}>
+          Confidence: <span style={{ fontFamily: 'var(--font-mono)' }}>{(agent.confidence * 100).toFixed(0)}%</span>
         </div>
       )}
       {agent.reasoning && (
-        <p className="text-sm text-[var(--text-secondary)] mt-2 leading-relaxed">
+        <p className="text-sm mt-2 leading-relaxed" style={{ color: 'var(--slate-300)' }}>
           {agent.reasoning.slice(0, 300)}{agent.reasoning.length > 300 ? '...' : ''}
         </p>
       )}
@@ -62,17 +63,16 @@ function SessionRow({ session, isLatest }) {
   const dateStr = ts ? new Date(ts).toLocaleString() : '--'
   const consensus = session.consensus_vote || session.consensus || '--'
   return (
-    <div className={`flex items-center justify-between py-2 px-3 rounded ${
-      isLatest ? 'bg-[var(--bg-tertiary)]' : ''
-    }`}>
+    <div className="flex items-center justify-between py-2 px-3 rounded"
+      style={{ background: isLatest ? 'var(--slate-600)' : 'transparent' }}>
       <div className="flex items-center gap-3">
-        <span className="text-sm text-[var(--text-secondary)] font-mono">{dateStr}</span>
+        <span className="text-sm" style={{ color: 'var(--slate-300)', fontFamily: 'var(--font-mono)' }}>{dateStr}</span>
         {session.ticker && (
           <span className="text-sm font-medium">{session.ticker}</span>
         )}
       </div>
       <div className="flex items-center gap-3">
-        <span className="text-xs text-[var(--text-muted)]">
+        <span className="text-xs" style={{ color: 'var(--slate-400)' }}>
           {session.agent_count || session.agents?.length || 0} agents
         </span>
         <VoteBadge vote={consensus} />
@@ -107,17 +107,18 @@ export default function Council() {
   const session = latest?.session || latest || {}
   const agents = session.agents || session.votes || []
   const consensus = session.consensus_vote || session.consensus
-  const consensusColor = VOTE_COLORS[consensus] || 'text-[var(--text-primary)]'
+  const consensusColor = VOTE_COLORS[consensus] || 'var(--slate-100)'
   const sessions = history?.sessions || history || []
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-medium">Advisory Council</h2>
+        <h2 className="text-xl font-medium" style={{ color: 'var(--slate-100)' }}>Advisory Council</h2>
         <button
           onClick={() => runCouncil.mutate()}
           disabled={runCouncil.isPending}
-          className="px-4 py-2 rounded-lg font-medium text-sm bg-[var(--blue)] hover:opacity-90 text-white disabled:opacity-50"
+          className="px-4 py-2 rounded-lg font-medium text-sm text-white disabled:opacity-50 transition-colors"
+          style={{ background: 'var(--teal-500)' }}
         >
           {runCouncil.isPending ? 'Running Council...' : 'Run Council Now'}
         </button>
@@ -125,20 +126,20 @@ export default function Council() {
 
       {/* Consensus Vote */}
       {consensus && (
-        <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-lg p-6 text-center">
-          <div className="text-xs text-[var(--text-muted)] uppercase tracking-wide mb-2">
+        <div className="rounded-lg p-6 text-center" style={{ background: 'var(--slate-700)', border: '1px solid var(--slate-600)' }}>
+          <div className="text-xs uppercase tracking-wide mb-2" style={{ color: 'var(--slate-400)' }}>
             Consensus Vote
           </div>
-          <div className={`text-3xl font-bold font-mono ${consensusColor}`}>
+          <div className="text-3xl font-bold" style={{ fontFamily: 'var(--font-mono)', color: consensusColor }}>
             {(consensus || '').replace('_', ' ').toUpperCase()}
           </div>
           {session.ticker && (
-            <div className="text-sm text-[var(--text-secondary)] mt-2">
+            <div className="text-sm mt-2" style={{ color: 'var(--slate-300)' }}>
               Ticker: <span className="font-medium">{session.ticker}</span>
             </div>
           )}
           {session.summary && (
-            <p className="text-sm text-[var(--text-secondary)] mt-3 max-w-2xl mx-auto">
+            <p className="text-sm mt-3 max-w-2xl mx-auto" style={{ color: 'var(--slate-300)' }}>
               {session.summary.slice(0, 400)}
             </p>
           )}
@@ -148,7 +149,7 @@ export default function Council() {
       {/* Agent Cards */}
       {agents.length > 0 && (
         <div>
-          <h3 className="text-sm text-[var(--text-muted)] uppercase tracking-wide mb-3">
+          <h3 className="text-sm uppercase tracking-wide mb-3" style={{ color: 'var(--slate-400)' }}>
             Agent Assessments ({agents.length})
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -161,16 +162,16 @@ export default function Council() {
 
       {/* No data state */}
       {!consensus && agents.length === 0 && (
-        <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-lg p-12 text-center">
-          <div className="text-[var(--text-muted)] text-sm">
+        <div className="rounded-lg p-12 text-center" style={{ background: 'var(--slate-700)', border: '1px solid var(--slate-600)' }}>
+          <div className="text-sm" style={{ color: 'var(--slate-400)' }}>
             No council session yet. Click "Run Council Now" to start.
           </div>
         </div>
       )}
 
       {/* Session History */}
-      <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-lg p-4">
-        <h3 className="text-sm text-[var(--text-muted)] uppercase tracking-wide mb-3">
+      <div className="rounded-lg p-4" style={{ background: 'var(--slate-700)', border: '1px solid var(--slate-600)' }}>
+        <h3 className="text-sm uppercase tracking-wide mb-3" style={{ color: 'var(--slate-400)' }}>
           Session History
         </h3>
         {sessions.length > 0 ? (
@@ -180,7 +181,7 @@ export default function Council() {
             ))}
           </div>
         ) : (
-          <div className="text-center text-[var(--text-muted)] py-6 text-sm">
+          <div className="text-center py-6 text-sm" style={{ color: 'var(--slate-400)' }}>
             No historical sessions
           </div>
         )}

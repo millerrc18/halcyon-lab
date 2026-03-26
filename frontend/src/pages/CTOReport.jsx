@@ -7,12 +7,15 @@ import MetricTrend from '../components/MetricTrend'
 
 function KpiCard({ label, value, target, good }) {
   return (
-    <div className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg p-4">
-      <div className="text-xs text-[var(--text-muted)] uppercase tracking-wide">{label}</div>
-      <div className={`text-2xl font-mono font-medium mt-1 ${good === true ? 'text-emerald-400' : good === false ? 'text-red-400' : 'text-[var(--text-primary)]'}`}>
+    <div className="rounded-lg p-4" style={{ background: 'var(--slate-700)', border: '1px solid var(--slate-600)' }}>
+      <div className="text-xs uppercase tracking-wide" style={{ color: 'var(--slate-400)' }}>{label}</div>
+      <div className="text-2xl font-medium mt-1" style={{
+        fontFamily: 'var(--font-mono)',
+        color: good === true ? 'var(--teal-400)' : good === false ? 'var(--danger)' : 'var(--slate-100)',
+      }}>
         {value}
       </div>
-      {target && <div className="text-xs text-[var(--text-muted)] mt-1">{target}</div>}
+      {target && <div className="text-xs mt-1" style={{ color: 'var(--slate-400)' }}>{target}</div>}
     </div>
   )
 }
@@ -21,24 +24,29 @@ function SectionTable({ title, headers, rows }) {
   if (!rows || rows.length === 0) return null
   return (
     <div className="mb-6">
-      <h2 className="text-sm font-medium text-[var(--text-secondary)] mb-3">{title}</h2>
-      <div className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg overflow-hidden">
+      <h2 className="text-sm font-medium mb-3" style={{ color: 'var(--slate-300)' }}>{title}</h2>
+      <div className="rounded-lg overflow-hidden" style={{ background: 'var(--slate-700)', border: '1px solid var(--slate-600)' }}>
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-[var(--border)]">
+            <tr style={{ borderBottom: '1px solid var(--slate-600)' }}>
               {headers.map((h, i) => (
-                <th key={i} className={`p-3 text-[var(--text-muted)] ${i === 0 ? 'text-left' : 'text-right'}`}>{h}</th>
+                <th key={i} className={`p-3 ${i === 0 ? 'text-left' : 'text-right'}`} style={{ color: 'var(--slate-400)' }}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {rows.map((row, i) => (
-              <tr key={i} className="border-b border-[var(--border)]/50">
-                {row.map((cell, j) => (
-                  <td key={j} className={`p-3 ${j === 0 ? 'text-[var(--text-primary)]' : 'text-right'} ${cell.color || ''}`}>
-                    {cell.text != null ? cell.text : cell}
-                  </td>
-                ))}
+              <tr key={i} style={{ borderBottom: '1px solid rgba(51, 65, 85, 0.5)' }}>
+                {row.map((cell, j) => {
+                  const color = cell.color
+                    ? (cell.color.includes('emerald') || cell.color.includes('green') ? 'var(--teal-400)' : cell.color.includes('red') ? 'var(--danger)' : undefined)
+                    : undefined
+                  return (
+                    <td key={j} className={`p-3 ${j === 0 ? '' : 'text-right'}`} style={{ color: j === 0 ? 'var(--slate-100)' : color }}>
+                      {cell.text != null ? cell.text : cell}
+                    </td>
+                  )
+                })}
               </tr>
             ))}
           </tbody>
@@ -58,9 +66,9 @@ export default function CTOReport() {
   if (isLoading) return <LoadingSpinner />
   if (error) return (
     <div className="text-center py-12">
-      <p className="text-red-400 mb-4">Failed to load CTO report</p>
+      <p className="mb-4" style={{ color: 'var(--danger)' }}>Failed to load CTO report</p>
       <button onClick={() => window.location.reload()}
-        className="px-4 py-2 bg-blue-600 text-white rounded text-sm">Retry</button>
+        className="px-4 py-2 text-white rounded text-sm" style={{ background: 'var(--teal-500)' }}>Retry</button>
     </div>
   )
   if (!data) return <EmptyState message="No report data available" />
@@ -80,14 +88,15 @@ export default function CTOReport() {
     <div className="max-w-4xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-medium text-[var(--text-primary)]">CTO performance report</h1>
-          <p className="text-sm text-[var(--text-muted)]">
+          <h1 className="text-xl font-medium" style={{ color: 'var(--slate-100)' }}>CTO performance report</h1>
+          <p className="text-sm" style={{ color: 'var(--slate-400)' }}>
             {period.start} to {period.end} | {status.model_version || 'base'} | {status.dataset_size || 0} examples
           </p>
         </div>
         <button
           onClick={() => navigator.clipboard.writeText(JSON.stringify(data, null, 2))}
-          className="px-3 py-1.5 text-xs bg-[var(--bg-tertiary)] border border-[var(--border)] rounded hover:bg-[var(--bg-secondary)]"
+          className="px-3 py-1.5 text-xs rounded transition-colors"
+          style={{ background: 'var(--slate-700)', border: '1px solid var(--slate-600)' }}
         >
           Copy JSON
         </button>
@@ -148,7 +157,7 @@ export default function CTOReport() {
             band,
             s.trades || 0,
             s.trades > 0 ? `${(s.win_rate * 100).toFixed(0)}%` : 'n/a',
-            { text: s.avg_pnl != null ? `${s.avg_pnl >= 0 ? '+' : ''}${s.avg_pnl.toFixed(1)}%` : 'n/a', color: (s.avg_pnl || 0) >= 0 ? 'text-emerald-400' : 'text-red-400' },
+            { text: s.avg_pnl != null ? `${s.avg_pnl >= 0 ? '+' : ''}${s.avg_pnl.toFixed(1)}%` : 'n/a', color: (s.avg_pnl || 0) >= 0 ? 'emerald' : 'red' },
           ])}
         />
       )}
@@ -161,7 +170,7 @@ export default function CTOReport() {
           rows={Object.entries(data.by_exit_reason).map(([reason, s]) => [
             reason,
             s.count || 0,
-            { text: `${s.avg_pnl >= 0 ? '+' : ''}${s.avg_pnl.toFixed(1)}%`, color: (s.avg_pnl || 0) >= 0 ? 'text-emerald-400' : 'text-red-400' },
+            { text: `${s.avg_pnl >= 0 ? '+' : ''}${s.avg_pnl.toFixed(1)}%`, color: (s.avg_pnl || 0) >= 0 ? 'emerald' : 'red' },
           ])}
         />
       )}
@@ -199,23 +208,23 @@ export default function CTOReport() {
       {/* Confidence calibration */}
       {data.confidence_calibration && (
         <div className="mb-6">
-          <h2 className="text-sm font-medium text-[var(--text-secondary)] mb-3">Confidence calibration</h2>
+          <h2 className="text-sm font-medium mb-3" style={{ color: 'var(--slate-300)' }}>Confidence calibration</h2>
           <div className="grid grid-cols-3 gap-3 mb-3">
             {Object.entries(data.confidence_calibration.by_conviction_band || {}).map(([band, s]) => (
-              <div key={band} className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg p-3 text-center">
-                <div className="text-xs text-[var(--text-muted)]">Conviction {band}</div>
-                <div className="text-lg font-mono mt-1">{s.trades > 0 ? `${(s.win_rate * 100).toFixed(0)}%` : 'n/a'}</div>
-                <div className="text-xs text-[var(--text-muted)]">{s.trades} trades</div>
+              <div key={band} className="rounded-lg p-3 text-center" style={{ background: 'var(--slate-700)', border: '1px solid var(--slate-600)' }}>
+                <div className="text-xs" style={{ color: 'var(--slate-400)' }}>Conviction {band}</div>
+                <div className="text-lg mt-1" style={{ fontFamily: 'var(--font-mono)' }}>{s.trades > 0 ? `${(s.win_rate * 100).toFixed(0)}%` : 'n/a'}</div>
+                <div className="text-xs" style={{ color: 'var(--slate-400)' }}>{s.trades} trades</div>
               </div>
             ))}
           </div>
-          <div className="text-sm text-[var(--text-secondary)]">
+          <div className="text-sm" style={{ color: 'var(--slate-300)' }}>
             Correlation: {data.confidence_calibration.correlation_with_outcomes?.toFixed(3) || 'n/a'}
             {data.confidence_calibration.is_calibrated != null && (
               <span className="ml-3">
                 {data.confidence_calibration.is_calibrated
-                  ? <span className="text-emerald-400">Calibrated</span>
-                  : <span className="text-amber-400">Not calibrated</span>}
+                  ? <span style={{ color: 'var(--teal-400)' }}>Calibrated</span>
+                  : <span style={{ color: 'var(--amber-400)' }}>Not calibrated</span>}
               </span>
             )}
           </div>
@@ -235,7 +244,7 @@ export default function CTOReport() {
       {/* Fund metrics */}
       {data.fund_metrics && (
         <div className="mb-6">
-          <h2 className="text-sm font-medium text-[var(--text-secondary)] mb-3">Fund metrics</h2>
+          <h2 className="text-sm font-medium mb-3" style={{ color: 'var(--slate-300)' }}>Fund metrics</h2>
           <div className="grid grid-cols-3 gap-3">
             <MetricCard label="Sortino ratio" value={data.fund_metrics.sortino_ratio != null ? data.fund_metrics.sortino_ratio : 'n/a'} />
             <MetricCard label="Calmar ratio" value={data.fund_metrics.calmar_ratio != null ? data.fund_metrics.calmar_ratio.toFixed(2) : 'n/a'} />

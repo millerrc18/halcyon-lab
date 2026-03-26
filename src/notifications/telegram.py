@@ -292,6 +292,285 @@ def notify_schedule_health(gpu_util: float, scan_delay_max: float,
     return send_telegram(msg)
 
 
+# ── Expanded Notification Functions ───────────────────────────────────────
+
+
+def notify_premarket_brief(vix: float, vix_change: float, regime: str,
+                           spy_futures_pct: float, ten_year: float,
+                           earnings_today: list[str],
+                           fomc_days: int | None, nfp_days: int | None,
+                           council_consensus: str, council_confidence: int,
+                           open_paper: int, open_live: int) -> bool:
+    """Alert: 6:00 AM pre-market brief with overnight context."""
+    now = datetime.now(ET).strftime("%H:%M ET")
+
+    earnings_str = ", ".join(earnings_today[:5]) if earnings_today else "None"
+
+    event_parts = []
+    if fomc_days is not None:
+        event_parts.append(f"FOMC in {fomc_days} days")
+    if nfp_days is not None:
+        event_parts.append(f"NFP in {nfp_days} days")
+    events_str = " | ".join(event_parts) if event_parts else "No major events this week"
+
+    msg = (
+        f"🌅 <b>PRE-MARKET BRIEF</b> ({now})\n\n"
+        f"VIX: {vix:.2f} ({vix_change:+.1f}) | Regime: {regime}\n"
+        f"S&amp;P Futures: {spy_futures_pct:+.1f}% | 10Y: {ten_year:.2f}%\n"
+        f"Earnings today: {earnings_str}\n"
+        f"{events_str}\n\n"
+        f"Council consensus: {council_consensus.upper()} ({council_confidence}%)\n"
+        f"Open positions: {open_paper} paper, {open_live} live"
+    )
+    return send_telegram(msg)
+
+
+def notify_first_scan_summary(total_scanned: int, packet_worthy: int,
+                              watchlist: int, trades_opened_paper: int,
+                              trades_opened_live: int,
+                              top_setups: list[tuple[str, int]],
+                              setup_type_counts: dict[str, int],
+                              llm_success: int, llm_total: int,
+                              llm_fallback: int) -> bool:
+    """Alert: first scan of the day summary with richer detail."""
+    now = datetime.now(ET).strftime("%H:%M ET")
+
+    top_str = " ".join(f"{t}({s})" for t, s in top_setups[:3]) if top_setups else "None"
+    setup_parts = [f"{count} {stype}" for stype, count in setup_type_counts.items()]
+    setup_str = ", ".join(setup_parts) if setup_parts else "None"
+
+    msg = (
+        f"📊 <b>FIRST SCAN COMPLETE</b> ({now})\n\n"
+        f"Scanned: {total_scanned} | Packet-worthy: {packet_worthy} | Watchlist: {watchlist}\n"
+        f"Trades opened: {trades_opened_paper} paper, {trades_opened_live} live\n"
+        f"Top setups: {top_str}\n"
+        f"Setup types: {setup_str}\n\n"
+        f"LLM success: {llm_success}/{llm_total}"
+    )
+    if llm_fallback > 0:
+        msg += f" ({llm_fallback} template fallback)"
+    return send_telegram(msg)
+
+
+def notify_eod_report(paper_open: int, paper_open_pnl: float,
+                      paper_closed_today: int, paper_closed_pnl: float,
+                      live_open: int, live_open_pnl: float,
+                      live_closed_today: int, live_closed_pnl: float,
+                      win_rate: float, wins: int, losses: int,
+                      best_ticker: str, best_pct: float,
+                      worst_ticker: str, worst_pct: float,
+                      regime: str, vix: float, vix_change: float) -> bool:
+    """Alert: 4:00 PM end-of-day P&L report with paper/live split."""
+    now = datetime.now(ET).strftime("%H:%M ET")
+
+    msg = (
+        f"📈 <b>END OF DAY</b> ({now})\n\n"
+        f"Paper: {paper_open} open (${paper_open_pnl:+.2f}) | "
+        f"{paper_closed_today} closed today (${paper_closed_pnl:+.2f})\n"
+        f"Live:  {live_open} open (${live_open_pnl:+.2f}) | "
+        f"{live_closed_today} closed today (${live_closed_pnl:+.2f})\n"
+        f"Win rate (all time): {win_rate:.0%} ({wins}W / {losses}L)\n\n"
+        f"Best: {best_ticker} {best_pct:+.1f}% | Worst: {worst_ticker} {worst_pct:+.1f}%\n"
+        f"Regime: {regime} | VIX: {vix:.1f} ({vix_change:+.1f})"
+    )
+    return send_telegram(msg)
+
+
+def notify_data_asset_report(training_total: int, training_today: int,
+                             training_target: int,
+                             signal_zoo_total: int, signal_zoo_today: int,
+                             scoring_backlog: int,
+                             quality_avg: float,
+                             flywheel_count: int) -> bool:
+    """Alert: 4:30 PM data asset report with training example growth."""
+    msg = (
+        f"📦 <b>DATA ASSET REPORT</b>\n\n"
+        f"Training examples: {training_total} (+{training_today} today) → target {training_target}\n"
+        f"Signal zoo entries: {signal_zoo_total} (+{signal_zoo_today} today)\n"
+        f"Scoring backlog: {scoring_backlog}\n"
+        f"Quality avg: {quality_avg:.1f}/5.0\n\n"
+    )
+    if flywheel_count > 0:
+        msg += f"Flywheel: ✅ {flywheel_count} new examples from closed trades"
+    else:
+        msg += "Flywheel: ⏸️ No new examples from closed trades today"
+    return send_telegram(msg)
+
+
+def notify_regime_alert(vix_now: float, vix_prev: float,
+                        threshold_crossed: float,
+                        regime_old: str, regime_new: str,
+                        qual_old: int, qual_new: int,
+                        sizing_old: int, sizing_new: int) -> bool:
+    """Alert: VIX crossed a key threshold, regime may have shifted."""
+    direction = "above" if vix_now > vix_prev else "below"
+    msg = (
+        f"⚡ <b>REGIME ALERT</b>\n\n"
+        f"VIX crossed {threshold_crossed:.0f} (was {vix_prev:.1f}, now {vix_now:.1f})\n"
+        f"Regime shifted: {regime_old} → {regime_new}\n"
+        f"Qualification threshold: {qual_old} → {qual_new}\n"
+        f"Position sizing: {sizing_old}% → {sizing_new}%\n\n"
+        f"Action: {'Tighter' if vix_now > vix_prev else 'Looser'} filters active. "
+        f"{'Fewer' if vix_now > vix_prev else 'More'} trades expected."
+    )
+    return send_telegram(msg)
+
+
+def notify_milestone(milestone: str, detail: str) -> bool:
+    """Alert: trade milestone reached (1st trade, 10th close, etc.)."""
+    msg = f"🏆 <b>MILESTONE: {milestone}</b>\n\n{detail}"
+    return send_telegram(msg)
+
+
+def notify_streak_alert(streak_length: int, recent_trades: list[tuple[str, float]],
+                        max_drawdown_pct: float,
+                        risk_governor_status: str,
+                        historical_max_streak: int) -> bool:
+    """Alert: 3+ consecutive losses."""
+    recent_str = ", ".join(f"{t} {p:+.1f}%" for t, p in recent_trades[:5])
+    msg = (
+        f"🔶 <b>STREAK ALERT: {streak_length} consecutive losses</b>\n\n"
+        f"Recent: {recent_str}\n"
+        f"Max drawdown: {max_drawdown_pct:+.1f}% | Risk governor: {risk_governor_status}\n"
+        f"Historical streak max: {historical_max_streak}\n\n"
+        f"No action required — within normal parameters."
+    )
+    return send_telegram(msg)
+
+
+def notify_weekly_digest(
+    period_start: str, period_end: str,
+    # Trades
+    opened_paper: int, opened_live: int,
+    closed_paper: int, closed_live: int,
+    win_rate: float, expectancy: float,
+    best_ticker: str, best_pct: float,
+    worst_ticker: str, worst_pct: float,
+    pnl_paper: float, pnl_live: float,
+    # Data asset
+    training_start: int, training_end: int,
+    signal_start: int, signal_end: int,
+    scoring_backlog: int, quality_avg: float,
+    # Model
+    canary_status: str, llm_success_rate: float,
+    # Market
+    regime: str, vix: float, vix_range_low: float, vix_range_high: float,
+    spy_weekly_pct: float,
+    # Council
+    council_sessions: int, council_consensus: str, council_avg_confidence: int,
+    # Next week
+    earnings_next_week: list[str], events_next_week: list[str],
+) -> bool:
+    """Alert: Sunday 8 PM weekly digest — full system summary."""
+    earnings_str = ", ".join(earnings_next_week[:5]) if earnings_next_week else "None"
+    events_str = ", ".join(events_next_week[:3]) if events_next_week else "None"
+
+    msg = (
+        f"📋 <b>WEEKLY DIGEST</b> ({period_start}–{period_end})\n\n"
+        f"<b>TRADES:</b>\n"
+        f"  Opened: {opened_paper} paper, {opened_live} live\n"
+        f"  Closed: {closed_paper} paper, {closed_live} live\n"
+        f"  Win rate: {win_rate:.0%} | Expectancy: ${expectancy:+.2f}\n"
+        f"  Best: {best_ticker} {best_pct:+.1f}% | Worst: {worst_ticker} {worst_pct:+.1f}%\n"
+        f"  P&amp;L: Paper ${pnl_paper:+.2f} | Live ${pnl_live:+.2f}\n\n"
+        f"<b>DATA ASSET:</b>\n"
+        f"  Training examples: {training_start} → {training_end} (+{training_end - training_start})\n"
+        f"  Signal zoo: {signal_start} → {signal_end} (+{signal_end - signal_start})\n"
+        f"  Scoring backlog: {scoring_backlog}\n"
+        f"  Quality avg: {quality_avg:.1f}/5.0\n\n"
+        f"<b>MODEL:</b>\n"
+        f"  Canary: {canary_status}\n"
+        f"  LLM success rate: {llm_success_rate:.0%}\n\n"
+        f"<b>MARKET:</b>\n"
+        f"  Regime: {regime}\n"
+        f"  VIX: {vix:.1f} (range: {vix_range_low:.1f}–{vix_range_high:.1f})\n"
+        f"  SPY: {spy_weekly_pct:+.1f}% this week\n\n"
+        f"<b>COUNCIL:</b>\n"
+        f"  Sessions: {council_sessions}\n"
+        f"  Consensus: {council_consensus} (avg {council_avg_confidence}% confidence)\n\n"
+        f"<b>NEXT WEEK:</b>\n"
+        f"  Earnings: {earnings_str}\n"
+        f"  Events: {events_str}"
+    )
+    return send_telegram(msg)
+
+
+def notify_retrain_report(model_name: str,
+                          training_examples: int, prev_examples: int,
+                          new_this_week: int, new_paper: int, new_live: int,
+                          canary_status: str,
+                          perplexity: float, prev_perplexity: float,
+                          distinct2: float, prev_distinct2: float,
+                          champion_challenger: str) -> bool:
+    """Alert: Saturday retrain complete with canary evaluation."""
+    ppl_delta = ((perplexity - prev_perplexity) / prev_perplexity * 100) if prev_perplexity else 0
+    d2_delta = ((distinct2 - prev_distinct2) / prev_distinct2 * 100) if prev_distinct2 else 0
+
+    msg = (
+        f"🧠 <b>SATURDAY RETRAIN COMPLETE</b>\n\n"
+        f"Model: {model_name}\n"
+        f"Training examples: {training_examples} (was {prev_examples})\n"
+        f"New examples this week: {new_this_week} ({new_paper} paper, {new_live} live)\n\n"
+        f"Canary evaluation: {canary_status}\n"
+        f"  Perplexity: {perplexity:.2f} (was {prev_perplexity:.2f}, {ppl_delta:+.1f}%)\n"
+        f"  Distinct-2: {distinct2:.2f} (was {prev_distinct2:.2f}, {d2_delta:+.1f}%)\n"
+        f"  Verdict: {'Within normal range' if canary_status == 'STABLE' else '⚠️ Review recommended'}\n\n"
+        f"Champion-challenger: {champion_challenger}"
+    )
+    return send_telegram(msg)
+
+
+def notify_collection_failure(collector_name: str, consecutive_failures: int,
+                              last_error: str, last_success_ago: str,
+                              other_collectors: dict[str, bool]) -> bool:
+    """Alert: data collector failed 3+ consecutive times."""
+    others_str = " ".join(
+        f"{'✅' if ok else '❌'} {name}"
+        for name, ok in other_collectors.items()
+    )
+    msg = (
+        f"🚨 <b>COLLECTION ALERT</b>\n\n"
+        f"{collector_name} collector failed {consecutive_failures} consecutive times\n"
+        f"Last error: {last_error[:80]}\n"
+        f"Last success: {last_success_ago}\n\n"
+        f"Other collectors: {others_str}"
+    )
+    return send_telegram(msg)
+
+
+def notify_exposure_alert(sector: str, count: int, tickers: list[str],
+                          exposure_pct: float, limit_pct: float) -> bool:
+    """Alert: sector concentration exceeds limit."""
+    ticker_str = ", ".join(tickers[:5])
+    msg = (
+        f"⚠️ <b>EXPOSURE ALERT</b>\n\n"
+        f"{count} positions in {sector} ({ticker_str})\n"
+        f"Sector exposure: {exposure_pct:.0f}% of portfolio\n"
+        f"Limit: {limit_pct:.0f}%\n\n"
+        f"Consider: Skip next {sector} setup until exposure normalizes."
+    )
+    return send_telegram(msg)
+
+
+def notify_position_earnings_warning(ticker: str, days_until: int,
+                                     earnings_date: str, earnings_time: str,
+                                     current_pnl: float, current_pnl_pct: float,
+                                     expected_move_pct: float | None = None) -> bool:
+    """Alert: open position has earnings within 3 trading days."""
+    time_label = "BMO" if earnings_time and "before" in earnings_time.lower() else (
+        "AMC" if earnings_time and "after" in earnings_time.lower() else earnings_time or "TBD"
+    )
+    msg = (
+        f"📅 <b>EARNINGS WARNING: You hold {ticker}</b>\n\n"
+        f"Earnings in {days_until} days ({earnings_date} {time_label})\n"
+        f"Current P&amp;L: ${current_pnl:+.2f} ({current_pnl_pct:+.1f}%)\n"
+    )
+    if expected_move_pct is not None:
+        msg += f"Expected move: ±{expected_move_pct:.1f}% (from options IV)\n"
+    msg += "\nConsider: Close before earnings or accept binary risk."
+    return send_telegram(msg)
+
+
 # ── Telegram Command Handler ──────────────────────────────────────────────
 
 TELEGRAM_UPDATES_API = "https://api.telegram.org/bot{token}/getUpdates"

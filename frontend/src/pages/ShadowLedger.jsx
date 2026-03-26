@@ -36,7 +36,7 @@ export default function ShadowLedger() {
 
   return (
     <div className="space-y-6">
-      <h2 className="text-xl font-medium">Shadow Ledger</h2>
+      <h2 className="text-xl font-medium" style={{ color: 'var(--slate-100)' }}>Shadow Ledger</h2>
 
       {/* Account summary */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -47,17 +47,21 @@ export default function ShadowLedger() {
       </div>
 
       {/* Tab bar */}
-      <div className="flex gap-1 border-b border-[var(--border)]">
+      <div className="flex gap-1" style={{ borderBottom: '1px solid var(--slate-600)' }}>
         {['open', 'closed'].map(t => (
           <button key={t} onClick={() => setTab(t)}
-            className={`px-4 py-2 text-sm capitalize ${tab === t ? 'text-[var(--text-primary)] border-b-2 border-[var(--blue)]' : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'}`}>
+            className="px-4 py-2 text-sm capitalize transition-colors"
+            style={{
+              color: tab === t ? 'var(--slate-50)' : 'var(--slate-400)',
+              borderBottom: tab === t ? '2px solid var(--teal-400)' : '2px solid transparent',
+            }}>
             {t} {t === 'open' ? `(${openData?.open_count || 0})` : `(${closedData?.trades?.length || 0})`}
           </button>
         ))}
       </div>
 
       {tab === 'open' ? (
-        <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-lg p-4">
+        <div className="rounded-lg p-4" style={{ background: 'var(--slate-700)', border: '1px solid var(--slate-600)' }}>
           {openLoading ? <LoadingSpinner /> :
            !openData?.open_trades?.length ? <EmptyState message="No open trades" icon={TrendingUp} /> :
            <DataTable columns={openCols} data={openData.open_trades} />}
@@ -71,7 +75,7 @@ export default function ShadowLedger() {
             <MetricCard label="Expectancy" value={(metrics.expectancy || 0).toFixed(2)} prefix="$" delta={metrics.expectancy} />
             <MetricCard label="Total P&L" value={(metrics.total_pnl || 0).toFixed(2)} prefix="$" delta={metrics.total_pnl} />
           </div>
-          <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-lg p-4">
+          <div className="rounded-lg p-4" style={{ background: 'var(--slate-700)', border: '1px solid var(--slate-600)' }}>
             {closedLoading ? <LoadingSpinner /> :
              !closedData?.trades?.length ? <EmptyState message="No closed trades" icon={TrendingUp} /> :
              <DataTable columns={closedCols} data={closedData.trades} />}

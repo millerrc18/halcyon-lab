@@ -195,7 +195,7 @@ const ROADMAP_DATA = {
 
   businessTarget: {
     line1: 'Business model: compound returns on growing capital under management',
-    line2: 'Paper → $1K live → $25K → $100K+ → verified track record → external capital',
+    line2: 'Paper \u2192 $1K live \u2192 $25K \u2192 $100K+ \u2192 verified track record \u2192 external capital',
   },
 }
 
@@ -204,9 +204,9 @@ const ROADMAP_DATA = {
 // ═══════════════════════════════════════════════════════════════
 
 function StatusIcon({ status }) {
-  if (status === 'done') return <CheckCircle2 size={16} className="text-emerald-500 shrink-0" />
-  if (status === 'in-progress') return <Loader2 size={16} className="text-amber-500 animate-spin shrink-0" />
-  return <Circle size={16} className="text-[var(--text-muted)] shrink-0" />
+  if (status === 'done') return <CheckCircle2 size={16} className="shrink-0" style={{ color: 'var(--teal-500)' }} />
+  if (status === 'in-progress') return <Loader2 size={16} className="animate-spin shrink-0" style={{ color: 'var(--amber-500)' }} />
+  return <Circle size={16} className="shrink-0" style={{ color: 'var(--slate-400)' }} />
 }
 
 function PhaseProgress({ items }) {
@@ -216,13 +216,13 @@ function PhaseProgress({ items }) {
   const pct = Math.round(((done + inProgress * 0.5) / total) * 100)
 
   return (
-    <div className="flex items-center gap-3 text-xs text-[var(--text-muted)]">
-      <div className="flex-1 h-1.5 bg-[var(--bg-tertiary)] rounded-full overflow-hidden">
+    <div className="flex items-center gap-3 text-xs" style={{ color: 'var(--slate-400)' }}>
+      <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--slate-600)' }}>
         <div
           className="h-full rounded-full transition-all duration-500"
           style={{
             width: `${pct}%`,
-            background: pct === 100 ? 'var(--color-text-success, #22c55e)' : 'var(--color-text-info, #3b82f6)',
+            background: pct === 100 ? 'var(--success)' : 'var(--teal-500)',
           }}
         />
       </div>
@@ -232,9 +232,9 @@ function PhaseProgress({ items }) {
 }
 
 const phaseColors = {
-  active: 'border-l-emerald-500',
-  completed: 'border-l-emerald-500',
-  locked: 'border-l-[var(--border)]',
+  active: 'var(--teal-500)',
+  completed: 'var(--teal-500)',
+  locked: 'var(--slate-600)',
 }
 
 function GateMetric({ metric, currentValue }) {
@@ -265,16 +265,16 @@ function GateMetric({ metric, currentValue }) {
     }
   }
 
-  const opSymbol = metric.op === '>=' ? '≥' : metric.op === '>' ? '>' : metric.op === '<=' ? '≤' : metric.op
+  const opSymbol = metric.op === '>=' ? '\u2265' : metric.op === '>' ? '>' : metric.op === '<=' ? '\u2264' : metric.op
 
   return (
     <div className="flex items-center gap-2 text-xs">
-      <div className={`w-2 h-2 rounded-full shrink-0 ${hasData ? (passed ? 'bg-emerald-500' : 'bg-red-400') : 'bg-[var(--text-muted)]'}`} />
-      <span className="text-[var(--text-muted)] w-28">{metric.label}</span>
-      <span className={`font-mono font-medium ${hasData ? (passed ? 'text-emerald-400' : 'text-red-400') : 'text-[var(--text-muted)]'}`}>
+      <div className="w-2 h-2 rounded-full shrink-0" style={{ background: hasData ? (passed ? 'var(--teal-500)' : 'var(--danger)') : 'var(--slate-400)' }} />
+      <span className="w-28" style={{ color: 'var(--slate-400)' }}>{metric.label}</span>
+      <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 500, color: hasData ? (passed ? 'var(--teal-400)' : 'var(--danger)') : 'var(--slate-400)' }}>
         {displayVal}
       </span>
-      <span className="text-[var(--text-muted)]">{opSymbol} {displayTarget}</span>
+      <span style={{ color: 'var(--slate-400)' }}>{opSymbol} {displayTarget}</span>
     </div>
   )
 }
@@ -285,38 +285,41 @@ function PhaseCard({ phase, kpis }) {
 
   return (
     <div
-      className={`border border-[var(--border)] rounded-lg overflow-hidden border-l-4 ${phaseColors[phase.status] || phaseColors.locked}`}
+      className="rounded-lg overflow-hidden border-l-4"
+      style={{ border: '1px solid var(--slate-600)', borderLeftColor: phaseColors[phase.status] || phaseColors.locked, borderLeftWidth: '4px' }}
     >
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center justify-between p-4 text-left hover:bg-[var(--bg-tertiary)]/50 transition-colors"
+        className="w-full flex items-center justify-between p-4 text-left transition-colors"
+        onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(30, 41, 59, 0.5)'}
+        onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
       >
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            {isLocked && <Lock size={14} className="text-[var(--text-muted)]" />}
-            <span className="font-medium text-[var(--text-primary)]">{phase.name}</span>
-            <span className="text-xs px-2 py-0.5 rounded-full bg-[var(--bg-tertiary)] text-[var(--text-muted)]">
+            {isLocked && <Lock size={14} style={{ color: 'var(--slate-400)' }} />}
+            <span className="font-medium" style={{ color: 'var(--slate-100)' }}>{phase.name}</span>
+            <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: 'var(--slate-600)', color: 'var(--slate-400)' }}>
               {phase.capital}
             </span>
-            <span className="text-xs text-[var(--text-muted)]">{phase.monthlyCost}</span>
+            <span className="text-xs" style={{ color: 'var(--slate-400)' }}>{phase.monthlyCost}</span>
           </div>
-          <p className="text-sm text-[var(--text-secondary)] mt-1">{phase.description}</p>
+          <p className="text-sm mt-1" style={{ color: 'var(--slate-300)' }}>{phase.description}</p>
           {phase.status !== 'locked' && (
             <div className="mt-2">
               <PhaseProgress items={phase.items} />
             </div>
           )}
         </div>
-        {expanded ? <ChevronDown size={18} className="text-[var(--text-muted)] shrink-0 ml-2" /> : <ChevronRight size={18} className="text-[var(--text-muted)] shrink-0 ml-2" />}
+        {expanded ? <ChevronDown size={18} className="shrink-0 ml-2" style={{ color: 'var(--slate-400)' }} /> : <ChevronRight size={18} className="shrink-0 ml-2" style={{ color: 'var(--slate-400)' }} />}
       </button>
 
       {expanded && (
-        <div className="px-4 pb-4 border-t border-[var(--border)]">
+        <div className="px-4 pb-4" style={{ borderTop: '1px solid var(--slate-600)' }}>
           <ul className="mt-3 space-y-1.5">
             {phase.items.map((item, i) => (
               <li key={i} className="flex items-center gap-2 text-sm">
                 <StatusIcon status={item.status} />
-                <span className={item.status === 'done' ? 'text-[var(--text-muted)] line-through' : 'text-[var(--text-primary)]'}>
+                <span style={{ color: item.status === 'done' ? 'var(--slate-400)' : 'var(--slate-100)', textDecoration: item.status === 'done' ? 'line-through' : 'none' }}>
                   {item.label}
                 </span>
               </li>
@@ -326,10 +329,10 @@ function PhaseCard({ phase, kpis }) {
       )}
 
       {phase.gate && (
-        <div className="px-4 py-3 bg-[var(--bg-tertiary)] border-t border-[var(--border)]">
+        <div className="px-4 py-3" style={{ background: 'var(--slate-700)', borderTop: '1px solid var(--slate-600)' }}>
           <div className="flex items-center gap-2 text-xs mb-2">
-            <Lock size={12} className="text-amber-500 shrink-0" />
-            <span className="text-[var(--text-secondary)] font-medium">Gate</span>
+            <Lock size={12} style={{ color: 'var(--amber-500)' }} className="shrink-0" />
+            <span className="font-medium" style={{ color: 'var(--slate-300)' }}>Gate</span>
           </div>
           {phase.gate.metrics ? (
             <div className="space-y-1.5 ml-5">
@@ -338,7 +341,7 @@ function PhaseCard({ phase, kpis }) {
               ))}
             </div>
           ) : (
-            <div className="text-xs text-[var(--text-muted)] ml-5">{phase.gate.label}</div>
+            <div className="text-xs ml-5" style={{ color: 'var(--slate-400)' }}>{phase.gate.label}</div>
           )}
         </div>
       )}
@@ -349,11 +352,11 @@ function PhaseCard({ phase, kpis }) {
 function PipelineStep({ step, isLast }) {
   return (
     <div className="flex items-center gap-2">
-      <div className="border border-[var(--border)] rounded-lg px-3 py-2 text-center min-w-[120px]">
-        <div className="text-sm font-medium text-[var(--text-primary)]">{step.label}</div>
-        <div className="text-xs text-[var(--text-muted)]">{step.detail}</div>
+      <div className="rounded-lg px-3 py-2 text-center min-w-[120px]" style={{ border: '1px solid var(--slate-600)' }}>
+        <div className="text-sm font-medium" style={{ color: 'var(--slate-100)' }}>{step.label}</div>
+        <div className="text-xs" style={{ color: 'var(--slate-400)' }}>{step.detail}</div>
       </div>
-      {!isLast && <ArrowRight size={16} className="text-[var(--text-muted)] shrink-0" />}
+      {!isLast && <ArrowRight size={16} className="shrink-0" style={{ color: 'var(--slate-400)' }} />}
     </div>
   )
 }
@@ -396,18 +399,18 @@ export default function Roadmap() {
   return (
     <div className="max-w-3xl mx-auto space-y-6">
       <div>
-        <h1 className="text-xl font-medium text-[var(--text-primary)]">Roadmap</h1>
-        <p className="text-sm text-[var(--text-muted)] mt-1">
+        <h1 className="text-xl font-medium" style={{ color: 'var(--slate-100)' }}>Roadmap</h1>
+        <p className="text-sm mt-1" style={{ color: 'var(--slate-400)' }}>
           Every gate is performance-based, not time-based. Updated {data.lastUpdated}.
         </p>
         <div className="mt-3 flex items-center gap-3">
-          <div className="flex-1 h-2 bg-[var(--bg-tertiary)] rounded-full overflow-hidden">
+          <div className="flex-1 h-2 rounded-full overflow-hidden" style={{ background: 'var(--slate-600)' }}>
             <div
-              className="h-full bg-emerald-500 rounded-full transition-all duration-700"
-              style={{ width: `${Math.round((doneCount / totalCount) * 100)}%` }}
+              className="h-full rounded-full transition-all duration-700"
+              style={{ width: `${Math.round((doneCount / totalCount) * 100)}%`, background: 'var(--teal-500)' }}
             />
           </div>
-          <span className="text-sm text-[var(--text-secondary)] whitespace-nowrap">
+          <span className="text-sm whitespace-nowrap" style={{ color: 'var(--slate-300)' }}>
             {doneCount}/{totalCount} items complete ({Math.round((doneCount / totalCount) * 100)}%)
           </span>
         </div>
@@ -420,7 +423,7 @@ export default function Roadmap() {
       </div>
 
       <div>
-        <h2 className="text-sm font-medium text-[var(--text-primary)] mb-3">Training pipeline (research-validated)</h2>
+        <h2 className="text-sm font-medium mb-3" style={{ color: 'var(--slate-100)' }}>Training pipeline (research-validated)</h2>
         <div className="flex flex-wrap items-center gap-2">
           {data.trainingPipeline.map((step, i) => (
             <PipelineStep key={i} step={step} isLast={i === data.trainingPipeline.length - 1} />
@@ -428,12 +431,12 @@ export default function Roadmap() {
         </div>
       </div>
 
-      <div className="border border-[var(--border)] rounded-lg p-4 bg-[var(--bg-secondary)]">
-        <div className="text-sm font-medium text-[var(--text-primary)]">{data.businessTarget.line1}</div>
-        <div className="text-xs text-[var(--text-muted)] mt-1">{data.businessTarget.line2}</div>
+      <div className="rounded-lg p-4" style={{ border: '1px solid var(--slate-600)', background: 'var(--slate-700)' }}>
+        <div className="text-sm font-medium" style={{ color: 'var(--slate-100)' }}>{data.businessTarget.line1}</div>
+        <div className="text-xs mt-1" style={{ color: 'var(--slate-400)' }}>{data.businessTarget.line2}</div>
       </div>
 
-      <p className="text-xs text-[var(--text-muted)] text-center pb-4">
+      <p className="text-xs text-center pb-4" style={{ color: 'var(--slate-400)' }}>
         The moat: combinatorial fusion of signals in structured LLM training data. Every trade teaches the model.
       </p>
     </div>

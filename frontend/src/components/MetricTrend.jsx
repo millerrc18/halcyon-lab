@@ -7,11 +7,11 @@ import EmptyState from './EmptyState'
 import { TrendingUp } from 'lucide-react'
 
 const METRIC_OPTIONS = [
-  { key: 'cumulative_pnl', label: 'Cumulative P&L', color: 'var(--green)', format: v => `$${v}` },
-  { key: 'win_rate', label: 'Win Rate', color: 'var(--blue)', format: v => `${(v * 100).toFixed(1)}%` },
-  { key: 'sharpe_ratio', label: 'Sharpe Ratio', color: 'var(--amber)', format: v => v.toFixed(2) },
-  { key: 'max_drawdown', label: 'Max Drawdown', color: 'var(--red)', format: v => `$${v}` },
-  { key: 'expectancy', label: 'Expectancy', color: '#a78bfa', format: v => `$${v}` },
+  { key: 'cumulative_pnl', label: 'Cumulative P&L', color: 'var(--bullish)', format: v => `$${v}` },
+  { key: 'win_rate', label: 'Win Rate', color: 'var(--chart-1)', format: v => `${(v * 100).toFixed(1)}%` },
+  { key: 'sharpe_ratio', label: 'Sharpe Ratio', color: 'var(--chart-3)', format: v => v.toFixed(2) },
+  { key: 'max_drawdown', label: 'Max Drawdown', color: 'var(--bearish)', format: v => `$${v}` },
+  { key: 'expectancy', label: 'Expectancy', color: 'var(--chart-4)', format: v => `$${v}` },
 ]
 
 const DAY_OPTIONS = [
@@ -44,19 +44,19 @@ export default function MetricTrend() {
   const activeMetrics = METRIC_OPTIONS.filter(m => selectedMetrics.includes(m.key))
 
   return (
-    <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-lg p-4">
+    <div className="rounded-lg p-4" style={{ background: 'var(--slate-700)', border: '1px solid var(--slate-600)' }}>
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm text-[var(--text-muted)] uppercase tracking-wide">Metric Trends</h3>
+        <h3 className="text-sm uppercase tracking-wide" style={{ color: 'var(--slate-400)' }}>Metric Trends</h3>
         <div className="flex gap-1">
           {DAY_OPTIONS.map(opt => (
             <button
               key={opt.value}
               onClick={() => setDays(opt.value)}
-              className={`px-2.5 py-1 text-xs rounded ${
-                days === opt.value
-                  ? 'bg-[var(--blue)] text-white'
-                  : 'bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-              }`}
+              className="px-2.5 py-1 text-xs rounded transition-colors"
+              style={{
+                background: days === opt.value ? 'var(--teal-500)' : 'var(--slate-600)',
+                color: days === opt.value ? 'white' : 'var(--slate-300)',
+              }}
             >
               {opt.label}
             </button>
@@ -73,9 +73,9 @@ export default function MetricTrend() {
             className={`px-2.5 py-1 text-xs rounded border transition-colors ${
               selectedMetrics.includes(m.key)
                 ? 'border-current opacity-100'
-                : 'border-[var(--border)] opacity-50 hover:opacity-75'
+                : 'opacity-50 hover:opacity-75'
             }`}
-            style={{ color: m.color }}
+            style={{ color: m.color, borderColor: selectedMetrics.includes(m.key) ? undefined : 'var(--slate-600)' }}
           >
             {m.label}
           </button>
@@ -84,12 +84,12 @@ export default function MetricTrend() {
 
       <ResponsiveContainer width="100%" height={280}>
         <LineChart data={data}>
-          <XAxis dataKey="date" tick={{ fontSize: 11, fill: 'var(--text-muted)' }} />
-          <YAxis tick={{ fontSize: 11, fill: 'var(--text-muted)' }} />
+          <XAxis dataKey="date" tick={{ fontSize: 11, fill: 'var(--slate-400)' }} />
+          <YAxis tick={{ fontSize: 11, fill: 'var(--slate-400)' }} />
           <Tooltip
             contentStyle={{
-              background: 'var(--bg-card)',
-              border: '1px solid var(--border)',
+              background: 'var(--slate-700)',
+              border: '1px solid var(--slate-600)',
               borderRadius: 8,
               fontSize: 12,
             }}

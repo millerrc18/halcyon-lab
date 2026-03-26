@@ -14,24 +14,24 @@ export default function Review() {
 
   return (
     <div className="space-y-6">
-      <h2 className="text-xl font-medium">Review</h2>
+      <h2 className="text-xl font-medium" style={{ color: 'var(--slate-100)' }}>Review</h2>
 
       {/* Pending reviews */}
-      <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-lg p-4">
-        <h3 className="text-sm text-[var(--text-muted)] uppercase tracking-wide mb-4">Pending Reviews ({(pending || []).length})</h3>
+      <div className="rounded-lg p-4" style={{ background: 'var(--slate-700)', border: '1px solid var(--slate-600)' }}>
+        <h3 className="text-sm uppercase tracking-wide mb-4" style={{ color: 'var(--slate-400)' }}>Pending Reviews ({(pending || []).length})</h3>
         {(!pending || pending.length === 0) ? (
           <EmptyState message="No trades pending review" icon={ClipboardCheck} />
         ) : (
           <div className="space-y-2">
             {pending.map((r, i) => (
-              <div key={r.recommendation_id || i} className="border border-[var(--border)] rounded p-3 flex items-center justify-between">
+              <div key={r.recommendation_id || i} className="rounded p-3 flex items-center justify-between" style={{ border: '1px solid var(--slate-600)' }}>
                 <div>
                   <span className="font-medium">{r.ticker}</span>
-                  <span className="text-[var(--text-muted)] ml-2 text-sm">{(r.created_at || '').slice(0, 10)}</span>
+                  <span className="ml-2 text-sm" style={{ color: 'var(--slate-400)' }}>{(r.created_at || '').slice(0, 10)}</span>
                 </div>
                 <div className="flex items-center gap-3">
                   <PnlText value={r.shadow_pnl_dollars} percent={r.shadow_pnl_pct} />
-                  <span className="font-mono text-sm text-[var(--text-secondary)]">{r.entry_zone}</span>
+                  <span className="text-sm" style={{ fontFamily: 'var(--font-mono)', color: 'var(--slate-300)' }}>{r.entry_zone}</span>
                 </div>
               </div>
             ))}
@@ -40,24 +40,24 @@ export default function Review() {
       </div>
 
       {/* Recent postmortems */}
-      <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-lg p-4">
-        <h3 className="text-sm text-[var(--text-muted)] uppercase tracking-wide mb-4">Recent Postmortems</h3>
+      <div className="rounded-lg p-4" style={{ background: 'var(--slate-700)', border: '1px solid var(--slate-600)' }}>
+        <h3 className="text-sm uppercase tracking-wide mb-4" style={{ color: 'var(--slate-400)' }}>Recent Postmortems</h3>
         {(!postmortems || postmortems.length === 0) ? (
           <EmptyState message="No postmortems yet" icon={ClipboardCheck} />
         ) : (
           <div className="space-y-2">
             {postmortems.map((p, i) => (
-              <div key={i} className="border border-[var(--border)] rounded p-3">
+              <div key={i} className="rounded p-3" style={{ border: '1px solid var(--slate-600)' }}>
                 <div className="flex items-center justify-between mb-1">
                   <div className="flex items-center gap-3">
                     <span className="font-medium">{p.ticker}</span>
-                    <span className="text-[var(--text-muted)] text-sm">{p.date}</span>
+                    <span className="text-sm" style={{ color: 'var(--slate-400)' }}>{p.date}</span>
                     <StatusBadge text={p.exit_reason} variant={p.pnl_dollars > 0 ? 'success' : 'danger'} />
                     <StatusBadge text={p.lesson_tag} variant="neutral" />
                   </div>
                   <PnlText value={p.pnl_dollars} />
                 </div>
-                <p className="text-sm text-[var(--text-secondary)] truncate">{p.postmortem?.split('\n')[0]}</p>
+                <p className="text-sm truncate" style={{ color: 'var(--slate-300)' }}>{p.postmortem?.split('\n')[0]}</p>
               </div>
             ))}
           </div>

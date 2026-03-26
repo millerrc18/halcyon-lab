@@ -34,12 +34,13 @@ export default function DataTable({ columns, data, onRowClick }) {
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b border-[var(--border)]">
+          <tr style={{ borderBottom: '1px solid var(--slate-600)' }}>
             {columns.map(col => (
               <th key={col.key}
-                  className={`py-2 px-3 text-[var(--text-muted)] text-xs uppercase tracking-wide cursor-pointer hover:text-[var(--text-secondary)] ${numTypes.includes(col.type) ? 'text-right' : 'text-left'}`}
+                  className={`py-2 px-3 text-xs uppercase tracking-wide cursor-pointer ${numTypes.includes(col.type) ? 'text-right' : 'text-left'}`}
+                  style={{ color: 'var(--slate-400)' }}
                   onClick={() => handleSort(col.key)}>
-                {col.label} {sortKey === col.key ? (sortAsc ? '↑' : '↓') : ''}
+                {col.label} {sortKey === col.key ? (sortAsc ? '\u2191' : '\u2193') : ''}
               </th>
             ))}
           </tr>
@@ -47,23 +48,35 @@ export default function DataTable({ columns, data, onRowClick }) {
         <tbody>
           {sorted.map((row, i) => (
             <tr key={i}
-                className={`border-b border-[var(--border)] hover:bg-[var(--bg-tertiary)] ${onRowClick ? 'cursor-pointer' : ''} ${i % 2 === 0 ? '' : 'bg-[var(--bg-secondary)]/30'}`}
+                className={`transition-colors ${onRowClick ? 'cursor-pointer' : ''}`}
+                style={{
+                  borderBottom: '1px solid var(--slate-600)',
+                  background: i % 2 === 0 ? 'transparent' : 'rgba(30, 41, 59, 0.5)',
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = 'var(--slate-700)'}
+                onMouseLeave={(e) => e.currentTarget.style.background = i % 2 === 0 ? 'transparent' : 'rgba(30, 41, 59, 0.5)'}
                 onClick={() => onRowClick?.(row)}>
               {columns.map(col => {
                 const val = row[col.key]
                 const isNum = numTypes.includes(col.type)
-                let className = `py-2 px-3 ${isNum ? 'text-right font-mono' : ''}`
+                let style = {}
                 if (col.type === 'currency' && val != null) {
-                  className += val > 0 ? ' text-[var(--green)]' : val < 0 ? ' text-[var(--red)]' : ''
+                  style.color = val > 0 ? 'var(--bullish)' : val < 0 ? 'var(--bearish)' : undefined
                 }
-                return <td key={col.key} className={className}>{fmt(val, col.type)}</td>
+                return (
+                  <td key={col.key}
+                      className={`py-2 px-3 ${isNum ? 'text-right' : ''}`}
+                      style={{ fontFamily: isNum ? 'var(--font-mono)' : undefined, ...style }}>
+                    {fmt(val, col.type)}
+                  </td>
+                )
               })}
             </tr>
           ))}
         </tbody>
       </table>
       {(!data || data.length === 0) && (
-        <div className="text-center text-[var(--text-muted)] py-8">No data available</div>
+        <div className="text-center py-8" style={{ color: 'var(--slate-400)' }}>No data available</div>
       )}
     </div>
   )

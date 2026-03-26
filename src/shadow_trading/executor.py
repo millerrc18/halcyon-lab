@@ -198,6 +198,12 @@ def open_shadow_trade(
         ticker, actual_price, planned_shares,
     )
 
+    # 1F. Check for trade open milestones
+    _check_open_milestones(db_path, source="paper")
+
+    # 1K. Check sector exposure
+    _check_sector_exposure(db_path)
+
     return trade_id
 
 
@@ -394,6 +400,12 @@ def check_and_manage_open_trades(
                     notify_trade_closed(ticker, pnl_dollars, pnl_pct, exit_reason, days_open)
             except Exception:
                 pass
+
+            # 1F. Check for trade close milestones
+            _check_close_milestones(db_path)
+
+            # 1G. Check for loss streak
+            _check_loss_streak(db_path)
 
     return actions
 
@@ -631,7 +643,282 @@ def open_live_trade(
     except Exception:
         pass
 
+    # 1F. Check for live trade open milestones
+    _check_open_milestones(db_path, source="live")
+
+    # 1K. Check sector exposure
+    _check_sector_exposure(db_path)
+
     return trade_id
+
+
+def _check_open_milestones(db_path: str = "ai_research_desk.sqlite3",
+                           source: str = "paper") -> None:
+    """Check for trade open milestones and send notifications."""
+    import sqlite3
+    try:
+        from src.notifications.telegram import notify_milestone, is_telegram_enabled
+        if not is_telegram_enabled():
+            return
+
+        with sqlite3.connect(db_path) as conn:
+            # Count total opened trades for this source
+            total = conn.execute(
+                "SELECT COUNT(*) FROM shadow_trades WHERE COALESCE(source,'paper') = ?",
+                (source,),
+            ).fetchone()[0]
+
+            label = "live" if source == "live" else "paper"
+
+            if total == 1:
+                notify_milestone(
+                    f"First {label} trade opened!",
+                    f"Your trading journey begins. Track progress in the Shadow Ledger."
+                )
+    except Exception as e:
+        logger.debug("[MILESTONE] Open milestone check failed: %s", e)
+
+
+def _check_close_milestones(db_path: str = "ai_research_desk.sqlite3") -> None:
+    """Check for trade close milestones and send notifications."""
+    import sqlite3
+    try:
+        from src.notifications.telegram import notify_milestone, is_telegram_enabled
+        if not is_telegram_enabled():
+            return
+
+        with sqlite3.connect(db_path) as conn:
+            conn.row_factory = sqlite3.Row
+
+            closed_total = conn.execute(
+                "SELECT COUNT(*) FROM shadow_trades WHERE status='closed'"
+            ).fetchone()[0]
+
+            wins = conn.execute(
+                "SELECT COUNT(*) FROM shadow_trades WHERE status='closed' AND pnl_dollars > 0"
+            ).fetchone()[0]
+            losses = closed_total - wins
+
+            # Check milestone thresholds
+            milestones = {1: "1st trade closed!", 10: "10th closed trade!",
+                          25: "25th closed trade!", 50: "50th closed trade — Phase 1 gate!"}
+            if closed_total in milestones:
+                win_rate = wins / closed_total if closed_total > 0 else 0
+
+                avg_row = conn.execute(
+                    "SELECT AVG(pnl_dollars) as expectancy, AVG(duration_days) as avg_hold "
+                    "FROM shadow_trades WHERE status='closed'"
+                ).fetchone()
+                expectancy = avg_row["expectancy"] or 0
+                avg_hold = avg_row["avg_hold"] or 0
+
+                if closed_total == 50:
+                    detail = (
+                        f"🎉 Phase 1 gate reached!\n"
+                        f"Current win rate: {win_rate:.0%} ({wins}W / {losses}L)\n"
+                        f"Avg hold: {avg_hold:.1f} days | Expectancy: ${expectancy:+.2f}/trade"
+                    )
+                elif closed_total == 1:
+                    detail = "Your first completed trade. Many more to come."
+                else:
+                    remaining = 50 - closed_total
+                    detail = (
+                        f"{remaining} more to Phase 1 gate (50 trades).\n"
+                        f"Current win rate: {win_rate:.0%} ({wins}W / {losses}L)\n"
+                        f"Avg hold: {avg_hold:.1f} days | Expectancy: ${expectancy:+.2f}/trade"
+                    )
+                notify_milestone(milestones[closed_total], detail)
+
+            # First profitable trade
+            if wins == 1:
+                first_win = conn.execute(
+                    "SELECT ticker, pnl_dollars, pnl_pct FROM shadow_trades "
+                    "WHERE status='closed' AND pnl_dollars > 0 "
+                    "ORDER BY actual_exit_time ASC LIMIT 1"
+                ).fetchone()
+                if first_win:
+                    notify_milestone(
+                        "First profitable trade!",
+                        f"{first_win['ticker']}: ${first_win['pnl_dollars']:+.2f} ({first_win['pnl_pct']:+.1f}%)"
+                    )
+
+            # First live profit
+            live_wins = conn.execute(
+                "SELECT COUNT(*) FROM shadow_trades "
+                "WHERE status='closed' AND source='live' AND pnl_dollars > 0"
+            ).fetchone()[0]
+            if live_wins == 1:
+                first_live_win = conn.execute(
+                    "SELECT ticker, pnl_dollars, pnl_pct FROM shadow_trades "
+                    "WHERE status='closed' AND source='live' AND pnl_dollars > 0 "
+                    "ORDER BY actual_exit_time ASC LIMIT 1"
+                ).fetchone()
+                if first_live_win:
+                    notify_milestone(
+                        "First live trade profit!",
+                        f"{first_live_win['ticker']}: ${first_live_win['pnl_dollars']:+.2f} ({first_live_win['pnl_pct']:+.1f}%)"
+                    )
+
+            # 3 consecutive wins
+            last_3 = conn.execute(
+                "SELECT pnl_dollars FROM shadow_trades WHERE status='closed' "
+                "ORDER BY actual_exit_time DESC LIMIT 3"
+            ).fetchall()
+            if len(last_3) == 3 and all(r["pnl_dollars"] > 0 for r in last_3):
+                last_4 = conn.execute(
+                    "SELECT pnl_dollars FROM shadow_trades WHERE status='closed' "
+                    "ORDER BY actual_exit_time DESC LIMIT 4"
+                ).fetchall()
+                # Only alert if the 4th-most-recent was NOT a win (to avoid repeat alerts)
+                if len(last_4) < 4 or last_4[3]["pnl_dollars"] <= 0:
+                    notify_milestone(
+                        "3 consecutive wins!",
+                        "Hot streak! Keep the discipline."
+                    )
+
+            # Best single trade P&L
+            best_ever = conn.execute(
+                "SELECT ticker, pnl_dollars, pnl_pct FROM shadow_trades "
+                "WHERE status='closed' ORDER BY pnl_dollars DESC LIMIT 1"
+            ).fetchone()
+            # The most recent closed trade
+            latest = conn.execute(
+                "SELECT ticker, pnl_dollars FROM shadow_trades "
+                "WHERE status='closed' ORDER BY actual_exit_time DESC LIMIT 1"
+            ).fetchone()
+            if (best_ever and latest and closed_total > 1
+                    and best_ever["ticker"] == latest["ticker"]
+                    and best_ever["pnl_dollars"] == latest["pnl_dollars"]
+                    and best_ever["pnl_dollars"] > 0):
+                notify_milestone(
+                    "New best trade!",
+                    f"{best_ever['ticker']}: ${best_ever['pnl_dollars']:+.2f} ({best_ever['pnl_pct']:+.1f}%)"
+                )
+
+    except Exception as e:
+        logger.debug("[MILESTONE] Close milestone check failed: %s", e)
+
+
+def _check_loss_streak(db_path: str = "ai_research_desk.sqlite3") -> None:
+    """Check for consecutive losses and alert at 3+."""
+    import sqlite3
+    try:
+        from src.notifications.telegram import notify_streak_alert, is_telegram_enabled
+        if not is_telegram_enabled():
+            return
+
+        with sqlite3.connect(db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            recent = conn.execute(
+                "SELECT ticker, pnl_dollars, pnl_pct FROM shadow_trades "
+                "WHERE status='closed' ORDER BY actual_exit_time DESC LIMIT 10"
+            ).fetchall()
+
+        if len(recent) < 3:
+            return
+
+        # Count consecutive losses from most recent
+        streak = 0
+        streak_trades = []
+        for r in recent:
+            if r["pnl_dollars"] < 0:
+                streak += 1
+                streak_trades.append((r["ticker"], r["pnl_pct"]))
+            else:
+                break
+
+        if streak >= 3:
+            # Only alert if this is exactly the streak boundary (3rd, 4th, etc.)
+            # Check if streak was already 3+ before this trade
+            prev_streak = 0
+            for r in recent[1:]:
+                if r["pnl_dollars"] < 0:
+                    prev_streak += 1
+                else:
+                    break
+
+            # Alert on first crossing of 3, or every additional loss after
+            if streak == 3 or (streak > 3 and prev_streak < streak):
+                max_dd = min(r["pnl_pct"] for r in recent[:streak])
+
+                # Historical max streak
+                with sqlite3.connect(db_path) as conn:
+                    conn.row_factory = sqlite3.Row
+                    all_closed = conn.execute(
+                        "SELECT pnl_dollars FROM shadow_trades WHERE status='closed' "
+                        "ORDER BY actual_exit_time ASC"
+                    ).fetchall()
+                max_streak = 0
+                current = 0
+                for r in all_closed:
+                    if r["pnl_dollars"] < 0:
+                        current += 1
+                        max_streak = max(max_streak, current)
+                    else:
+                        current = 0
+
+                notify_streak_alert(
+                    streak_length=streak,
+                    recent_trades=streak_trades[:5],
+                    max_drawdown_pct=max_dd,
+                    risk_governor_status="NORMAL",
+                    historical_max_streak=max_streak,
+                )
+    except Exception as e:
+        logger.debug("[STREAK] Loss streak check failed: %s", e)
+
+
+def _check_sector_exposure(db_path: str = "ai_research_desk.sqlite3") -> None:
+    """Check sector concentration after each trade open."""
+    import sqlite3
+    try:
+        from src.notifications.telegram import notify_exposure_alert, is_telegram_enabled
+        if not is_telegram_enabled():
+            return
+
+        with sqlite3.connect(db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            open_trades = conn.execute(
+                "SELECT ticker FROM shadow_trades WHERE status='open'"
+            ).fetchall()
+
+        if len(open_trades) < 3:
+            return
+
+        # Get sector for each ticker (best-effort from recommendations)
+        sectors: dict[str, list[str]] = {}
+        with sqlite3.connect(db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            for trade in open_trades:
+                ticker = trade["ticker"]
+                rec = conn.execute(
+                    "SELECT setup_type FROM recommendations WHERE ticker = ? "
+                    "ORDER BY created_at DESC LIMIT 1",
+                    (ticker,),
+                ).fetchone()
+                # Use setup_type as a proxy; in practice, sector info would come from features
+                sector = "Unknown"
+                try:
+                    import yfinance as yf
+                    info = yf.Ticker(ticker).info
+                    sector = info.get("sector", "Unknown")
+                except Exception:
+                    pass
+                sectors.setdefault(sector, []).append(ticker)
+
+        total_positions = len(open_trades)
+        limit_pct = 30.0
+        for sector, tickers in sectors.items():
+            if sector == "Unknown":
+                continue
+            exposure_pct = (len(tickers) / total_positions) * 100
+            if exposure_pct > limit_pct and len(tickers) >= 3:
+                notify_exposure_alert(
+                    sector=sector, count=len(tickers), tickers=tickers,
+                    exposure_pct=exposure_pct, limit_pct=limit_pct,
+                )
+    except Exception as e:
+        logger.debug("[EXPOSURE] Sector exposure check failed: %s", e)
 
 
 def _get_current_price_safe(ticker: str) -> float | None:

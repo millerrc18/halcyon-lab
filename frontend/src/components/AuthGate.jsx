@@ -58,32 +58,46 @@ export default function AuthGate({ children }) {
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+    <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--slate-900)' }}>
       <form
         onSubmit={handleSubmit}
-        className="bg-gray-900 border border-gray-800 rounded-xl p-8 w-full max-w-sm shadow-lg"
+        className="rounded-xl p-8 w-full max-w-sm shadow-lg"
+        style={{ background: 'var(--slate-700)', border: '1px solid var(--slate-600)' }}
       >
-        <h1 className="text-2xl font-bold text-white mb-6 text-center">
-          Halcyon Lab
+        <h1
+          className="text-center mb-6"
+          style={{ fontFamily: 'var(--font-display)', fontSize: '28px', fontWeight: 600, color: 'var(--teal-400)' }}
+        >
+          HALCYON LAB
         </h1>
         <input
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           placeholder="Dashboard password"
-          className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4"
+          className="w-full px-4 py-2 rounded-lg mb-4 text-sm outline-none transition-shadow"
+          style={{
+            background: 'var(--slate-800)',
+            border: '1px solid var(--slate-600)',
+            color: 'var(--slate-100)',
+          }}
+          onFocus={(e) => e.target.style.boxShadow = '0 0 0 2px var(--teal-400)'}
+          onBlur={(e) => e.target.style.boxShadow = 'none'}
           autoFocus
           disabled={loading}
         />
         <button
           type="submit"
           disabled={loading || !password}
-          className="w-full py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors"
+          className="w-full py-2 font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          style={{ background: 'var(--teal-500)', color: 'white' }}
+          onMouseEnter={(e) => { if (!e.target.disabled) e.target.style.background = 'var(--teal-600)' }}
+          onMouseLeave={(e) => e.target.style.background = 'var(--teal-500)'}
         >
           {loading ? 'Signing in...' : 'Sign in'}
         </button>
         {error && (
-          <p className="mt-3 text-red-400 text-sm text-center">{error}</p>
+          <p className="mt-3 text-sm text-center" style={{ color: 'var(--danger)' }}>{error}</p>
         )}
       </form>
     </div>

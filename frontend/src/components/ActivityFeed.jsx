@@ -2,28 +2,28 @@ import { useEffect, useRef } from 'react'
 import useWebSocket from '../hooks/useWebSocket'
 
 const EVENT_COLORS = {
-  trade_opened: 'bg-emerald-500',
-  trade_closed: 'bg-emerald-500', // overridden per-event below
-  training_complete: 'bg-emerald-500',
-  action_complete: 'bg-emerald-500',
-  scan_complete: 'bg-blue-500',
-  scan_started: 'bg-blue-500',
-  overnight_task: 'bg-blue-500',
-  pre_market_refresh: 'bg-blue-500',
-  training_started: 'bg-yellow-500',
-  training_collection: 'bg-yellow-500',
-  action_started: 'bg-yellow-500',
-  order_submitted: 'bg-yellow-500',
-  order_filled: 'bg-yellow-500',
-  action_error: 'bg-red-500',
-  error: 'bg-red-500',
+  trade_opened: 'bg-[var(--success)]',
+  trade_closed: 'bg-[var(--success)]',
+  training_complete: 'bg-[var(--success)]',
+  action_complete: 'bg-[var(--success)]',
+  scan_complete: 'bg-[var(--info)]',
+  scan_started: 'bg-[var(--info)]',
+  overnight_task: 'bg-[var(--info)]',
+  pre_market_refresh: 'bg-[var(--info)]',
+  training_started: 'bg-[var(--warning)]',
+  training_collection: 'bg-[var(--warning)]',
+  action_started: 'bg-[var(--warning)]',
+  order_submitted: 'bg-[var(--warning)]',
+  order_filled: 'bg-[var(--warning)]',
+  action_error: 'bg-[var(--danger)]',
+  error: 'bg-[var(--danger)]',
 }
 
 function getEventColor(evt) {
   if (evt.type === 'trade_closed') {
-    return (evt.data?.pnl_dollars || 0) >= 0 ? 'bg-emerald-500' : 'bg-red-500'
+    return (evt.data?.pnl_dollars || 0) >= 0 ? 'bg-[var(--success)]' : 'bg-[var(--danger)]'
   }
-  return EVENT_COLORS[evt.type] || 'bg-gray-500'
+  return EVENT_COLORS[evt.type] || 'bg-[var(--slate-400)]'
 }
 
 function formatEvent(evt) {
@@ -75,35 +75,36 @@ export default function ActivityFeed() {
   }, [events.length])
 
   return (
-    <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-lg p-4">
+    <div className="rounded-lg p-4" style={{ background: 'var(--slate-700)', border: '1px solid var(--slate-600)' }}>
       <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm text-[var(--text-muted)] uppercase tracking-wide">Live Activity</h3>
+        <h3 className="text-sm uppercase tracking-wide" style={{ color: 'var(--slate-400)' }}>Live Activity</h3>
         <div className="flex items-center gap-3">
           {events.length > 0 && (
             <button
               onClick={clearEvents}
-              className="text-xs text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
+              className="text-xs hover:opacity-80"
+              style={{ color: 'var(--slate-400)' }}
             >
               Clear
             </button>
           )}
           <div className="flex items-center gap-1.5">
-            <div className={`w-2 h-2 rounded-full ${connected ? 'bg-green-400' : 'bg-red-400'}`} />
-            <span className="text-xs text-[var(--text-muted)]">{connected ? 'Connected' : 'Disconnected'}</span>
+            <div className={`w-2 h-2 rounded-full`} style={{ background: connected ? 'var(--success)' : 'var(--danger)' }} />
+            <span className="text-xs" style={{ color: 'var(--slate-400)' }}>{connected ? 'Connected' : 'Disconnected'}</span>
           </div>
         </div>
       </div>
-      <div ref={scrollRef} className="space-y-1 max-h-64 overflow-y-auto text-sm font-mono">
+      <div ref={scrollRef} className="space-y-1 max-h-64 overflow-y-auto text-sm" style={{ fontFamily: 'var(--font-mono)' }}>
         {events.length === 0 && (
-          <p className="text-[var(--text-muted)] text-xs">Waiting for events...</p>
+          <p className="text-xs" style={{ color: 'var(--slate-400)' }}>Waiting for events...</p>
         )}
         {events.map((evt, i) => (
           <div key={i} className="flex gap-2 items-start">
-            <span className="text-[var(--text-muted)] text-xs shrink-0 pt-0.5">
+            <span className="text-xs shrink-0 pt-0.5" style={{ color: 'var(--slate-400)' }}>
               {new Date(evt.timestamp).toLocaleTimeString()}
             </span>
             <span className={`w-2 h-2 rounded-full shrink-0 mt-1.5 ${getEventColor(evt)}`} />
-            <span className="text-[var(--text-secondary)]">{formatEvent(evt)}</span>
+            <span style={{ color: 'var(--slate-300)' }}>{formatEvent(evt)}</span>
           </div>
         ))}
       </div>

@@ -13,24 +13,24 @@ export default function Settings() {
   if (isLoading) return <LoadingSpinner />
 
   const Section = ({ title, children }) => (
-    <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-lg p-4">
-      <h3 className="text-sm text-[var(--text-muted)] uppercase tracking-wide mb-4">{title}</h3>
+    <div className="rounded-lg p-4" style={{ background: 'var(--slate-700)', border: '1px solid var(--slate-600)' }}>
+      <h3 className="text-sm uppercase tracking-wide mb-4" style={{ color: 'var(--slate-400)' }}>{title}</h3>
       <div className="space-y-3 text-sm">{children}</div>
     </div>
   )
 
   const Row = ({ label, value }) => (
     <div className="flex justify-between">
-      <span className="text-[var(--text-secondary)]">{label}</span>
-      <span className="font-mono">{String(value)}</span>
+      <span style={{ color: 'var(--slate-300)' }}>{label}</span>
+      <span style={{ fontFamily: 'var(--font-mono)' }}>{String(value)}</span>
     </div>
   )
 
   return (
     <div className="space-y-6">
-      <h2 className="text-xl font-medium">Settings</h2>
+      <h2 className="text-xl font-medium" style={{ color: 'var(--slate-100)' }}>Settings</h2>
 
-      <div className="bg-amber-900/30 border border-amber-500/50 rounded-lg p-3 text-amber-300 text-sm">
+      <div className="rounded-lg p-3 text-sm" style={{ background: 'rgba(245, 158, 11, 0.15)', border: '1px solid rgba(245, 158, 11, 0.4)', color: 'var(--amber-300)' }}>
         Configuration changes require a watch loop restart to take effect.
       </div>
 
@@ -75,8 +75,8 @@ export default function Settings() {
 
       {/* System Health */}
       {status && (
-        <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-lg p-4">
-          <h3 className="text-sm text-[var(--text-muted)] uppercase tracking-wide mb-4">System Health</h3>
+        <div className="rounded-lg p-4" style={{ background: 'var(--slate-700)', border: '1px solid var(--slate-600)' }}>
+          <h3 className="text-sm uppercase tracking-wide mb-4" style={{ color: 'var(--slate-400)' }}>System Health</h3>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
             {[
               ['Config', status.config_loaded],
@@ -89,7 +89,7 @@ export default function Settings() {
               ['Bootcamp', status.bootcamp_enabled],
             ].map(([label, ok]) => (
               <div key={label} className="flex items-center justify-between">
-                <span className="text-[var(--text-secondary)]">{label}</span>
+                <span style={{ color: 'var(--slate-300)' }}>{label}</span>
                 <StatusBadge text={ok ? 'OK' : 'Off'} variant={ok ? 'success' : 'neutral'} />
               </div>
             ))}
@@ -100,7 +100,7 @@ export default function Settings() {
       {/* API Cost Tracking */}
       {costs && (
         <>
-          <h3 className="text-sm text-[var(--text-muted)] uppercase tracking-wide">API Costs</h3>
+          <h3 className="text-sm uppercase tracking-wide" style={{ color: 'var(--slate-400)' }}>API Costs</h3>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <MetricCard label="All Time" value={`$${costs.total_all_time.toFixed(2)}`} />
             <MetricCard label="Today" value={`$${costs.total_today.toFixed(4)}`} />
@@ -110,16 +110,16 @@ export default function Settings() {
 
           {/* Breakdown by purpose */}
           {Object.keys(costs.by_purpose).length > 0 && (
-            <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-lg p-4">
-              <h3 className="text-sm text-[var(--text-muted)] uppercase tracking-wide mb-4">Cost by Purpose (30d)</h3>
+            <div className="rounded-lg p-4" style={{ background: 'var(--slate-700)', border: '1px solid var(--slate-600)' }}>
+              <h3 className="text-sm uppercase tracking-wide mb-4" style={{ color: 'var(--slate-400)' }}>Cost by Purpose (30d)</h3>
               <div className="space-y-2 text-sm">
                 {Object.entries(costs.by_purpose)
                   .sort((a, b) => b[1].cost - a[1].cost)
                   .map(([purpose, data]) => (
                     <div key={purpose} className="flex items-center justify-between">
-                      <span className="text-[var(--text-secondary)] capitalize">{purpose.replace(/_/g, ' ')}</span>
-                      <div className="flex items-center gap-4 font-mono">
-                        <span className="text-[var(--text-muted)] text-xs">{data.calls} calls</span>
+                      <span className="capitalize" style={{ color: 'var(--slate-300)' }}>{purpose.replace(/_/g, ' ')}</span>
+                      <div className="flex items-center gap-4" style={{ fontFamily: 'var(--font-mono)' }}>
+                        <span className="text-xs" style={{ color: 'var(--slate-400)' }}>{data.calls} calls</span>
                         <span>${data.cost.toFixed(4)}</span>
                       </div>
                     </div>
@@ -130,17 +130,17 @@ export default function Settings() {
 
           {/* Daily spend chart */}
           {costs.daily && costs.daily.length > 0 && (
-            <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-lg p-4">
-              <h3 className="text-sm text-[var(--text-muted)] uppercase tracking-wide mb-4">Daily Spend (30d)</h3>
+            <div className="rounded-lg p-4" style={{ background: 'var(--slate-700)', border: '1px solid var(--slate-600)' }}>
+              <h3 className="text-sm uppercase tracking-wide mb-4" style={{ color: 'var(--slate-400)' }}>Daily Spend (30d)</h3>
               <ResponsiveContainer width="100%" height={180}>
                 <BarChart data={costs.daily}>
-                  <XAxis dataKey="date" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} tickFormatter={d => d.slice(5)} />
-                  <YAxis tick={{ fontSize: 10, fill: 'var(--text-muted)' }} tickFormatter={v => `$${v}`} />
+                  <XAxis dataKey="date" tick={{ fontSize: 10, fill: 'var(--slate-400)' }} tickFormatter={d => d.slice(5)} />
+                  <YAxis tick={{ fontSize: 10, fill: 'var(--slate-400)' }} tickFormatter={v => `$${v}`} />
                   <Tooltip
-                    contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 12 }}
+                    contentStyle={{ background: 'var(--slate-700)', border: '1px solid var(--slate-600)', borderRadius: 8, fontSize: 12 }}
                     formatter={v => [`$${v.toFixed(4)}`, 'Cost']}
                   />
-                  <Bar dataKey="cost" fill="var(--blue)" radius={[2, 2, 0, 0]} />
+                  <Bar dataKey="cost" fill="var(--teal-400)" radius={[2, 2, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
