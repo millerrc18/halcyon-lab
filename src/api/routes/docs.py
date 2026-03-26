@@ -12,6 +12,8 @@ DOCS = [
     {"id": "architecture", "path": "docs/architecture.md", "title": "Architecture"},
     {"id": "training-guide", "path": "docs/training-guide.md", "title": "Training Guide"},
     {"id": "roadmap", "path": "docs/roadmap.md", "title": "Roadmap"},
+    {"id": "cli-reference", "path": "docs/cli-reference.md", "title": "CLI Reference (49 commands)"},
+    {"id": "telegram-commands", "path": "docs/telegram-commands.md", "title": "Telegram Bot Commands"},
 
     # Research — Training & Model
     {"id": "research-training-formats", "path": "docs/research/Optimal_Training_Formats_for_Fine-Tuning_Equity_Trade_Commentary_Models.md", "title": "Research: Training Formats"},
