@@ -1,0 +1,42 @@
+# Render Blueprint — Halcyon Lab Cloud Deployment
+# https://render.com/docs/blueprint-spec
+
+services:
+  # ── Static site: React frontend ────────────────────────────────────
+  - type: web
+    name: halcyon-frontend
+    runtime: static
+    buildCommand: cd frontend && npm install && npm run build
+    staticPublishPath: frontend/dist
+    envVars:
+      - key: VITE_API_URL
+        value: https://halcyon-api.onrender.com
+    headers:
+      - path: /*
+        name: Cache-Control
+        value: public, max-age=3600
+
+  # ── Python web service: read-only API ──────────────────────────────
+  - type: web
+    name: halcyon-api
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements-cloud.txt
+    startCommand: uvicorn src.api.cloud_app:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: halcyon-db
+          property: connectionString
+      - key: API_SECRET
+        sync: false  # Set manually in Render dashboard
+      - key: PYTHON_VERSION
+        value: "3.11.6"
+    healthCheckPath: /api/status
+
+databases:
+  # ── Free Postgres database ─────────────────────────────────────────
+  - name: halcyon-db
+    plan: free
+    databaseName: halcyon
+    user: halcyon_user
