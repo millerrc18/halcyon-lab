@@ -25,6 +25,27 @@ def cmd_send_test_email(args):
     print("Test email sent successfully." if success else "Failed to send test email.")
 
 
+def cmd_send_test_telegram(args):
+    from src.notifications.telegram import send_telegram, is_telegram_enabled
+    if not is_telegram_enabled():
+        print("Telegram not configured. Add telegram section to config/settings.local.yaml:")
+        print("  telegram:")
+        print("    enabled: true")
+        print('    bot_token: "your-bot-token"')
+        print('    chat_id: "your-chat-id"')
+        return
+    success = send_telegram(
+        "🧪 <b>HALCYON LAB — TEST</b>\n"
+        "Telegram notifications are working!\n"
+        "You'll receive alerts for:\n"
+        "  • Trade opens/closes\n"
+        "  • Earnings warnings\n"
+        "  • Overnight data collection\n"
+        "  • System events"
+    )
+    print("Telegram test sent successfully! ✓" if success else "Failed to send Telegram message.")
+
+
 def cmd_ingest(args):
     from src.data_ingestion.market_data import fetch_ohlcv, fetch_spy_benchmark
     from src.universe.sp100 import get_sp100_universe
@@ -593,6 +614,7 @@ def build_parser() -> argparse.ArgumentParser:
     _p = sp.add_parser("init-db"); _p.add_argument("--db-path", default="ai_research_desk.sqlite3"); _p.set_defaults(func=cmd_init_db)
     sp.add_parser("demo-packet").set_defaults(func=cmd_demo_packet)
     sp.add_parser("send-test-email").set_defaults(func=cmd_send_test_email)
+    sp.add_parser("send-test-telegram", help="Test Telegram notification delivery").set_defaults(func=cmd_send_test_telegram)
     sp.add_parser("ingest").set_defaults(func=cmd_ingest)
 
     _p = sp.add_parser("scan"); _p.add_argument("--verbose", action="store_true"); _p.add_argument("--email", action="store_true"); _p.add_argument("--dry-run", action="store_true"); _p.add_argument("--no-shadow", action="store_true"); _p.set_defaults(func=cmd_scan)

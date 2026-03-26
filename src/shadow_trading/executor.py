@@ -384,6 +384,14 @@ def check_and_manage_open_trades(
                 ticker, exit_reason, pnl_dollars, pnl_pct, days_open,
             )
 
+            # Telegram notification
+            try:
+                from src.notifications.telegram import notify_trade_closed, is_telegram_enabled
+                if is_telegram_enabled():
+                    notify_trade_closed(ticker, pnl_dollars, pnl_pct, exit_reason, days_open)
+            except Exception:
+                pass
+
     return actions
 
 

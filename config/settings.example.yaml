@@ -90,3 +90,15 @@ bootcamp:
   # Email preferences
   email_mode: full_stream           # full_stream / daily_summary / silent
   scan_interval_minutes: 30         # How often to re-scan during market hours
+
+# ── Telegram Notifications ───────────────────────────────────────
+# Real-time push alerts for trade opens/closes, earnings warnings,
+# overnight collection results, and system events.
+# Setup: message @BotFather on Telegram → /newbot → copy token
+#        message your bot → /start → get chat_id from
+#        https://api.telegram.org/bot<TOKEN>/getUpdates
+# ─────────────────────────────────────────────────────────────────
+telegram:
+  enabled: false
+  bot_token: "your-bot-token-from-botfather"
+  chat_id: "your-chat-id"

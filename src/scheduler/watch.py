@@ -190,6 +190,20 @@ class WatchLoop:
 {'='*45}
 """)
 
+        # Send Telegram startup notification
+        try:
+            from src.notifications.telegram import notify_system_event, is_telegram_enabled
+            if is_telegram_enabled():
+                notify_system_event(
+                    "HALCYON LAB STARTED",
+                    f"Model: {model_name}\nMode: {'Overnight' if self.overnight else 'Standard'}\nTraining: {training_str}"
+                )
+                print(" Telegram: connected ✓")
+            else:
+                print(" Telegram: not configured")
+        except Exception:
+            print(" Telegram: not configured")
+
     def _run_morning_watchlist(self):
         """Execute the morning watchlist pipeline."""
         from src.data_ingestion.market_data import fetch_ohlcv, fetch_spy_benchmark
@@ -311,6 +325,17 @@ class WatchLoop:
             try:
                 broadcast_sync("trade_opened", {"ticker": ticker, "side": "BUY",
                                                 "score": candidate["score"]})
+            except Exception:
+                pass
+
+            # Telegram notification
+            try:
+                from src.notifications.telegram import notify_trade_opened, is_telegram_enabled
+                if is_telegram_enabled():
+                    ps = packet.position_sizing
+                    notify_trade_opened(
+                        ticker, ps.entry_price, ps.stop_level, ps.target_1,
+                        candidate["score"], ps.shares)
             except Exception:
                 pass
 
@@ -863,12 +888,27 @@ class WatchLoop:
             if upcoming:
                 logger.warning("[EARNINGS] %d stocks report this week: %s",
                                len(upcoming), ", ".join(upcoming))
+                # Telegram earnings warning
+                try:
+                    from src.notifications.telegram import notify_earnings_warning, is_telegram_enabled
+                    if is_telegram_enabled():
+                        notify_earnings_warning(upcoming)
+                except Exception:
+                    pass
         except Exception as e:
             logger.debug("[WATCH] Earnings fetch failed: %s", e)
             results["earnings"] = {"error": str(e)}
 
         summary = {k: str(v) for k, v in results.items()}
         print(f"[WATCH] Data collection complete: {summary}")
+
+        # Telegram overnight summary
+        try:
+            from src.notifications.telegram import notify_overnight_complete, is_telegram_enabled
+            if is_telegram_enabled():
+                notify_overnight_complete(results)
+        except Exception:
+            pass
 
         try:
             broadcast_sync("overnight_task", {"task": "data_collection", "status": "complete",
