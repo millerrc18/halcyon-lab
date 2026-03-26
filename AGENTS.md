@@ -12,7 +12,7 @@ Halcyon Lab is an autonomous AI trading system that scans, analyzes, and execute
 
 ## Current System State
 
-The system is live in **bootcamp mode** — shadow paper trading on Alpaca with halcyon-v1 (fine-tuned Qwen3 8B). Full data enrichment, bracket orders, risk governor, daily/weekly auditor, validation holdout, A/B model evaluation, learned confidence, walk-forward backtesting, 24/7 overnight schedule, comprehensive data collection pipeline, and a 9-page web dashboard.
+The system is live in **bootcamp mode** — shadow paper trading on Alpaca with halcyon-v1 (fine-tuned Qwen3 8B). Full data enrichment, bracket orders, risk governor, daily/weekly auditor, validation holdout, A/B model evaluation, learned confidence, walk-forward backtesting, 24/7 compute scheduler (73% GPU target), comprehensive data collection pipeline, Telegram push notifications, and a 9-page web dashboard.
 
 **Active Model:** halcyon-v1 (Qwen3 8B fine-tuned on 790 examples via QLoRA)
 **Training Data:** 976 self-blinded examples, scored with process-first rubric
@@ -71,16 +71,35 @@ Universe (S&P 100 → expanding to ~325 stocks)
 8. **A/B Shadow Evaluation**: New model runs alongside current model
 9. **Auto-Rollback**: Performance regression triggers automatic rollback
 
-## 24/7 Overnight Schedule
+## 24/7 Compute Schedule
 
-| Time (ET) | Task |
-|-----------|------|
-| 5:30 PM | Post-close capture (MFE/MAE update, regime logging) |
-| 6:00 PM | Training data collection from closed trades |
-| 9:30 PM | Comprehensive data collection (options, VIX, macro, trends) |
-| 10:00 PM | Full universe news ingestion |
-| 11:00 PM | Enrichment pre-caching for morning |
-| 6:00 AM | Pre-market refresh |
+**Target: 73% GPU utilization** (inference ≤30%, training ≤45%, slack ≥25%)
+
+| Time (ET) | Task | GPU Mode |
+|-----------|------|----------|
+| 5:15 AM | Morning VRAM handoff (training → Ollama) | Transition |
+| 5:30 AM | Post-close capture (MFE/MAE update, regime logging) | Inference |
+| 6:00 AM | Pre-market refresh + rolling feature computation | CPU + Inference |
+| 7:00 AM | Self-blinded training data generation (historical) | Inference |
+| 8:00 AM | Morning watchlist | Inference |
+| 8:02 AM | Overnight news scoring + sentiment analysis | Inference |
+| 9:00 AM | Pre-market candidate analysis | Inference |
+| 9:25 AM | Guard band — verify model warm | Idle |
+| 9:30 AM–4:00 PM | Market scans (every 30 min) + between-scan scoring | Inference |
+| 4:00 PM | EOD recap + daily P&L | CPU + Inference |
+| 4:15 PM | Training data scoring (LLM-as-judge, ~50 examples) | Inference |
+| 5:30 PM | Post-close capture | CPU |
+| 6:00 PM | Training data collection from closed trades | CPU |
+| 6:45 PM | DPO preference pair generation | Inference |
+| 6:50 PM | Evening VRAM handoff (Ollama → training subprocess) | Transition |
+| 7:00 PM | Walk-forward backtesting | Training |
+| 9:30 PM | Data collection (options, VIX, FRED, trends, CBOE, earnings) | CPU (concurrent) |
+| 10:00 PM | News ingestion (full universe) | CPU (concurrent) |
+| 11:00 PM | Enrichment pre-cache | CPU (concurrent) |
+| 11:05 PM | Auxiliary model training (regime classifier) | Training |
+| 1:00 AM | Feature importance computation | Training |
+| 2:30 AM | Leakage detector with model probing | Training |
+| 4:30 AM | DB maintenance, health checks, backups | CPU |
 
 ## Dashboard Pages (9)
 
@@ -118,7 +137,7 @@ Universe (S&P 100 → expanding to ~325 stocks)
 `cto-report`, `feature-importance`, `backtest`, `compare-models`, `model-evaluation-status`, `promote-model`
 
 ### Operations
-`watch [--overnight]`, `dashboard`, `halt-trading`, `resume-trading`, `collect-data`
+`watch [--overnight]`, `dashboard`, `halt-trading`, `resume-trading`, `collect-data`, `fetch-earnings`, `send-test-telegram`
 
 ## Scope
 
@@ -165,6 +184,7 @@ Universe (S&P 100 → expanding to ~325 stocks)
 - **Finnhub API** — Insider activity, company news
 - **FRED API** — Macroeconomic indicators (19 series)
 - **SEC EDGAR** — Fundamental data
+- **Telegram Bot API** — Real-time push notifications
 
 ## Research Library (19 documents)
 

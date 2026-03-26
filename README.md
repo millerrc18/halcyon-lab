@@ -17,6 +17,8 @@ An autonomous AI trading system that scans equities, generates institutional-qua
 - **24/7 Operations**: Overnight schedule for data collection, training, and enrichment
 - **Data Collection**: Options chains, VIX term structure, macro indicators, Google Trends
 - **13 Research Documents**: Training methodology, strategy, business/fund path, options
+- **24/7 Compute Scheduler**: Between-scan scoring, VRAM handoffs, overnight training (2%→73% GPU)
+- **Telegram Notifications**: Real-time push alerts for trades, earnings, system events
 
 ## Prerequisites
 

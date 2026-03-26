@@ -84,16 +84,35 @@
 - 5-phase roadmap with fund-grade gate metrics
 - Comprehensive codebase audit (100 files, 15,556 lines)
 
+### M19 — Tech Debt Cleanup (CC Sprint)
+- Fixed default equity fallback in risk governor ($5K → config)
+- Auto-switch to active model version in LLM client
+- Consolidated dual WebSocket connections into shared context
+- Silent except-pass → logger.debug across 9 locations
+- Unused imports removed, print → logger across 13 modules
+- Fixed metric_history days filter bug, resource leak, margin label
+- 16 issues fixed (11 known + 5 new), 257 tests passing
+
+### M20 — 24/7 Compute Scheduler
+- GuardedScorer: between-scan inference scoring (~420 examples/day, 3-min guard band)
+- VRAMManager: evening/morning VRAM handoffs with nvidia-smi monitoring, subprocess isolation
+- OvernightPipeline: 7-task pipeline (holdout, DPO, feature importance, leakage, rolling stats, DB maintenance, health)
+- PreMarketPipeline: rolling features, training gen, news scoring, candidate pre-analysis
+- Schedule metrics table with API endpoint
+- 86 new tests (363 total passing)
+- GPU utilization target: 2-3% → 73%
+
+### M21 — Telegram Notifications + Earnings Calendar
+- Telegram Bot API integration: trade opens/closes, earnings warnings, overnight summary, system events
+- Earnings calendar scraper with overnight integration (step 7/7)
+- Cached earnings lookup for fast scan-time access
+- 5 new FRED credit/financial conditions series (BBB spread, NFCI, stress index, claims, breakeven)
+- Market event calendar CSV (422 events, 2020-2027)
+- 19 research documents on dashboard (regime timeline, company profiles, compute schedule, API comparison)
+
 ## Upcoming
 
-### M19 — Tech Debt Cleanup
-- Fix default equity fallback in risk governor
-- Auto-switch to active model version in LLM client
-- Consolidate dual WebSocket connections
-- Silent except-pass → logger.debug
-- Test coverage improvement
-
-### M20 — Phase 2 Preparation
+### M22 — Phase 2 Preparation
 - Universe expansion to ~325 stocks
 - GICS sector conditioning feature
 - Polygon.io integration

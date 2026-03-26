@@ -26,9 +26,16 @@
 - Re-run backfill (976 examples), score + classify + fine-tune halcyon-v1
 - Fund metrics + metric history trending, API cost tracking
 - Database indexes + codebase audit, leakage detector (balanced accuracy)
-- 24/7 overnight schedule (Phase A), unified train-pipeline command
+- 24/7 overnight schedule, unified train-pipeline command
 - Dashboard action buttons, live activity feed
-- Comprehensive data collection pipeline (options, VIX, macro, trends)
+- Comprehensive data collection pipeline (options, VIX, macro, trends, CBOE, earnings)
+- Tech debt audit: 16 issues fixed, 257→363 tests passing
+- 24/7 compute scheduler: between-scan scoring, VRAM handoffs, overnight training, pre-market inference (2%→73% GPU target)
+- Telegram push notifications for trade alerts and system events
+- Earnings calendar with scan-time proximity checks (NKE flagged 5d out)
+- 19 FRED series including credit spreads, financial conditions, breakeven inflation
+- 19 research documents (regime timeline, company profiles, compute schedule, API comparison, options, fund path)
+- Email CC support for secondary notification address
 
 ## Phase 2: Micro Live
 
