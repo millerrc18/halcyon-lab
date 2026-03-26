@@ -114,6 +114,10 @@ def _parse_json_fields(row: dict, fields: list[str]) -> dict:
 
 # ── Endpoints ────────────────────────────────────────────────────────
 
+@app.get("/healthz")
+def healthz():
+    """Unauthenticated health check for Render."""
+    return {"status": "ok"}
 
 @app.get("/api/status", dependencies=[Depends(verify_auth)])
 def status():
