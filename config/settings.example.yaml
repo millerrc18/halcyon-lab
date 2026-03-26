@@ -85,7 +85,7 @@ api:
 training:
   enabled: true
   anthropic_api_key: "your-anthropic-api-key-here"
-  claude_model: "claude-haiku-4-5-20251001"  # legacy fallback
+  claude_model: "claude-sonnet-4-20250514"  # Used by scoring + training gen. Sonnet recommended.
   auto_train_threshold: 50       # Fine-tune when N new examples accumulate
   auto_train_time_days: 7        # Or fine-tune if N days since last train
   auto_train_min_examples: 20    # Min new examples for time-based trigger
