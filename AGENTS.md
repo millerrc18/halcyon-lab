@@ -111,7 +111,7 @@ Universe (S&P 100 → expanding to ~325 stocks)
 - **CTO Report** — Performance analytics, fund metrics, metric trends
 - **Settings** — Configuration, API costs, data collection stats, system health
 - **Roadmap** — 5-phase plan with live gate metrics
-- **Docs** — 24 research documents + core documentation
+- **Docs** — 25 research documents + core documentation
 
 ## CLI Commands (44)
 
@@ -186,7 +186,7 @@ Each desk launches only after the previous desk is profitable. See docs/roadmap.
 - **SEC EDGAR** — Fundamental data
 - **Telegram Bot API** — Real-time push notifications
 
-## Research Library (24 documents)
+## Research Library (25 documents)
 
 See the dashboard Docs page for the complete research library covering:
 - Training methodology (formats, rubric, self-blinding, degradation prevention, gaps/innovation, GRPO)

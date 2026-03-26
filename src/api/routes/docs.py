@@ -46,6 +46,7 @@ DOCS = [
     {"id": "research-master-plan", "path": "docs/research/Halcyon_Lab_Business_Plan_Operating_Manual.docx", "title": "Research: Master Business Plan & Operating Manual"},
     {"id": "research-multi-strategy", "path": "docs/research/Multi-Strategy_Pattern_Classification_for_Equity_Trading.md", "title": "Research: Multi-Strategy Pattern Classification"},
     {"id": "research-options-education", "path": "docs/research/Options_Trading_Education_Plan_for_System_Builders.md", "title": "Research: Options Trading Education Plan"},
+    {"id": "research-ai-council", "path": "docs/research/AI_Council_Multi-Agent_Deliberation_Architecture.md", "title": "Research: AI Council Deliberation Architecture"},
 ]
 
 
