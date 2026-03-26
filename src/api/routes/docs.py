@@ -42,6 +42,8 @@ DOCS = [
     {"id": "research-sp100-profiles", "path": "docs/research/SP100_Pullback_Trading_Profiles.md", "title": "Research: S&P 100 Pullback Trading Profiles"},
     {"id": "research-compute-schedule", "path": "docs/research/Optimal_24x7_GPU_Schedule_for_Solo_AI_Trading.md", "title": "Research: 24/7 GPU Compute Schedule (2% → 73%)"},
     {"id": "research-market-assessment", "path": "docs/research/SP100_Current_Market_Assessment_2026-03-25.pdf", "title": "Research: S&P 100 Market Assessment (3/25/2026)"},
+    {"id": "research-v2-training-spec", "path": "docs/research/Halcyon_v2_Training_Dataset_Specification.pdf", "title": "Research: v2 Training Dataset Specification (790 → 2,800)"},
+    {"id": "research-master-plan", "path": "docs/research/Halcyon_Lab_Business_Plan_Operating_Manual.docx", "title": "Research: Master Business Plan & Operating Manual"},
 ]
 
 
