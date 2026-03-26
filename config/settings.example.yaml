@@ -36,6 +36,27 @@ shadow_trading:
   default_order_type: market
   timeout_days: 15  # Auto-close after this many days
 
+# ── Live Trading (Dual Execution) ────────────────────────────────
+# When enabled, qualifying setups execute on BOTH paper and live
+# accounts simultaneously. Paper trades continue as before for the
+# training flywheel; live trades use real capital with tighter risk.
+# SAFETY: Requires LLM commentary (no template fallback), skips
+# first scan of day, halts if equity drops below 50% of starting.
+# ─────────────────────────────────────────────────────────────────
+live_trading:
+  enabled: false
+  api_key: "your-live-alpaca-api-key"
+  secret_key: "your-live-alpaca-secret-key"
+  starting_capital: 100       # USD starting capital for live account
+  max_open_positions: 2       # Conservative limit for live trading
+  risk:
+    planned_risk_pct_max: 0.02    # 2% max risk per trade
+    stop_atr_multiplier: 1.0      # ATR multiplier for stop placement
+    target_atr_multiplier: 2.0    # ATR multiplier for target placement
+    timeout_days: 7               # Auto-close live trades after N days
+  min_score: null             # Optional: minimum priority score for live trades
+  max_price: null             # Optional: maximum stock price for live trades
+
 automation:
   morning_watchlist_hour_et: 8
   eod_recap_hour_et: 16
@@ -111,6 +132,10 @@ bootcamp:
 #        message your bot → /start → get chat_id from
 #        https://api.telegram.org/bot<TOKEN>/getUpdates
 # ─────────────────────────────────────────────────────────────────
+logging:
+  level: INFO
+  file: logs/halcyon.log
+
 telegram:
   enabled: false
   bot_token: "your-bot-token-from-botfather"

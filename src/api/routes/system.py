@@ -1,5 +1,5 @@
 """System API routes."""
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 from src.config import load_config
 from src.services.system_service import get_system_status
 
@@ -313,6 +313,17 @@ def upcoming_earnings(days: int = 14):
             "earnings": [],
             "error": str(e),
         }
+
+
+@router.get("/activity-log")
+def activity_log(
+    limit: int = Query(default=20, ge=1, le=200),
+    category: str | None = Query(default=None),
+):
+    """Return recent activity log entries."""
+    from src.logging.activity import get_recent_activity
+    entries = get_recent_activity(limit=limit, category=category)
+    return {"count": len(entries), "entries": entries}
 
 
 @router.get("/schedule-metrics")

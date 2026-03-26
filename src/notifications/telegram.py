@@ -87,12 +87,21 @@ def send_telegram(message: str, parse_mode: str = "HTML") -> bool:
 def notify_trade_opened(ticker: str, entry_price: float, stop: float,
                         target: float, score: int, shares: int,
                         setup_type: str | None = None,
-                        setup_confidence: float | None = None) -> bool:
-    """Alert: new trade opened."""
+                        setup_confidence: float | None = None,
+                        source: str = "paper") -> bool:
+    """Alert: new trade opened.
+
+    Args:
+        source: "paper" or "live" — controls header emoji and label.
+    """
     pnl_risk = (entry_price - stop) * shares
 
-    # Build header with setup info if available
-    header = f"🟢 <b>TRADE OPENED: {ticker}"
+    # Build header with source distinction
+    if source == "live":
+        header = f"🟢💰 <b>LIVE TRADE OPENED: {ticker}"
+    else:
+        header = f"🟢 <b>TRADE OPENED: {ticker}"
+
     if setup_type and setup_confidence is not None:
         header += f" ({setup_type} ↑{setup_confidence:.2f})"
     elif setup_type:
@@ -364,6 +373,7 @@ def handle_command(command: str, args: str) -> str:
                 "/scoring — Scoring backlog\n"
                 "/council — Run AI council session\n"
                 "/health — GPU & system health\n"
+                "/log — Recent activity log\n"
                 "/help — This message"
             )
 
@@ -385,6 +395,8 @@ def handle_command(command: str, args: str) -> str:
             return _cmd_council()
         elif command == "/health":
             return _cmd_health()
+        elif command == "/log":
+            return _cmd_log()
         else:
             return f"Unknown command: {command}\nSend /help for available commands."
 
@@ -423,47 +435,71 @@ def _cmd_status() -> str:
 
 
 def _cmd_trades() -> str:
-    """List open trades."""
+    """List open trades with paper/live split."""
     import sqlite3
     try:
         with sqlite3.connect("ai_research_desk.sqlite3") as conn:
             conn.row_factory = sqlite3.Row
             rows = conn.execute(
-                """SELECT ticker, entry_price, pnl_pct, pnl_dollars, created_at
+                """SELECT ticker, entry_price, pnl_pct, pnl_dollars, created_at,
+                       COALESCE(source, 'paper') as source
                 FROM shadow_trades WHERE status = 'open'
-                ORDER BY created_at DESC"""
+                ORDER BY source DESC, created_at DESC"""
             ).fetchall()
 
         if not rows:
             return "📭 No open trades."
 
+        paper_trades = [r for r in rows if r["source"] == "paper"]
+        live_trades = [r for r in rows if r["source"] == "live"]
+
         lines = [f"📊 <b>OPEN TRADES</b> ({len(rows)})"]
-        for r in rows:
-            emoji = "🟢" if (r["pnl_pct"] or 0) >= 0 else "🔴"
-            pnl = r["pnl_pct"] or 0
-            # Compute days held
-            try:
-                from datetime import datetime
-                opened = datetime.fromisoformat(r["created_at"][:19])
-                days = (datetime.now() - opened).days
-            except Exception:
-                days = "?"
-            lines.append(
-                f"  {emoji} {r['ticker']}: ${r['entry_price']:.2f} "
-                f"({pnl:+.1f}%) Day {days}"
-            )
+
+        if live_trades:
+            lines.append(f"\n💰 <b>LIVE</b> ({len(live_trades)}):")
+            for r in live_trades:
+                emoji = "🟢" if (r["pnl_pct"] or 0) >= 0 else "🔴"
+                pnl = r["pnl_pct"] or 0
+                try:
+                    from datetime import datetime
+                    opened = datetime.fromisoformat(r["created_at"][:19])
+                    days = (datetime.now() - opened).days
+                except Exception:
+                    days = "?"
+                lines.append(
+                    f"  {emoji} {r['ticker']}: ${r['entry_price']:.2f} "
+                    f"({pnl:+.1f}%) Day {days}"
+                )
+
+        if paper_trades:
+            lines.append(f"\n📝 <b>PAPER</b> ({len(paper_trades)}):")
+            for r in paper_trades:
+                emoji = "🟢" if (r["pnl_pct"] or 0) >= 0 else "🔴"
+                pnl = r["pnl_pct"] or 0
+                try:
+                    from datetime import datetime
+                    opened = datetime.fromisoformat(r["created_at"][:19])
+                    days = (datetime.now() - opened).days
+                except Exception:
+                    days = "?"
+                lines.append(
+                    f"  {emoji} {r['ticker']}: ${r['entry_price']:.2f} "
+                    f"({pnl:+.1f}%) Day {days}"
+                )
+
         return "\n".join(lines)
     except Exception as e:
         return f"📭 No open trades or error: {e}"
 
 
 def _cmd_pnl() -> str:
-    """Current P&L summary."""
+    """Current P&L summary with paper/live split."""
     import sqlite3
     try:
         with sqlite3.connect("ai_research_desk.sqlite3") as conn:
             conn.row_factory = sqlite3.Row
 
+            # Overall stats
             open_row = conn.execute(
                 """SELECT COUNT(*) as cnt, COALESCE(SUM(pnl_dollars), 0) as total_pnl
                 FROM shadow_trades WHERE status = 'open'"""
@@ -475,18 +511,50 @@ def _cmd_pnl() -> str:
                 FROM shadow_trades WHERE status = 'closed'"""
             ).fetchone()
 
+            # Live-specific stats
+            live_open = conn.execute(
+                """SELECT COUNT(*) as cnt, COALESCE(SUM(pnl_dollars), 0) as total_pnl
+                FROM shadow_trades WHERE status = 'open' AND source = 'live'"""
+            ).fetchone()
+
+            live_closed = conn.execute(
+                """SELECT COUNT(*) as cnt, COALESCE(SUM(pnl_dollars), 0) as total_pnl,
+                   COALESCE(AVG(CASE WHEN pnl_dollars > 0 THEN 1.0 ELSE 0.0 END), 0) as win_rate
+                FROM shadow_trades WHERE status = 'closed' AND source = 'live'"""
+            ).fetchone()
+
         open_pnl = open_row["total_pnl"]
         closed_pnl = closed_row["total_pnl"]
         total = open_pnl + closed_pnl
         emoji = "🟢" if total >= 0 else "🔴"
 
-        return (
-            f"{emoji} <b>P&L SUMMARY</b>\n"
-            f"Open: {open_row['cnt']} trades, ${open_pnl:+.2f}\n"
-            f"Closed: {closed_row['cnt']} trades, ${closed_pnl:+.2f}\n"
-            f"Win rate: {closed_row['win_rate']:.0%}\n"
-            f"Total: ${total:+.2f}"
-        )
+        lines = [
+            f"{emoji} <b>P&L SUMMARY</b>",
+            f"Open: {open_row['cnt']} trades, ${open_pnl:+.2f}",
+            f"Closed: {closed_row['cnt']} trades, ${closed_pnl:+.2f}",
+            f"Win rate: {closed_row['win_rate']:.0%}",
+            f"Total: ${total:+.2f}",
+        ]
+
+        # Show live breakdown if any live trades exist
+        live_total_cnt = live_open["cnt"] + live_closed["cnt"]
+        if live_total_cnt > 0:
+            live_pnl = live_open["total_pnl"] + live_closed["total_pnl"]
+            live_emoji = "🟢" if live_pnl >= 0 else "🔴"
+            lines.append(f"\n💰 <b>LIVE</b>: {live_emoji} ${live_pnl:+.2f}")
+            lines.append(f"  Open: {live_open['cnt']} | Closed: {live_closed['cnt']}")
+            if live_closed["cnt"] > 0:
+                lines.append(f"  Win rate: {live_closed['win_rate']:.0%}")
+
+            # Paper = total minus live
+            paper_pnl = total - live_pnl
+            paper_emoji = "🟢" if paper_pnl >= 0 else "🔴"
+            paper_open = open_row["cnt"] - live_open["cnt"]
+            paper_closed = closed_row["cnt"] - live_closed["cnt"]
+            lines.append(f"\n📝 <b>PAPER</b>: {paper_emoji} ${paper_pnl:+.2f}")
+            lines.append(f"  Open: {paper_open} | Closed: {paper_closed}")
+
+        return "\n".join(lines)
     except Exception:
         return "No P&L data available yet."
 
@@ -657,3 +725,28 @@ def _cmd_health() -> str:
         )
     except Exception:
         return "🖥️ GPU health data unavailable (nvidia-smi not found)"
+
+
+def _cmd_log() -> str:
+    """Recent activity log entries."""
+    try:
+        from src.logging.activity import get_recent_activity
+
+        entries = get_recent_activity(limit=10)
+        if not entries:
+            return "📋 No activity log entries yet."
+
+        lines = ["📋 <b>RECENT ACTIVITY</b>"]
+        for e in entries:
+            # Extract time from ISO timestamp
+            ts = e.get("timestamp", "")
+            try:
+                time_str = ts[11:16]  # HH:MM from ISO format
+            except Exception:
+                time_str = "??:??"
+            cat = e.get("category", "?")
+            event = e.get("event", "")
+            lines.append(f"{time_str} [{cat}] {event}")
+        return "\n".join(lines)
+    except Exception as e:
+        return f"📋 Activity log unavailable: {e}"
