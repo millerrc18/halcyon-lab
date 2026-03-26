@@ -87,6 +87,7 @@ class WatchLoop:
         self._premarket_news_done = False
         self._premarket_candidates_done = False
         self._ollama_warmup_done = False
+        self._council_done = False
 
     def _reset_daily_state(self):
         """Reset daily flags at midnight ET."""
@@ -116,6 +117,7 @@ class WatchLoop:
         self._premarket_news_done = False
         self._premarket_candidates_done = False
         self._ollama_warmup_done = False
+        self._council_done = False
 
     def _is_market_open(self, now: datetime) -> bool:
         """Check if market is currently open (weekday, between open and close)."""
@@ -439,6 +441,11 @@ class WatchLoop:
                         and not self._ollama_warmup_done):
                     self._safe_run("Ollama warm-up", self._run_ollama_warmup)
                     self._ollama_warmup_done = True
+
+                # 0.5. Daily AI Council (8:30 AM — after watchlist, before first scan)
+                if (hour == 8 and now.minute >= 30 and not self._council_done):
+                    self._safe_run("daily council", self._run_daily_council)
+                    self._council_done = True
 
                 # 1. Morning watchlist
                 if hour == self.morning_hour and not self._morning_done:
@@ -1046,6 +1053,40 @@ class WatchLoop:
                 vm._reload_ollama()
             except Exception as e:
                 logger.error("[WATCH] Ollama restart failed: %s", e)
+
+    # ── AI Council ────────────────────────────────────────────────
+
+    def _run_daily_council(self):
+        """8:30 AM ET — Run the daily AI Council session."""
+        print("[WATCH] Running daily AI Council session...")
+        try:
+            from src.council.engine import CouncilEngine
+            engine = CouncilEngine()
+            result = engine.run_session(session_type="daily")
+            consensus = result.get("consensus", "unknown")
+            cost = result.get("total_cost", 0)
+            rounds = result.get("rounds_completed", 0)
+            contested = result.get("is_contested", False)
+            print(f"[WATCH] Council complete: {consensus} "
+                  f"({'CONTESTED' if contested else 'agreed'}) "
+                  f"({rounds} rounds, ${cost:.2f})")
+
+            # Telegram notification
+            try:
+                from src.notifications.telegram import send_telegram, is_telegram_enabled
+                if is_telegram_enabled():
+                    now = datetime.now(ET).strftime("%H:%M ET")
+                    msg = f"🏛️ <b>AI COUNCIL SESSION</b> ({now})\n"
+                    msg += f"Consensus: <b>{consensus.upper()}</b>"
+                    if contested:
+                        msg += " ⚠️ CONTESTED"
+                    msg += f"\nCost: ${cost:.2f} | Rounds: {rounds}"
+                    send_telegram(msg)
+            except Exception:
+                pass
+        except Exception as e:
+            logger.error("[WATCH] Council session failed: %s", e)
+            print(f"[WATCH] Council session failed: {e}")
 
     # ── Ollama Warm-Up ─────────────────────────────────────────────
 

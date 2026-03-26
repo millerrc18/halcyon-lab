@@ -591,6 +591,19 @@ def cmd_fetch_earnings(args):
             print(f"  • {item['ticker']:6s} {item['earnings_date']} ({item['days_away']}d) {item.get('earnings_time') or ''}")
 
 
+def cmd_council(args):
+    from src.council.engine import CouncilEngine
+    session_type = getattr(args, "type", "daily")
+    print(f"Running AI Council session (type: {session_type})...")
+    engine = CouncilEngine()
+    result = engine.run_session(session_type=session_type)
+    consensus = result.get("consensus", "unknown")
+    contested = result.get("is_contested", False)
+    print(f"\nConsensus: {consensus.upper()}"
+          f"{' (CONTESTED)' if contested else ''}")
+    print(f"Rounds: {result.get('rounds_completed', 0)} | "
+          f"Cost: ${result.get('total_cost', 0):.2f}")
+
 def cmd_watch(args):
     from src.config import load_config
     from src.scheduler.watch import WatchLoop
@@ -667,6 +680,7 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_parser("halt-trading").set_defaults(func=cmd_halt_trading)
     sp.add_parser("resume-trading").set_defaults(func=cmd_resume_trading)
     sp.add_parser("preflight").set_defaults(func=cmd_preflight)
+    _p = sp.add_parser("council", help="Run an AI Council session"); _p.add_argument("--type", default="daily", choices=["daily", "strategic", "on_demand"]); _p.set_defaults(func=cmd_council)
     _p = sp.add_parser("watch"); _p.add_argument("--email-mode", choices=["full_stream", "daily_summary", "silent"]); _p.add_argument("--overnight", action="store_true", help="Enable overnight schedule (post-close, news, enrichment, pre-market)"); _p.set_defaults(func=cmd_watch)
     _p = sp.add_parser("dashboard"); _p.add_argument("--port", type=int, default=8000); _p.set_defaults(func=cmd_dashboard)
 
