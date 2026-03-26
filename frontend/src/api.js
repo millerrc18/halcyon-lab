@@ -1,8 +1,16 @@
-const BASE = '/api'
+import { API_BASE, API_SECRET, IS_CLOUD } from './config'
+
+function authHeaders() {
+  const headers = { 'Content-Type': 'application/json' }
+  if (API_SECRET) {
+    headers['Authorization'] = `Bearer ${API_SECRET}`
+  }
+  return headers
+}
 
 export async function fetchApi(path, options = {}) {
-  const res = await fetch(`${BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json', ...options.headers },
+  const res = await fetch(`${API_BASE}${path}`, {
+    headers: { ...authHeaders(), ...options.headers },
     ...options,
   })
   if (!res.ok) throw new Error(`API error: ${res.status}`)
@@ -44,10 +52,16 @@ export const api = {
   getDoc: (docId) => fetchApi(`/docs/${docId}`),
   getMetricHistory: (days = 90) => fetchApi(`/metric-history?days=${days}`),
   getCosts: (days = 30) => fetchApi(`/costs?days=${days}`),
+  // Council
+  getCouncilLatest: () => fetchApi('/council/latest'),
+  getCouncilHistory: (days = 30) => fetchApi(`/council/history?days=${days}`),
+  // Health Score
+  getHealthScore: () => fetchApi('/health/score'),
   // Actions
   triggerActionScan: () => fetchApi('/actions/scan', { method: 'POST' }),
   triggerCtoReport: () => fetchApi('/actions/cto-report', { method: 'POST' }),
   triggerCollectTraining: () => fetchApi('/actions/collect-training', { method: 'POST' }),
   triggerTrainPipeline: () => fetchApi('/actions/train-pipeline', { method: 'POST' }),
   triggerScore: () => fetchApi('/actions/score', { method: 'POST' }),
+  triggerCouncil: () => fetchApi('/actions/council', { method: 'POST' }),
 }

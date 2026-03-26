@@ -14,6 +14,8 @@ import CTOReport from './pages/CTOReport'
 import Settings from './pages/Settings'
 import Roadmap from './pages/Roadmap'
 import Docs from './pages/Docs'
+import Council from './pages/Council'
+import Health from './pages/Health'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -72,6 +74,8 @@ export default function App() {
                 <Route path="/settings" element={<Settings />} />
                 <Route path="/roadmap" element={<Roadmap />} />
                 <Route path="/docs" element={<Docs />} />
+                <Route path="/council" element={<Council />} />
+                <Route path="/health" element={<Health />} />
               </Route>
             </Routes>
           </BrowserRouter>
