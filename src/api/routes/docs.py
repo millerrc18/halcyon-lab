@@ -44,6 +44,8 @@ DOCS = [
     {"id": "research-market-assessment", "path": "docs/research/SP100_Current_Market_Assessment_2026-03-25.pdf", "title": "Research: S&P 100 Market Assessment (3/25/2026)"},
     {"id": "research-v2-training-spec", "path": "docs/research/Halcyon_v2_Training_Dataset_Specification.pdf", "title": "Research: v2 Training Dataset Specification (790 → 2,800)"},
     {"id": "research-master-plan", "path": "docs/research/Halcyon_Lab_Business_Plan_Operating_Manual.docx", "title": "Research: Master Business Plan & Operating Manual"},
+    {"id": "research-multi-strategy", "path": "docs/research/Multi-Strategy_Pattern_Classification_for_Equity_Trading.md", "title": "Research: Multi-Strategy Pattern Classification"},
+    {"id": "research-options-education", "path": "docs/research/Options_Trading_Education_Plan_for_System_Builders.md", "title": "Research: Options Trading Education Plan"},
 ]
 
 
