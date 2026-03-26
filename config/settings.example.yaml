@@ -140,3 +140,8 @@ telegram:
   enabled: false
   bot_token: "your-bot-token-from-botfather"
   chat_id: "your-chat-id"
+
+render:
+  enabled: false
+  database_url: "postgresql://user:pass@host:5432/halcyon"
+  sync_interval_seconds: 120
