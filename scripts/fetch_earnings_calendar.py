@@ -259,6 +259,11 @@ def main():
 
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
+    # Handle both standalone and module execution
+    import sys
+    import os
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
     from src.universe.sp100 import get_sp100_universe
     universe = get_sp100_universe()
 

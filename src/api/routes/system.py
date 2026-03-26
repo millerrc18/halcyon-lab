@@ -295,6 +295,26 @@ def data_collection_stats():
     return stats
 
 
+@router.get("/earnings")
+def upcoming_earnings(days: int = 14):
+    """Return upcoming earnings dates for the S&P 100 universe."""
+    try:
+        from scripts.fetch_earnings_calendar import get_all_upcoming_earnings
+        earnings = get_all_upcoming_earnings(days=days)
+        return {
+            "days_ahead": days,
+            "count": len(earnings),
+            "earnings": earnings,
+        }
+    except Exception as e:
+        return {
+            "days_ahead": days,
+            "count": 0,
+            "earnings": [],
+            "error": str(e),
+        }
+
+
 @router.put("/config")
 def update_config(updates: dict):
     import yaml

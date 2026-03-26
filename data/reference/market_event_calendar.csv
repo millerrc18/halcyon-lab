@@ -1,0 +1,423 @@
+date,event_type,event_subtype,description,historical_value,surprise_direction,market_impact_notes
+2020-01-03,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2020-01),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2020-01-13,CPI,cpi_monthly,Consumer Price Index (2020-01),,,Key inflation indicator — high impact on rate expectations
+2020-01-17,OPTIONS_EXPIRATION,monthly,Monthly options expiration,,,
+2020-01-28,GDP,gdp_advance,GDP Advance Estimate — Q4 2019,,,
+2020-01-29,FOMC,hold,FOMC Meeting — hold to 1.50-1.75%,1.50-1.75%,,
+2020-02-07,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2020-02),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2020-02-13,CPI,cpi_monthly,Consumer Price Index (2020-02),,,Key inflation indicator — high impact on rate expectations
+2020-02-19,MARKET_EVENT,correction_start,COVID-19 selloff begins — S&P 500 peaks at 3386,,,S&P dropped 34% in 23 trading days
+2020-02-21,OPTIONS_EXPIRATION,monthly,Monthly options expiration,,,
+2020-03-03,FOMC,cut,FOMC Meeting — cut to 1.00-1.25% (Emergency cut — COVID-19),1.00-1.25%,,Emergency cut — COVID-19
+2020-03-06,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2020-03),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2020-03-09,MARKET_EVENT,circuit_breaker,Circuit breaker triggered — S&P 500 -7% at open,,,First circuit breaker since 1997
+2020-03-12,MARKET_EVENT,circuit_breaker,Circuit breaker triggered again — S&P 500 -9.5%,,,Largest single-day drop since 1987
+2020-03-13,CPI,cpi_monthly,Consumer Price Index (2020-03),,,Key inflation indicator — high impact on rate expectations
+2020-03-15,FOMC,cut,FOMC Meeting — cut to 0.00-0.25% (Emergency cut to zero — COVID-19 pandemic),0.00-0.25%,,Emergency cut to zero — COVID-19 pandemic
+2020-03-16,MARKET_EVENT,circuit_breaker,Circuit breaker triggered — S&P 500 -12%,,,Third circuit breaker in one week
+2020-03-20,OPTIONS_EXPIRATION,triple_witching,Quadruple witching,,,Higher volume and volatility typical
+2020-03-20,INDEX_REBALANCE,sp500_quarterly,S&P 500 quarterly rebalancing effective,,,Rebalancing flows affect added/removed stocks
+2020-03-23,MARKET_EVENT,bear_market_bottom,COVID bear market bottom — S&P 500 at 2237,,,34% drawdown from peak
+2020-04-03,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2020-04),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2020-04-13,CPI,cpi_monthly,Consumer Price Index (2020-04),,,Key inflation indicator — high impact on rate expectations
+2020-04-17,OPTIONS_EXPIRATION,monthly,Monthly options expiration,,,
+2020-04-28,GDP,gdp_advance,GDP Advance Estimate — Q1 2020,,,
+2020-04-29,FOMC,hold,FOMC Meeting — hold to 0.00-0.25%,0.00-0.25%,,
+2020-05-01,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2020-05),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2020-05-13,CPI,cpi_monthly,Consumer Price Index (2020-05),,,Key inflation indicator — high impact on rate expectations
+2020-05-15,OPTIONS_EXPIRATION,monthly,Monthly options expiration,,,
+2020-06-05,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2020-06),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2020-06-10,FOMC,hold,FOMC Meeting — hold to 0.00-0.25%,0.00-0.25%,,
+2020-06-12,CPI,cpi_monthly,Consumer Price Index (2020-06),,,Key inflation indicator — high impact on rate expectations
+2020-06-19,OPTIONS_EXPIRATION,triple_witching,Quadruple witching,,,Higher volume and volatility typical
+2020-06-19,INDEX_REBALANCE,sp500_quarterly,S&P 500 quarterly rebalancing effective,,,Rebalancing flows affect added/removed stocks
+2020-07-03,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2020-07),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2020-07-13,CPI,cpi_monthly,Consumer Price Index (2020-07),,,Key inflation indicator — high impact on rate expectations
+2020-07-17,OPTIONS_EXPIRATION,monthly,Monthly options expiration,,,
+2020-07-28,GDP,gdp_advance,GDP Advance Estimate — Q2 2020,,,
+2020-07-29,FOMC,hold,FOMC Meeting — hold to 0.00-0.25%,0.00-0.25%,,
+2020-08-07,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2020-08),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2020-08-13,CPI,cpi_monthly,Consumer Price Index (2020-08),,,Key inflation indicator — high impact on rate expectations
+2020-08-21,OPTIONS_EXPIRATION,monthly,Monthly options expiration,,,
+2020-09-04,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2020-09),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2020-09-11,CPI,cpi_monthly,Consumer Price Index (2020-09),,,Key inflation indicator — high impact on rate expectations
+2020-09-16,FOMC,hold,FOMC Meeting — hold to 0.00-0.25% (Forward guidance updated),0.00-0.25%,,Forward guidance updated
+2020-09-18,OPTIONS_EXPIRATION,triple_witching,Quadruple witching,,,Higher volume and volatility typical
+2020-09-18,INDEX_REBALANCE,sp500_quarterly,S&P 500 quarterly rebalancing effective,,,Rebalancing flows affect added/removed stocks
+2020-10-02,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2020-10),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2020-10-13,CPI,cpi_monthly,Consumer Price Index (2020-10),,,Key inflation indicator — high impact on rate expectations
+2020-10-16,OPTIONS_EXPIRATION,monthly,Monthly options expiration,,,
+2020-10-28,GDP,gdp_advance,GDP Advance Estimate — Q3 2020,,,
+2020-11-05,FOMC,hold,FOMC Meeting — hold to 0.00-0.25%,0.00-0.25%,,
+2020-11-06,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2020-11),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2020-11-13,CPI,cpi_monthly,Consumer Price Index (2020-11),,,Key inflation indicator — high impact on rate expectations
+2020-11-20,OPTIONS_EXPIRATION,monthly,Monthly options expiration,,,
+2020-12-04,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2020-12),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2020-12-11,CPI,cpi_monthly,Consumer Price Index (2020-12),,,Key inflation indicator — high impact on rate expectations
+2020-12-16,FOMC,hold,FOMC Meeting — hold to 0.00-0.25% (Guidance on asset purchases),0.00-0.25%,,Guidance on asset purchases
+2020-12-18,OPTIONS_EXPIRATION,triple_witching,Quadruple witching,,,Higher volume and volatility typical
+2020-12-18,INDEX_REBALANCE,sp500_quarterly,S&P 500 quarterly rebalancing effective,,,Rebalancing flows affect added/removed stocks
+2021-01-01,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2021-01),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2021-01-13,CPI,cpi_monthly,Consumer Price Index (2021-01),,,Key inflation indicator — high impact on rate expectations
+2021-01-15,OPTIONS_EXPIRATION,monthly,Monthly options expiration,,,
+2021-01-27,FOMC,hold,FOMC Meeting — hold to 0.00-0.25%,0.00-0.25%,,
+2021-01-28,GDP,gdp_advance,GDP Advance Estimate — Q4 2020,,,
+2021-02-05,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2021-02),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2021-02-12,CPI,cpi_monthly,Consumer Price Index (2021-02),,,Key inflation indicator — high impact on rate expectations
+2021-02-19,OPTIONS_EXPIRATION,monthly,Monthly options expiration,,,
+2021-03-05,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2021-03),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2021-03-12,CPI,cpi_monthly,Consumer Price Index (2021-03),,,Key inflation indicator — high impact on rate expectations
+2021-03-17,FOMC,hold,FOMC Meeting — hold to 0.00-0.25%,0.00-0.25%,,
+2021-03-19,OPTIONS_EXPIRATION,triple_witching,Quadruple witching,,,Higher volume and volatility typical
+2021-03-19,INDEX_REBALANCE,sp500_quarterly,S&P 500 quarterly rebalancing effective,,,Rebalancing flows affect added/removed stocks
+2021-04-02,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2021-04),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2021-04-13,CPI,cpi_monthly,Consumer Price Index (2021-04),,,Key inflation indicator — high impact on rate expectations
+2021-04-16,OPTIONS_EXPIRATION,monthly,Monthly options expiration,,,
+2021-04-28,FOMC,hold,FOMC Meeting — hold to 0.00-0.25%,0.00-0.25%,,
+2021-04-28,GDP,gdp_advance,GDP Advance Estimate — Q1 2021,,,
+2021-05-07,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2021-05),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2021-05-13,CPI,cpi_monthly,Consumer Price Index (2021-05),,,Key inflation indicator — high impact on rate expectations
+2021-05-21,OPTIONS_EXPIRATION,monthly,Monthly options expiration,,,
+2021-06-04,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2021-06),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2021-06-11,CPI,cpi_monthly,Consumer Price Index (2021-06),,,Key inflation indicator — high impact on rate expectations
+2021-06-16,FOMC,hold,FOMC Meeting — hold to 0.00-0.25% (Dot plot shift hawkish),0.00-0.25%,,Dot plot shift hawkish
+2021-06-18,OPTIONS_EXPIRATION,triple_witching,Quadruple witching,,,Higher volume and volatility typical
+2021-06-18,INDEX_REBALANCE,sp500_quarterly,S&P 500 quarterly rebalancing effective,,,Rebalancing flows affect added/removed stocks
+2021-07-02,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2021-07),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2021-07-13,CPI,cpi_monthly,Consumer Price Index (2021-07),,,Key inflation indicator — high impact on rate expectations
+2021-07-16,OPTIONS_EXPIRATION,monthly,Monthly options expiration,,,
+2021-07-28,FOMC,hold,FOMC Meeting — hold to 0.00-0.25%,0.00-0.25%,,
+2021-07-28,GDP,gdp_advance,GDP Advance Estimate — Q2 2021,,,
+2021-08-06,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2021-08),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2021-08-13,CPI,cpi_monthly,Consumer Price Index (2021-08),,,Key inflation indicator — high impact on rate expectations
+2021-08-20,OPTIONS_EXPIRATION,monthly,Monthly options expiration,,,
+2021-09-03,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2021-09),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2021-09-13,CPI,cpi_monthly,Consumer Price Index (2021-09),,,Key inflation indicator — high impact on rate expectations
+2021-09-17,OPTIONS_EXPIRATION,triple_witching,Quadruple witching,,,Higher volume and volatility typical
+2021-09-17,INDEX_REBALANCE,sp500_quarterly,S&P 500 quarterly rebalancing effective,,,Rebalancing flows affect added/removed stocks
+2021-09-22,FOMC,hold,FOMC Meeting — hold to 0.00-0.25% (Taper signal),0.00-0.25%,,Taper signal
+2021-10-01,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2021-10),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2021-10-13,CPI,cpi_monthly,Consumer Price Index (2021-10),,,Key inflation indicator — high impact on rate expectations
+2021-10-15,OPTIONS_EXPIRATION,monthly,Monthly options expiration,,,
+2021-10-28,GDP,gdp_advance,GDP Advance Estimate — Q3 2021,,,
+2021-11-03,FOMC,hold,FOMC Meeting — hold to 0.00-0.25% (Taper announced),0.00-0.25%,,Taper announced
+2021-11-05,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2021-11),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2021-11-12,CPI,cpi_monthly,Consumer Price Index (2021-11),,,Key inflation indicator — high impact on rate expectations
+2021-11-19,OPTIONS_EXPIRATION,monthly,Monthly options expiration,,,
+2021-12-03,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2021-12),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2021-12-13,CPI,cpi_monthly,Consumer Price Index (2021-12),,,Key inflation indicator — high impact on rate expectations
+2021-12-15,FOMC,hold,FOMC Meeting — hold to 0.00-0.25% (Accelerated taper),0.00-0.25%,,Accelerated taper
+2021-12-17,OPTIONS_EXPIRATION,triple_witching,Quadruple witching,,,Higher volume and volatility typical
+2021-12-17,INDEX_REBALANCE,sp500_quarterly,S&P 500 quarterly rebalancing effective,,,Rebalancing flows affect added/removed stocks
+2022-01-03,MARKET_EVENT,correction_start,2022 bear market begins — S&P 500 peaks at 4797,,,Rate hike cycle selloff
+2022-01-07,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2022-01),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2022-01-13,CPI,cpi_monthly,Consumer Price Index (2022-01),,,Key inflation indicator — high impact on rate expectations
+2022-01-21,OPTIONS_EXPIRATION,monthly,Monthly options expiration,,,
+2022-01-26,FOMC,hold,FOMC Meeting — hold to 0.00-0.25% (Signaled March hike),0.00-0.25%,,Signaled March hike
+2022-01-28,GDP,gdp_advance,GDP Advance Estimate — Q4 2021,,,
+2022-02-04,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2022-02),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2022-02-11,CPI,cpi_monthly,Consumer Price Index (2022-02),,,Key inflation indicator — high impact on rate expectations
+2022-02-18,OPTIONS_EXPIRATION,monthly,Monthly options expiration,,,
+2022-03-04,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2022-03),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2022-03-11,CPI,cpi_monthly,Consumer Price Index (2022-03),,,Key inflation indicator — high impact on rate expectations
+2022-03-16,FOMC,hike,FOMC Meeting — hike to 0.25-0.50% (+25bp — first hike since 2018),0.25-0.50%,,+25bp — first hike since 2018
+2022-03-18,OPTIONS_EXPIRATION,triple_witching,Quadruple witching,,,Higher volume and volatility typical
+2022-03-18,INDEX_REBALANCE,sp500_quarterly,S&P 500 quarterly rebalancing effective,,,Rebalancing flows affect added/removed stocks
+2022-04-01,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2022-04),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2022-04-13,CPI,cpi_monthly,Consumer Price Index (2022-04),,,Key inflation indicator — high impact on rate expectations
+2022-04-15,OPTIONS_EXPIRATION,monthly,Monthly options expiration,,,
+2022-04-28,GDP,gdp_advance,GDP Advance Estimate — Q1 2022,,,
+2022-05-04,FOMC,hike,FOMC Meeting — hike to 0.75-1.00% (+50bp),0.75-1.00%,,+50bp
+2022-05-06,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2022-05),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2022-05-13,CPI,cpi_monthly,Consumer Price Index (2022-05),,,Key inflation indicator — high impact on rate expectations
+2022-05-20,OPTIONS_EXPIRATION,monthly,Monthly options expiration,,,
+2022-06-03,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2022-06),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2022-06-13,CPI,cpi_monthly,Consumer Price Index (2022-06),,,Key inflation indicator — high impact on rate expectations
+2022-06-15,FOMC,hike,FOMC Meeting — hike to 1.50-1.75% (+75bp — largest since 1994),1.50-1.75%,,+75bp — largest since 1994
+2022-06-16,MARKET_EVENT,bear_market,S&P 500 enters bear market — 20% from peak,,,Inflation + aggressive rate hikes
+2022-06-17,OPTIONS_EXPIRATION,triple_witching,Quadruple witching,,,Higher volume and volatility typical
+2022-06-17,INDEX_REBALANCE,sp500_quarterly,S&P 500 quarterly rebalancing effective,,,Rebalancing flows affect added/removed stocks
+2022-07-01,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2022-07),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2022-07-13,CPI,cpi_monthly,Consumer Price Index (2022-07),,,Key inflation indicator — high impact on rate expectations
+2022-07-15,OPTIONS_EXPIRATION,monthly,Monthly options expiration,,,
+2022-07-27,FOMC,hike,FOMC Meeting — hike to 2.25-2.50% (+75bp),2.25-2.50%,,+75bp
+2022-07-28,GDP,gdp_advance,GDP Advance Estimate — Q2 2022,,,
+2022-08-05,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2022-08),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2022-08-12,CPI,cpi_monthly,Consumer Price Index (2022-08),,,Key inflation indicator — high impact on rate expectations
+2022-08-19,OPTIONS_EXPIRATION,monthly,Monthly options expiration,,,
+2022-09-02,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2022-09),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2022-09-13,CPI,cpi_monthly,Consumer Price Index (2022-09),,,Key inflation indicator — high impact on rate expectations
+2022-09-16,OPTIONS_EXPIRATION,triple_witching,Quadruple witching,,,Higher volume and volatility typical
+2022-09-16,INDEX_REBALANCE,sp500_quarterly,S&P 500 quarterly rebalancing effective,,,Rebalancing flows affect added/removed stocks
+2022-09-21,FOMC,hike,FOMC Meeting — hike to 3.00-3.25% (+75bp),3.00-3.25%,,+75bp
+2022-10-07,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2022-10),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2022-10-12,MARKET_EVENT,bear_market_bottom,2022 bear market bottom — S&P 500 at 3577,,,25.4% peak-to-trough drawdown
+2022-10-13,CPI,cpi_monthly,Consumer Price Index (2022-10),,,Key inflation indicator — high impact on rate expectations
+2022-10-21,OPTIONS_EXPIRATION,monthly,Monthly options expiration,,,
+2022-10-28,GDP,gdp_advance,GDP Advance Estimate — Q3 2022,,,
+2022-11-02,FOMC,hike,FOMC Meeting — hike to 3.75-4.00% (+75bp),3.75-4.00%,,+75bp
+2022-11-04,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2022-11),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2022-11-11,CPI,cpi_monthly,Consumer Price Index (2022-11),,,Key inflation indicator — high impact on rate expectations
+2022-11-18,OPTIONS_EXPIRATION,monthly,Monthly options expiration,,,
+2022-12-02,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2022-12),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2022-12-13,CPI,cpi_monthly,Consumer Price Index (2022-12),,,Key inflation indicator — high impact on rate expectations
+2022-12-14,FOMC,hike,FOMC Meeting — hike to 4.25-4.50% (+50bp — pace slowed),4.25-4.50%,,+50bp — pace slowed
+2022-12-16,OPTIONS_EXPIRATION,triple_witching,Quadruple witching,,,Higher volume and volatility typical
+2022-12-16,INDEX_REBALANCE,sp500_quarterly,S&P 500 quarterly rebalancing effective,,,Rebalancing flows affect added/removed stocks
+2023-01-06,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2023-01),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2023-01-13,CPI,cpi_monthly,Consumer Price Index (2023-01),,,Key inflation indicator — high impact on rate expectations
+2023-01-20,OPTIONS_EXPIRATION,monthly,Monthly options expiration,,,
+2023-01-27,GDP,gdp_advance,GDP Advance Estimate — Q4 2022,,,
+2023-02-01,FOMC,hike,FOMC Meeting — hike to 4.50-4.75% (+25bp),4.50-4.75%,,+25bp
+2023-02-03,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2023-02),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2023-02-13,CPI,cpi_monthly,Consumer Price Index (2023-02),,,Key inflation indicator — high impact on rate expectations
+2023-02-17,OPTIONS_EXPIRATION,monthly,Monthly options expiration,,,
+2023-03-03,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2023-03),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2023-03-10,MARKET_EVENT,banking_crisis,SVB failure — largest bank failure since 2008,,,S&P 500 -4.5% in two sessions
+2023-03-12,MARKET_EVENT,banking_crisis,Signature Bank closed — FDIC backstop announced,,,Systemic risk fears
+2023-03-13,CPI,cpi_monthly,Consumer Price Index (2023-03),,,Key inflation indicator — high impact on rate expectations
+2023-03-17,OPTIONS_EXPIRATION,triple_witching,Quadruple witching,,,Higher volume and volatility typical
+2023-03-17,INDEX_REBALANCE,sp500_quarterly,S&P 500 quarterly rebalancing effective,,,Rebalancing flows affect added/removed stocks
+2023-03-22,FOMC,hike,FOMC Meeting — hike to 4.75-5.00% (+25bp — SVB crisis context),4.75-5.00%,,+25bp — SVB crisis context
+2023-04-07,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2023-04),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2023-04-13,CPI,cpi_monthly,Consumer Price Index (2023-04),,,Key inflation indicator — high impact on rate expectations
+2023-04-21,OPTIONS_EXPIRATION,monthly,Monthly options expiration,,,
+2023-04-28,GDP,gdp_advance,GDP Advance Estimate — Q1 2023,,,
+2023-05-03,FOMC,hike,FOMC Meeting — hike to 5.00-5.25% (+25bp),5.00-5.25%,,+25bp
+2023-05-05,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2023-05),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2023-05-12,CPI,cpi_monthly,Consumer Price Index (2023-05),,,Key inflation indicator — high impact on rate expectations
+2023-05-19,OPTIONS_EXPIRATION,monthly,Monthly options expiration,,,
+2023-06-02,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2023-06),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2023-06-13,CPI,cpi_monthly,Consumer Price Index (2023-06),,,Key inflation indicator — high impact on rate expectations
+2023-06-14,FOMC,hold,FOMC Meeting — hold to 5.00-5.25% (Skip — hawkish hold),5.00-5.25%,,Skip — hawkish hold
+2023-06-16,OPTIONS_EXPIRATION,triple_witching,Quadruple witching,,,Higher volume and volatility typical
+2023-06-16,INDEX_REBALANCE,sp500_quarterly,S&P 500 quarterly rebalancing effective,,,Rebalancing flows affect added/removed stocks
+2023-07-07,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2023-07),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2023-07-13,CPI,cpi_monthly,Consumer Price Index (2023-07),,,Key inflation indicator — high impact on rate expectations
+2023-07-21,OPTIONS_EXPIRATION,monthly,Monthly options expiration,,,
+2023-07-26,FOMC,hike,FOMC Meeting — hike to 5.25-5.50% (+25bp — final hike of cycle),5.25-5.50%,,+25bp — final hike of cycle
+2023-07-28,GDP,gdp_advance,GDP Advance Estimate — Q2 2023,,,
+2023-07-31,MARKET_EVENT,correction_start,Aug-Oct 2023 correction begins,,,"Higher-for-longer fears, 10Y yields surge"
+2023-08-04,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2023-08),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2023-08-11,CPI,cpi_monthly,Consumer Price Index (2023-08),,,Key inflation indicator — high impact on rate expectations
+2023-08-18,OPTIONS_EXPIRATION,monthly,Monthly options expiration,,,
+2023-09-01,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2023-09),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2023-09-13,CPI,cpi_monthly,Consumer Price Index (2023-09),,,Key inflation indicator — high impact on rate expectations
+2023-09-15,OPTIONS_EXPIRATION,triple_witching,Quadruple witching,,,Higher volume and volatility typical
+2023-09-15,INDEX_REBALANCE,sp500_quarterly,S&P 500 quarterly rebalancing effective,,,Rebalancing flows affect added/removed stocks
+2023-09-20,FOMC,hold,FOMC Meeting — hold to 5.25-5.50% (Higher for longer signal),5.25-5.50%,,Higher for longer signal
+2023-10-06,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2023-10),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2023-10-13,CPI,cpi_monthly,Consumer Price Index (2023-10),,,Key inflation indicator — high impact on rate expectations
+2023-10-20,OPTIONS_EXPIRATION,monthly,Monthly options expiration,,,
+2023-10-27,GDP,gdp_advance,GDP Advance Estimate — Q3 2023,,,
+2023-10-27,MARKET_EVENT,correction_bottom,Oct 2023 correction bottom — S&P 500 at 4117,,,~10% correction
+2023-11-01,FOMC,hold,FOMC Meeting — hold to 5.25-5.50%,5.25-5.50%,,
+2023-11-03,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2023-11),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2023-11-13,CPI,cpi_monthly,Consumer Price Index (2023-11),,,Key inflation indicator — high impact on rate expectations
+2023-11-17,OPTIONS_EXPIRATION,monthly,Monthly options expiration,,,
+2023-12-01,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2023-12),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2023-12-13,FOMC,hold,FOMC Meeting — hold to 5.25-5.50% (Pivot signal — dovish dot plot),5.25-5.50%,,Pivot signal — dovish dot plot
+2023-12-13,CPI,cpi_monthly,Consumer Price Index (2023-12),,,Key inflation indicator — high impact on rate expectations
+2023-12-15,OPTIONS_EXPIRATION,triple_witching,Quadruple witching,,,Higher volume and volatility typical
+2023-12-15,INDEX_REBALANCE,sp500_quarterly,S&P 500 quarterly rebalancing effective,,,Rebalancing flows affect added/removed stocks
+2024-01-05,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2024-01),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2024-01-12,CPI,cpi_monthly,Consumer Price Index (2024-01),,,Key inflation indicator — high impact on rate expectations
+2024-01-19,OPTIONS_EXPIRATION,monthly,Monthly options expiration,,,
+2024-01-26,GDP,gdp_advance,GDP Advance Estimate — Q4 2023,,,
+2024-01-31,FOMC,hold,FOMC Meeting — hold to 5.25-5.50%,5.25-5.50%,,
+2024-02-02,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2024-02),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2024-02-13,CPI,cpi_monthly,Consumer Price Index (2024-02),,,Key inflation indicator — high impact on rate expectations
+2024-02-16,OPTIONS_EXPIRATION,monthly,Monthly options expiration,,,
+2024-03-01,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2024-03),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2024-03-13,CPI,cpi_monthly,Consumer Price Index (2024-03),,,Key inflation indicator — high impact on rate expectations
+2024-03-15,OPTIONS_EXPIRATION,triple_witching,Quadruple witching,,,Higher volume and volatility typical
+2024-03-15,INDEX_REBALANCE,sp500_quarterly,S&P 500 quarterly rebalancing effective,,,Rebalancing flows affect added/removed stocks
+2024-03-20,FOMC,hold,FOMC Meeting — hold to 5.25-5.50%,5.25-5.50%,,
+2024-04-05,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2024-04),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2024-04-12,CPI,cpi_monthly,Consumer Price Index (2024-04),,,Key inflation indicator — high impact on rate expectations
+2024-04-19,OPTIONS_EXPIRATION,monthly,Monthly options expiration,,,
+2024-04-26,GDP,gdp_advance,GDP Advance Estimate — Q1 2024,,,
+2024-05-01,FOMC,hold,FOMC Meeting — hold to 5.25-5.50%,5.25-5.50%,,
+2024-05-03,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2024-05),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2024-05-13,CPI,cpi_monthly,Consumer Price Index (2024-05),,,Key inflation indicator — high impact on rate expectations
+2024-05-17,OPTIONS_EXPIRATION,monthly,Monthly options expiration,,,
+2024-06-07,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2024-06),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2024-06-12,FOMC,hold,FOMC Meeting — hold to 5.25-5.50%,5.25-5.50%,,
+2024-06-13,CPI,cpi_monthly,Consumer Price Index (2024-06),,,Key inflation indicator — high impact on rate expectations
+2024-06-21,OPTIONS_EXPIRATION,triple_witching,Quadruple witching,,,Higher volume and volatility typical
+2024-06-21,INDEX_REBALANCE,sp500_quarterly,S&P 500 quarterly rebalancing effective,,,Rebalancing flows affect added/removed stocks
+2024-07-05,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2024-07),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2024-07-12,CPI,cpi_monthly,Consumer Price Index (2024-07),,,Key inflation indicator — high impact on rate expectations
+2024-07-19,OPTIONS_EXPIRATION,monthly,Monthly options expiration,,,
+2024-07-26,GDP,gdp_advance,GDP Advance Estimate — Q2 2024,,,
+2024-07-31,FOMC,hold,FOMC Meeting — hold to 5.25-5.50% (September cut signal),5.25-5.50%,,September cut signal
+2024-08-02,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2024-08),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2024-08-05,MARKET_EVENT,volatility_spike,Yen carry trade unwind — VIX spikes to 65,,,Largest VIX spike since COVID
+2024-08-13,CPI,cpi_monthly,Consumer Price Index (2024-08),,,Key inflation indicator — high impact on rate expectations
+2024-08-16,OPTIONS_EXPIRATION,monthly,Monthly options expiration,,,
+2024-09-06,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2024-09),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2024-09-13,CPI,cpi_monthly,Consumer Price Index (2024-09),,,Key inflation indicator — high impact on rate expectations
+2024-09-18,FOMC,cut,FOMC Meeting — cut to 4.75-5.00% (-50bp — first cut since 2020),4.75-5.00%,,-50bp — first cut since 2020
+2024-09-20,OPTIONS_EXPIRATION,triple_witching,Quadruple witching,,,Higher volume and volatility typical
+2024-09-20,INDEX_REBALANCE,sp500_quarterly,S&P 500 quarterly rebalancing effective,,,Rebalancing flows affect added/removed stocks
+2024-10-04,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2024-10),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2024-10-11,CPI,cpi_monthly,Consumer Price Index (2024-10),,,Key inflation indicator — high impact on rate expectations
+2024-10-18,OPTIONS_EXPIRATION,monthly,Monthly options expiration,,,
+2024-10-28,GDP,gdp_advance,GDP Advance Estimate — Q3 2024,,,
+2024-11-01,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2024-11),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2024-11-07,FOMC,cut,FOMC Meeting — cut to 4.50-4.75% (-25bp),4.50-4.75%,,-25bp
+2024-11-13,CPI,cpi_monthly,Consumer Price Index (2024-11),,,Key inflation indicator — high impact on rate expectations
+2024-11-15,OPTIONS_EXPIRATION,monthly,Monthly options expiration,,,
+2024-12-06,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2024-12),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2024-12-13,CPI,cpi_monthly,Consumer Price Index (2024-12),,,Key inflation indicator — high impact on rate expectations
+2024-12-18,FOMC,cut,FOMC Meeting — cut to 4.25-4.50% (-25bp),4.25-4.50%,,-25bp
+2024-12-20,OPTIONS_EXPIRATION,triple_witching,Quadruple witching,,,Higher volume and volatility typical
+2024-12-20,INDEX_REBALANCE,sp500_quarterly,S&P 500 quarterly rebalancing effective,,,Rebalancing flows affect added/removed stocks
+2025-01-03,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2025-01),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2025-01-13,CPI,cpi_monthly,Consumer Price Index (2025-01),,,Key inflation indicator — high impact on rate expectations
+2025-01-17,OPTIONS_EXPIRATION,monthly,Monthly options expiration,,,
+2025-01-28,GDP,gdp_advance,GDP Advance Estimate — Q4 2024,,,
+2025-01-29,FOMC,hold,FOMC Meeting — hold to 4.25-4.50% (Pause after 3 cuts),4.25-4.50%,,Pause after 3 cuts
+2025-02-07,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2025-02),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2025-02-13,CPI,cpi_monthly,Consumer Price Index (2025-02),,,Key inflation indicator — high impact on rate expectations
+2025-02-21,OPTIONS_EXPIRATION,monthly,Monthly options expiration,,,
+2025-03-07,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2025-03),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2025-03-13,CPI,cpi_monthly,Consumer Price Index (2025-03),,,Key inflation indicator — high impact on rate expectations
+2025-03-19,FOMC,hold,FOMC Meeting — hold to 4.25-4.50%,4.25-4.50%,,
+2025-03-21,OPTIONS_EXPIRATION,triple_witching,Quadruple witching,,,Higher volume and volatility typical
+2025-03-21,INDEX_REBALANCE,sp500_quarterly,S&P 500 quarterly rebalancing effective,,,Rebalancing flows affect added/removed stocks
+2025-04-04,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2025-04),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2025-04-11,CPI,cpi_monthly,Consumer Price Index (2025-04),,,Key inflation indicator — high impact on rate expectations
+2025-04-18,OPTIONS_EXPIRATION,monthly,Monthly options expiration,,,
+2025-04-28,GDP,gdp_advance,GDP Advance Estimate — Q1 2025,,,
+2025-05-02,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2025-05),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2025-05-07,FOMC,scheduled,FOMC Meeting (Scheduled),,,Scheduled
+2025-05-13,CPI,cpi_monthly,Consumer Price Index (2025-05),,,Key inflation indicator — high impact on rate expectations
+2025-05-16,OPTIONS_EXPIRATION,monthly,Monthly options expiration,,,
+2025-06-06,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2025-06),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2025-06-13,CPI,cpi_monthly,Consumer Price Index (2025-06),,,Key inflation indicator — high impact on rate expectations
+2025-06-18,FOMC,scheduled,FOMC Meeting (Scheduled),,,Scheduled
+2025-06-20,OPTIONS_EXPIRATION,triple_witching,Quadruple witching,,,Higher volume and volatility typical
+2025-06-20,INDEX_REBALANCE,sp500_quarterly,S&P 500 quarterly rebalancing effective,,,Rebalancing flows affect added/removed stocks
+2025-07-04,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2025-07),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2025-07-11,CPI,cpi_monthly,Consumer Price Index (2025-07),,,Key inflation indicator — high impact on rate expectations
+2025-07-18,OPTIONS_EXPIRATION,monthly,Monthly options expiration,,,
+2025-07-28,GDP,gdp_advance,GDP Advance Estimate — Q2 2025,,,
+2025-07-30,FOMC,scheduled,FOMC Meeting (Scheduled),,,Scheduled
+2025-08-01,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2025-08),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2025-08-13,CPI,cpi_monthly,Consumer Price Index (2025-08),,,Key inflation indicator — high impact on rate expectations
+2025-08-15,OPTIONS_EXPIRATION,monthly,Monthly options expiration,,,
+2025-09-05,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2025-09),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2025-09-12,CPI,cpi_monthly,Consumer Price Index (2025-09),,,Key inflation indicator — high impact on rate expectations
+2025-09-17,FOMC,scheduled,FOMC Meeting (Scheduled),,,Scheduled
+2025-09-19,OPTIONS_EXPIRATION,triple_witching,Quadruple witching,,,Higher volume and volatility typical
+2025-09-19,INDEX_REBALANCE,sp500_quarterly,S&P 500 quarterly rebalancing effective,,,Rebalancing flows affect added/removed stocks
+2025-10-03,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2025-10),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2025-10-13,CPI,cpi_monthly,Consumer Price Index (2025-10),,,Key inflation indicator — high impact on rate expectations
+2025-10-17,OPTIONS_EXPIRATION,monthly,Monthly options expiration,,,
+2025-10-28,GDP,gdp_advance,GDP Advance Estimate — Q3 2025,,,
+2025-10-29,FOMC,scheduled,FOMC Meeting (Scheduled),,,Scheduled
+2025-11-07,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2025-11),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2025-11-13,CPI,cpi_monthly,Consumer Price Index (2025-11),,,Key inflation indicator — high impact on rate expectations
+2025-11-21,OPTIONS_EXPIRATION,monthly,Monthly options expiration,,,
+2025-12-05,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2025-12),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2025-12-10,FOMC,scheduled,FOMC Meeting (Scheduled),,,Scheduled
+2025-12-12,CPI,cpi_monthly,Consumer Price Index (2025-12),,,Key inflation indicator — high impact on rate expectations
+2025-12-19,OPTIONS_EXPIRATION,triple_witching,Quadruple witching,,,Higher volume and volatility typical
+2025-12-19,INDEX_REBALANCE,sp500_quarterly,S&P 500 quarterly rebalancing effective,,,Rebalancing flows affect added/removed stocks
+2026-01-02,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2026-01),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2026-01-13,CPI,cpi_monthly,Consumer Price Index (2026-01),,,Key inflation indicator — high impact on rate expectations
+2026-01-16,OPTIONS_EXPIRATION,monthly,Monthly options expiration,,,
+2026-01-28,FOMC,scheduled,FOMC Meeting (Scheduled),,,Scheduled
+2026-01-28,GDP,gdp_advance,GDP Advance Estimate — Q4 2025,,,
+2026-02-06,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2026-02),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2026-02-13,CPI,cpi_monthly,Consumer Price Index (2026-02),,,Key inflation indicator — high impact on rate expectations
+2026-02-20,OPTIONS_EXPIRATION,monthly,Monthly options expiration,,,
+2026-03-06,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2026-03),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2026-03-13,CPI,cpi_monthly,Consumer Price Index (2026-03),,,Key inflation indicator — high impact on rate expectations
+2026-03-18,FOMC,scheduled,FOMC Meeting (Scheduled),,,Scheduled
+2026-03-20,OPTIONS_EXPIRATION,triple_witching,Quadruple witching,,,Higher volume and volatility typical
+2026-03-20,INDEX_REBALANCE,sp500_quarterly,S&P 500 quarterly rebalancing effective,,,Rebalancing flows affect added/removed stocks
+2026-04-03,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2026-04),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2026-04-13,CPI,cpi_monthly,Consumer Price Index (2026-04),,,Key inflation indicator — high impact on rate expectations
+2026-04-17,OPTIONS_EXPIRATION,monthly,Monthly options expiration,,,
+2026-04-28,GDP,gdp_advance,GDP Advance Estimate — Q1 2026,,,
+2026-04-29,FOMC,scheduled,FOMC Meeting (Scheduled),,,Scheduled
+2026-05-01,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2026-05),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2026-05-13,CPI,cpi_monthly,Consumer Price Index (2026-05),,,Key inflation indicator — high impact on rate expectations
+2026-05-15,OPTIONS_EXPIRATION,monthly,Monthly options expiration,,,
+2026-06-05,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2026-06),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2026-06-12,CPI,cpi_monthly,Consumer Price Index (2026-06),,,Key inflation indicator — high impact on rate expectations
+2026-06-17,FOMC,scheduled,FOMC Meeting (Scheduled),,,Scheduled
+2026-06-19,OPTIONS_EXPIRATION,triple_witching,Quadruple witching,,,Higher volume and volatility typical
+2026-06-19,INDEX_REBALANCE,sp500_quarterly,S&P 500 quarterly rebalancing effective,,,Rebalancing flows affect added/removed stocks
+2026-07-03,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2026-07),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2026-07-13,CPI,cpi_monthly,Consumer Price Index (2026-07),,,Key inflation indicator — high impact on rate expectations
+2026-07-17,OPTIONS_EXPIRATION,monthly,Monthly options expiration,,,
+2026-07-28,GDP,gdp_advance,GDP Advance Estimate — Q2 2026,,,
+2026-07-29,FOMC,scheduled,FOMC Meeting (Scheduled),,,Scheduled
+2026-08-07,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2026-08),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2026-08-13,CPI,cpi_monthly,Consumer Price Index (2026-08),,,Key inflation indicator — high impact on rate expectations
+2026-08-21,OPTIONS_EXPIRATION,monthly,Monthly options expiration,,,
+2026-09-04,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2026-09),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2026-09-11,CPI,cpi_monthly,Consumer Price Index (2026-09),,,Key inflation indicator — high impact on rate expectations
+2026-09-16,FOMC,scheduled,FOMC Meeting (Scheduled),,,Scheduled
+2026-09-18,OPTIONS_EXPIRATION,triple_witching,Quadruple witching,,,Higher volume and volatility typical
+2026-09-18,INDEX_REBALANCE,sp500_quarterly,S&P 500 quarterly rebalancing effective,,,Rebalancing flows affect added/removed stocks
+2026-10-02,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2026-10),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2026-10-13,CPI,cpi_monthly,Consumer Price Index (2026-10),,,Key inflation indicator — high impact on rate expectations
+2026-10-16,OPTIONS_EXPIRATION,monthly,Monthly options expiration,,,
+2026-10-28,FOMC,scheduled,FOMC Meeting (Scheduled),,,Scheduled
+2026-10-28,GDP,gdp_advance,GDP Advance Estimate — Q3 2026,,,
+2026-11-06,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2026-11),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2026-11-13,CPI,cpi_monthly,Consumer Price Index (2026-11),,,Key inflation indicator — high impact on rate expectations
+2026-11-20,OPTIONS_EXPIRATION,monthly,Monthly options expiration,,,
+2026-12-04,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2026-12),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2026-12-09,FOMC,scheduled,FOMC Meeting (Scheduled),,,Scheduled
+2026-12-11,CPI,cpi_monthly,Consumer Price Index (2026-12),,,Key inflation indicator — high impact on rate expectations
+2026-12-18,OPTIONS_EXPIRATION,triple_witching,Quadruple witching,,,Higher volume and volatility typical
+2026-12-18,INDEX_REBALANCE,sp500_quarterly,S&P 500 quarterly rebalancing effective,,,Rebalancing flows affect added/removed stocks
+2027-01-01,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2027-01),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2027-01-13,CPI,cpi_monthly,Consumer Price Index (2027-01),,,Key inflation indicator — high impact on rate expectations
+2027-01-15,OPTIONS_EXPIRATION,monthly,Monthly options expiration,,,
+2027-01-28,GDP,gdp_advance,GDP Advance Estimate — Q4 2026,,,
+2027-02-05,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2027-02),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2027-02-12,CPI,cpi_monthly,Consumer Price Index (2027-02),,,Key inflation indicator — high impact on rate expectations
+2027-02-19,OPTIONS_EXPIRATION,monthly,Monthly options expiration,,,
+2027-03-05,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2027-03),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2027-03-12,CPI,cpi_monthly,Consumer Price Index (2027-03),,,Key inflation indicator — high impact on rate expectations
+2027-03-19,OPTIONS_EXPIRATION,triple_witching,Quadruple witching,,,Higher volume and volatility typical
+2027-03-19,INDEX_REBALANCE,sp500_quarterly,S&P 500 quarterly rebalancing effective,,,Rebalancing flows affect added/removed stocks
+2027-04-02,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2027-04),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2027-04-13,CPI,cpi_monthly,Consumer Price Index (2027-04),,,Key inflation indicator — high impact on rate expectations
+2027-04-16,OPTIONS_EXPIRATION,monthly,Monthly options expiration,,,
+2027-04-28,GDP,gdp_advance,GDP Advance Estimate — Q1 2027,,,
+2027-05-07,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2027-05),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2027-05-13,CPI,cpi_monthly,Consumer Price Index (2027-05),,,Key inflation indicator — high impact on rate expectations
+2027-05-21,OPTIONS_EXPIRATION,monthly,Monthly options expiration,,,
+2027-06-04,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2027-06),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2027-06-11,CPI,cpi_monthly,Consumer Price Index (2027-06),,,Key inflation indicator — high impact on rate expectations
+2027-06-18,OPTIONS_EXPIRATION,triple_witching,Quadruple witching,,,Higher volume and volatility typical
+2027-06-18,INDEX_REBALANCE,sp500_quarterly,S&P 500 quarterly rebalancing effective,,,Rebalancing flows affect added/removed stocks
+2027-07-02,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2027-07),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2027-07-13,CPI,cpi_monthly,Consumer Price Index (2027-07),,,Key inflation indicator — high impact on rate expectations
+2027-07-16,OPTIONS_EXPIRATION,monthly,Monthly options expiration,,,
+2027-07-28,GDP,gdp_advance,GDP Advance Estimate — Q2 2027,,,
+2027-08-06,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2027-08),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2027-08-13,CPI,cpi_monthly,Consumer Price Index (2027-08),,,Key inflation indicator — high impact on rate expectations
+2027-08-20,OPTIONS_EXPIRATION,monthly,Monthly options expiration,,,
+2027-09-03,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2027-09),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2027-09-13,CPI,cpi_monthly,Consumer Price Index (2027-09),,,Key inflation indicator — high impact on rate expectations
+2027-09-17,OPTIONS_EXPIRATION,triple_witching,Quadruple witching,,,Higher volume and volatility typical
+2027-09-17,INDEX_REBALANCE,sp500_quarterly,S&P 500 quarterly rebalancing effective,,,Rebalancing flows affect added/removed stocks
+2027-10-01,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2027-10),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2027-10-13,CPI,cpi_monthly,Consumer Price Index (2027-10),,,Key inflation indicator — high impact on rate expectations
+2027-10-15,OPTIONS_EXPIRATION,monthly,Monthly options expiration,,,
+2027-10-28,GDP,gdp_advance,GDP Advance Estimate — Q3 2027,,,
+2027-11-05,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2027-11),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2027-11-12,CPI,cpi_monthly,Consumer Price Index (2027-11),,,Key inflation indicator — high impact on rate expectations
+2027-11-19,OPTIONS_EXPIRATION,monthly,Monthly options expiration,,,
+2027-12-03,NFP,employment_situation,Non-Farm Payrolls / Employment Situation (2027-12),,,Major market mover — typically ±0.5-1.5% S&P impact on surprise
+2027-12-13,CPI,cpi_monthly,Consumer Price Index (2027-12),,,Key inflation indicator — high impact on rate expectations
+2027-12-17,OPTIONS_EXPIRATION,triple_witching,Quadruple witching,,,Higher volume and volatility typical
+2027-12-17,INDEX_REBALANCE,sp500_quarterly,S&P 500 quarterly rebalancing effective,,,Rebalancing flows affect added/removed stocks

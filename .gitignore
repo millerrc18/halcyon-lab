@@ -30,6 +30,8 @@ Thumbs.db
 *.sqlite3
 logs/
 data/
+!data/reference/
+!data/reference/**
 
 # Training artifacts
 training_data/

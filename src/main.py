@@ -541,6 +541,35 @@ def cmd_collect_data(args):
     print("\nData collection complete.")
 
 
+def cmd_fetch_earnings(args):
+    """Fetch upcoming earnings dates for S&P 100."""
+    import sys
+    import os
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from scripts.fetch_earnings_calendar import fetch_earnings_dates, get_all_upcoming_earnings
+    from src.universe.sp100 import get_sp100_universe
+
+    universe = get_sp100_universe()
+    print(f"\n{'='*60}")
+    print(f"EARNINGS CALENDAR — S&P 100")
+    print(f"{'='*60}")
+    print(f"Fetching for {len(universe)} tickers...\n")
+
+    result = fetch_earnings_dates(universe)
+    print(f"\nResults: {result['tickers_with_dates']} tickers with dates, {result['errors']} errors")
+
+    if result["upcoming_7d"]:
+        print(f"\n⚠️  EARNINGS THIS WEEK ({len(result['upcoming_7d'])}):")
+        for item in result["upcoming_7d"]:
+            print(f"  • {item}")
+
+    upcoming = get_all_upcoming_earnings(days=14)
+    if upcoming:
+        print(f"\n📅 NEXT 14 DAYS ({len(upcoming)} stocks):")
+        for item in upcoming:
+            print(f"  • {item['ticker']:6s} {item['earnings_date']} ({item['days_away']}d) {item.get('earnings_time') or ''}")
+
+
 def cmd_watch(args):
     from src.config import load_config
     from src.scheduler.watch import WatchLoop
@@ -612,6 +641,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     # Operations
     sp.add_parser("collect-data", help="Run market data collection pipeline").set_defaults(func=cmd_collect_data)
+    sp.add_parser("fetch-earnings", help="Fetch upcoming earnings dates for S&P 100").set_defaults(func=cmd_fetch_earnings)
     sp.add_parser("halt-trading").set_defaults(func=cmd_halt_trading)
     sp.add_parser("resume-trading").set_defaults(func=cmd_resume_trading)
     sp.add_parser("preflight").set_defaults(func=cmd_preflight)

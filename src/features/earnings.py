@@ -1,19 +1,35 @@
-"""Earnings date lookup and event-risk classification."""
+"""Earnings date lookup and event-risk classification.
+
+Checks the earnings_calendar table first (populated by overnight scraper),
+falls back to yfinance if no cached data exists.
+"""
 
 import logging
 from datetime import date, datetime
-
-import yfinance as yf
 
 logger = logging.getLogger(__name__)
 
 
 def get_next_earnings_date(ticker: str) -> str | None:
-    """Get the next earnings date for a ticker via yfinance.
+    """Get the next earnings date for a ticker.
+
+    Checks cached earnings_calendar table first (fast),
+    falls back to yfinance API if no cached data.
 
     Returns ISO date string (YYYY-MM-DD) or None if unavailable.
     """
+    # Try cached data first
     try:
+        from scripts.fetch_earnings_calendar import get_earnings_within_days
+        result = get_earnings_within_days(ticker, days=90)
+        if result:
+            return result["earnings_date"]
+    except Exception:
+        pass
+
+    # Fallback to yfinance
+    try:
+        import yfinance as yf
         t = yf.Ticker(ticker)
         # Try .calendar first — returns a dict or DataFrame with earnings dates
         cal = t.calendar
