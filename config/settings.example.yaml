@@ -145,3 +145,14 @@ render:
   enabled: false
   database_url: "postgresql://user:pass@host:5432/halcyon"
   sync_interval_seconds: 120
+
+# ── AI Council ────────────────────────────────────────────
+# 5-agent Modified Delphi deliberation system.
+# Model configured in api.models.council_automated above.
+# ──────────────────────────────────────────────────────────
+council:
+  enabled: true
+  daily_hour_et: 8
+  daily_minute_et: 30
+  rounds: 3
+  temperature: 0.8
