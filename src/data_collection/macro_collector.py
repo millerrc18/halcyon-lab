@@ -68,11 +68,21 @@ def _init_table(db_path: str) -> None:
 
 
 def _get_fred_api_key() -> str | None:
-    """Get FRED API key from config."""
+    """Get FRED API key from config.
+
+    Checks multiple config paths for backwards compatibility:
+    - data_enrichment.fred_api_key (primary — matches settings.example.yaml)
+    - fred.api_key
+    - fred_api_key (top-level)
+    """
     try:
         from src.config import load_config
         config = load_config()
-        return config.get("fred", {}).get("api_key") or config.get("fred_api_key")
+        return (
+            config.get("data_enrichment", {}).get("fred_api_key")
+            or config.get("fred", {}).get("api_key")
+            or config.get("fred_api_key")
+        )
     except Exception:
         return None
 
