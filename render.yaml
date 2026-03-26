@@ -20,7 +20,7 @@ services:
   - type: web
     name: halcyon-api
     runtime: python
-    plan: standard
+    plan: free
     buildCommand: pip install -r requirements-cloud.txt
     startCommand: uvicorn src.api.cloud_app:app --host 0.0.0.0 --port $PORT
     envVars:
