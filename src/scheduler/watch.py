@@ -360,7 +360,9 @@ class WatchLoop:
                     ps = packet.position_sizing
                     notify_trade_opened(
                         ticker, ps.entry_price, ps.stop_level, ps.target_1,
-                        candidate["score"], ps.shares)
+                        candidate["score"], ps.shares,
+                        setup_type=feat.get("setup_type"),
+                        setup_confidence=feat.get("setup_confidence"))
             except Exception:
                 pass
 

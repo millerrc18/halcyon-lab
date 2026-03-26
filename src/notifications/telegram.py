@@ -85,11 +85,22 @@ def send_telegram(message: str, parse_mode: str = "HTML") -> bool:
 
 
 def notify_trade_opened(ticker: str, entry_price: float, stop: float,
-                        target: float, score: int, shares: int) -> bool:
+                        target: float, score: int, shares: int,
+                        setup_type: str | None = None,
+                        setup_confidence: float | None = None) -> bool:
     """Alert: new trade opened."""
     pnl_risk = (entry_price - stop) * shares
+
+    # Build header with setup info if available
+    header = f"🟢 <b>TRADE OPENED: {ticker}"
+    if setup_type and setup_confidence is not None:
+        header += f" ({setup_type} ↑{setup_confidence:.2f})"
+    elif setup_type:
+        header += f" ({setup_type})"
+    header += "</b>"
+
     msg = (
-        f"🟢 <b>TRADE OPENED: {ticker}</b>\n"
+        f"{header}\n"
         f"Entry: ${entry_price:.2f} | Stop: ${stop:.2f} | Target: ${target:.2f}\n"
         f"Shares: {shares} | Risk: ${pnl_risk:.2f}\n"
         f"Score: {score}/100"
@@ -337,6 +348,7 @@ def handle_command(command: str, args: str) -> str:
     /earnings — Upcoming earnings
     /schedule — Compute schedule status
     /scoring — Scoring backlog
+    /council — Run AI council session
     /help — List commands
     """
     try:
@@ -350,6 +362,7 @@ def handle_command(command: str, args: str) -> str:
                 "/earnings — Upcoming earnings\n"
                 "/schedule — Compute schedule\n"
                 "/scoring — Scoring backlog\n"
+                "/council — Run AI council session\n"
                 "/health — GPU & system health\n"
                 "/help — This message"
             )
@@ -368,6 +381,8 @@ def handle_command(command: str, args: str) -> str:
             return _cmd_schedule()
         elif command == "/scoring":
             return _cmd_scoring()
+        elif command == "/council":
+            return _cmd_council()
         elif command == "/health":
             return _cmd_health()
         else:
@@ -565,6 +580,62 @@ def _cmd_scoring() -> str:
         )
     except Exception:
         return "📝 No scoring data available."
+
+
+def _cmd_council() -> str:
+    """Run an on-demand AI council session and format the result."""
+    try:
+        from src.council.engine import CouncilEngine
+        engine = CouncilEngine()
+        result = engine.run_session(session_type="ad_hoc", trigger_reason="Telegram /council command")
+    except Exception as e:
+        return f"❌ Council session failed: {str(e)[:200]}"
+
+    now = datetime.now(ET).strftime("%H:%M ET")
+    consensus = result.get("consensus", "unknown").upper()
+    confidence = result.get("confidence_weighted_score", 0)
+    confidence_pct = int(confidence * 100) if confidence and confidence <= 1 else int(confidence or 0)
+
+    lines = [f"🏛️ <b>AI COUNCIL SESSION</b> ({now})"]
+    lines.append(f"Consensus: <b>{consensus}</b> ({confidence_pct}% confidence)")
+
+    if result.get("is_contested"):
+        lines.append("⚠️ <i>Contested — agents disagreed</i>")
+
+    lines.append("")
+
+    # Agent emoji mapping
+    agent_emojis = {
+        "risk_officer": "🔴",
+        "alpha_strategist": "🟡",
+        "data_scientist": "🔵",
+        "regime_analyst": "🟠",
+        "devils_advocate": "😈",
+    }
+    agent_labels = {
+        "risk_officer": "Risk Officer",
+        "alpha_strategist": "Alpha Strategist",
+        "data_scientist": "Data Scientist",
+        "regime_analyst": "Regime Analyst",
+        "devils_advocate": "Devil's Advocate",
+    }
+
+    # Use round 3 (final vote) if available, else round 1
+    final_round = result.get("round3") or result.get("round2") or result.get("round1") or []
+    for assessment in final_round:
+        agent = assessment.get("agent", "unknown")
+        emoji = agent_emojis.get(agent, "⚪")
+        label = agent_labels.get(agent, agent.replace("_", " ").title())
+        position = assessment.get("position", "N/A")
+        conf = assessment.get("confidence", "?")
+        lines.append(f"{emoji} {label}: {position} ({conf}/10)")
+
+    if result.get("total_cost"):
+        lines.append(f"\n💰 Cost: ${result['total_cost']:.4f}")
+
+    lines.append(f"Rounds: {result.get('rounds_completed', 0)}/3")
+
+    return "\n".join(lines)
 
 
 def _cmd_health() -> str:
