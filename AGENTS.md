@@ -149,19 +149,19 @@ Universe (S&P 100 → expanding to ~325 stocks)
 - Passive options/volatility data collection
 
 ### Out of Scope (Current Phase)
-- Options trading (passive data collection only — strategy in Phase 3-4)
+- Options trading (passive data collection only — Options Volatility Desk in Phase 3-4)
 - Short selling
-- High-frequency trading
+- High-frequency / intraday trading (Intraday Desk is Phase 6+)
 - Live trading with real money (Phase 2)
 
-### Future Scope (Gated by Performance)
-- Universe expansion to ~325 stocks (Phase 2)
-- GRPO reinforcement learning (Phase 2)
-- Sector-specific LoRA adapters (Phase 3)
-- Options trading: credit spreads, iron condors (Phase 3-5)
-- Wyoming LLC + Section 475 MTM election (Phase 2)
-- Interactive Brokers for verified track record (Phase 2)
-- Family LP fund structure (Phase 5)
+### Future Desks (Gated by Performance)
+Each desk launches only after the previous desk is profitable. See docs/roadmap.md for full specifications.
+
+- **Equity Research Desk** (Phase 2) — Same model, lower thresholds (score ≥ 30), separate paper account, training data volume
+- **Options Volatility Desk** (Phase 3-4) — Separate LoRA adapter, credit spreads + iron condors, 15-check non-linear risk governor
+- **Equity Momentum Desk** (Phase 5) — Separate LoRA adapter, Russell 1000, breakout/trend-following (LOW correlation with Swing)
+- **Intraday Desk** (Phase 6+) — Separate model entirely, 1-min bars, VWAP reversion, requires dedicated GPU + real-time data
+- **Future:** Event-Driven Desk, Macro/Rates Desk, Crypto Desk
 
 ## Governance Hierarchy
 
@@ -196,9 +196,10 @@ See the dashboard Docs page for the complete research library covering:
 
 ## Roadmap
 
-See the dashboard Roadmap page or docs/roadmap.md for the 5-phase development plan:
-1. **Bootcamp** (current) — Paper $100K, prove edge
-2. **Micro Live** — $500-$1K, expand to ~325 stocks, LLC formation
-3. **Growth** — $5K-$25K, sector LoRA adapters, options backtesting
-4. **Full Autonomous** — $25K+, investor-ready track record
-5. **Scale Capital** — $100K+, Russell 1000, options live, family LP
+See the dashboard Roadmap page or docs/roadmap.md for the 6-phase development plan:
+1. **Bootcamp** (current) — Equity Swing Desk, paper $100K, prove edge
+2. **Micro Live** — Swing Desk live ($500-$1K) + Research Desk (paper, training data volume)
+3. **Growth** — Options Volatility Desk (paper), sector/regime LoRA adapters
+4. **Full Autonomous** — Options Desk live ($2-5K), investor-ready track record
+5. **Scale Capital** — Equity Momentum Desk, Russell 1000, family LP
+6. **Future** — Intraday Desk, event-driven, macro, crypto (scoped, not scheduled)
