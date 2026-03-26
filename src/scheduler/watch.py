@@ -492,6 +492,18 @@ class WatchLoop:
         """Main watch loop. Checks every 60 seconds."""
         self._print_banner()
 
+        # Start Render cloud sync background thread
+        try:
+            from src.sync.render_sync import start_render_sync
+            sync_thread = start_render_sync(self.config)
+            if sync_thread:
+                print(" Render sync: enabled ✓")
+            else:
+                print(" Render sync: disabled")
+        except Exception as e:
+            logger.debug("Render sync startup failed: %s", e)
+            print(f" Render sync: error ({e})")
+
         try:
             while True:
                 now = datetime.now(ET)
