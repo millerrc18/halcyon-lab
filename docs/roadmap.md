@@ -262,3 +262,172 @@ Each future desk follows the same pattern: paper validate → gate metrics → l
 | 4 | ~$430 | Same |
 | 5 | ~$500 | + additional as needed |
 | 6+ | ~$800+ | + intraday data feeds ($300-500) |
+
+---
+
+## Financial Projections
+
+### Return Assumptions
+
+Based on the Halcyon Framework research and fund path analysis. S&P 100 swing trading with 2-15 day holds, ~15% annualized volatility.
+
+| Scenario | Sharpe | Annual Return | Basis |
+|----------|--------|---------------|-------|
+| Conservative | 1.0 | 15% | Acceptable threshold for emerging managers |
+| Base case | 1.5 | 22% | Competitive — top quartile emerging quant |
+| Optimistic | 2.0 | 30% | Exceptional — institutional-grade |
+
+**Critical caveat:** 30-50% performance degradation from backtest to live is typical. For liquid S&P 100 names with medium-term holds, expect 15-25% degradation. These projections assume live performance, not backtested.
+
+### Phase-by-Phase Financial Milestones
+
+#### Phase 1: Bootcamp (Current — Month 1-6)
+
+| Item | Value |
+|------|-------|
+| Capital | $100K paper (no real money at risk) |
+| Operating cost | ~$60/year ($5/mo data + electricity) |
+| Revenue | $0 |
+| Net P&L | -$60/year (pure R&D cost) |
+| **Milestone** | **Prove positive expectancy on 50+ closed trades** |
+
+#### Phase 2: Micro Live (Month 7-12)
+
+| Scenario | Starting Capital | Annual Return | Trading P&L | Operating Cost | Net P&L |
+|----------|-----------------|---------------|-------------|----------------|---------|
+| Conservative | $1,000 | 15% | $150 | $4,200/yr | -$4,050 |
+| Base case | $5,000 | 22% | $1,100 | $4,200/yr | -$3,100 |
+| Optimistic | $10,000 | 30% | $3,000 | $4,200/yr | -$1,200 |
+
+**Key insight:** Phase 2 is NOT profitable. You're paying ~$350/mo for data/infra while proving the strategy works with real money. This is an investment in track record, not a moneymaker. The $1K-$10K in capital is a calibration instrument.
+
+**Legal costs (one-time):** Wyoming LLC $100 + securities attorney $2,000-$5,000 = ~$3,000
+
+| **Milestone** | **Value** |
+|---------------|-----------|
+| First live trade with real money | Priceless (track record clock starts) |
+| Section 475 MTM election filed | Within 75 days of LLC formation |
+| IB account opened | GIPS-verified returns begin |
+
+#### Phase 3: Growth (Month 13-24)
+
+| Scenario | Capital (start) | Annual Return | Trading P&L | Operating Cost | Net P&L |
+|----------|----------------|---------------|-------------|----------------|---------|
+| Conservative | $25,000 | 15% | $3,750 | $5,200/yr | -$1,450 |
+| Base case | $25,000 | 22% | $5,500 | $5,200/yr | +$300 |
+| Optimistic | $50,000 | 30% | $15,000 | $5,200/yr | +$9,800 |
+
+**Break-even capital at base case (22% return):** ~$24,000 covers $5,200/yr operating costs.
+
+This is the phase where the Options Desk starts paper trading. No additional capital required for options paper — uses existing IB paper account.
+
+| **Milestone** | **Value** |
+|---------------|-----------|
+| Break-even on operating costs | ~$25K capital at base case |
+| 12 months live track record | Institutional clock milestone |
+| Options desk paper validation | 50+ credit spreads on paper |
+
+#### Phase 4: Full Autonomous (Month 25-36)
+
+| Scenario | Capital (start) | Annual Return | Trading P&L | Operating Cost | Net P&L |
+|----------|----------------|---------------|-------------|----------------|---------|
+| Conservative | $50,000 | 15% | $7,500 | $5,200/yr | +$2,300 |
+| Base case | $100,000 | 22% | $22,000 | $5,200/yr | +$16,800 |
+| Optimistic | $150,000 | 30% | $45,000 | $5,200/yr | +$39,800 |
+
+Capital grows through reinvested profits + additional personal allocation as confidence builds. The Options Desk goes live with $2-5K.
+
+| **Milestone** | **Value** |
+|---------------|-----------|
+| $100K personal capital deployed | Full conviction in strategy |
+| $10K+ annual trading profit | Strategy covers all costs with headroom |
+| 3-year audited track record begins | Incubator fund structure ($2,500-$5,000) |
+| Investor-ready documentation | ODD materials, risk reports, compliance manual |
+
+#### Phase 5: Scale Capital (Month 37-60)
+
+This is where the economics transform. External capital changes everything.
+
+**Personal capital only (no external investors):**
+
+| Scenario | Capital | Annual Return | Trading P&L | Operating Cost | Net P&L |
+|----------|---------|---------------|-------------|----------------|---------|
+| Conservative | $200,000 | 15% | $30,000 | $6,000/yr | +$24,000 |
+| Base case | $300,000 | 22% | $66,000 | $6,000/yr | +$60,000 |
+| Optimistic | $500,000 | 30% | $150,000 | $6,000/yr | +$144,000 |
+
+**With external capital (fund structure):**
+
+| AUM | Mgmt Fee (1.5%) | Perf Fee (17.5% on 22%) | Gross Revenue | Fund OpEx | Net to Manager |
+|-----|-----------------|------------------------|---------------|-----------|----------------|
+| $1M | $15,000 | $38,500 | $53,500 | $60,000 | -$6,500 |
+| $3M | $45,000 | $115,500 | $160,500 | $75,000 | +$85,500 |
+| $5M | $75,000 | $192,500 | $267,500 | $85,000 | +$182,500 |
+| $10M | $150,000 | $385,000 | $535,000 | $100,000 | +$435,000 |
+| $25M | $375,000 | $962,500 | $1,337,500 | $150,000 | +$1,187,500 |
+
+**Fund break-even AUM:** ~$2M at base case returns (mgmt fee + perf fee covers $60K operating costs).
+
+**Fund formation costs (one-time):** $15K-$50K (legal), or $10K-$20K via Repool/similar platform.
+
+**Annual fund operating costs:**
+| Item | Cost |
+|------|------|
+| Fund administrator | $10,000-$25,000 |
+| Annual audit | $15,000-$25,000 |
+| Outsourced CCO | $10,000-$25,000 |
+| Legal retainer | $5,000-$10,000 |
+| Insurance (E&O, D&O, cyber) | $12,000-$20,000 |
+| Technology + data | $6,000-$10,000 |
+| **Total lean** | **$60,000-$100,000** |
+
+| **Milestone** | **Value** |
+|---------------|-----------|
+| Fund break-even | ~$2M AUM |
+| Manager comp exceeds W-2 salary | ~$5-10M AUM (depends on salary) |
+| Sustainable fund business | ~$10M AUM ($435K net at base case) |
+
+### Capital Growth Trajectory (Base Case — 22% Annual Return)
+
+Assumes reinvested profits + periodic personal capital additions.
+
+| Month | Phase | Personal Capital | External AUM | Total AUM | Annual Trading P&L | Annual Fund Revenue | Net to You |
+|-------|-------|-----------------|-------------|-----------|-------------------|--------------------|-----------| 
+| 0-6 | 1 | $0 (paper) | $0 | $0 | $0 | $0 | -$60 |
+| 7-12 | 2 | $5,000 | $0 | $5,000 | $1,100 | $0 | -$3,100 |
+| 13-24 | 3 | $25,000 | $0 | $25,000 | $5,500 | $0 | +$300 |
+| 25-36 | 4 | $100,000 | $0 | $100,000 | $22,000 | $0 | +$16,800 |
+| 37-48 | 5a | $150,000 | $500,000 | $650,000 | $143,000 | $25,000 | +$108,000 |
+| 49-60 | 5b | $200,000 | $3,000,000 | $3,200,000 | $704,000 | $160,000 | +$604,000 |
+
+**Year 5 cumulative investment:** ~$20K (operating costs + legal + fund formation)
+**Year 5 annual income (base case):** ~$600K (personal returns + fund fees)
+**Strategy capacity ceiling:** $500M-$1B+ (S&P 100 liquidity)
+
+### Legal Structure Timeline
+
+| Phase | Structure | Cost | Tax Treatment |
+|-------|-----------|------|---------------|
+| 1 | Personal account | $0 | Short-term capital gains (ordinary rates) |
+| 2 | Wyoming LLC + Section 475 MTM | $3,100 | Ordinary income, full loss deduction, expense deduction |
+| 3-4 | Same LLC, incubator fund prep | $2,500-$5,000 | Same |
+| 5 | Full private fund (DE LP + WY GP) | $15,000-$50,000 setup | Fund-level: pass-through. Manager: fee income + carry |
+| 5+ | ERA filing ($150/yr) | $150/year | Same |
+
+### Risk-Adjusted Scenarios
+
+**What if the strategy doesn't work?**
+- Phase 1 cost: $60 (electricity). Zero financial risk.
+- Phase 2 max loss: $1,000-$10,000 in capital + $4,200 operating costs. Painful but survivable.
+- Phase 3+ losses are bounded by risk governor (max drawdown ≤15%). At $25K, worst case is -$3,750.
+- Total maximum cumulative loss through Phase 3 if strategy fails completely: ~$20,000.
+
+**What if it works but Sharpe is only 0.5 (mediocre)?**
+- 7.5% annual return. $25K → $1,875/yr. Never covers operating costs with personal capital alone.
+- Fund path is not viable at Sharpe 0.5. Stay personal, keep it as a side income/hobby.
+- Decision point: if Sharpe < 0.75 after 12 months live, reassess strategy fundamentally.
+
+**What if it works AND Sharpe > 2.0?**
+- 30%+ annual return. Capital compounds aggressively. External capital arrives faster.
+- $10M AUM by Year 4 becomes realistic (3-year track record + exceptional returns).
+- Year 5 income could exceed $1M (personal returns + fund fees on $10M+ AUM).
