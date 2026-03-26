@@ -378,8 +378,7 @@ def _cmd_status() -> str:
     """System status summary."""
     from src.config import load_config
     from src.llm.client import is_llm_available
-    from src.training.versioning import get_active_model_name
-    from src.training.quality_filter import get_training_example_counts
+    from src.training.versioning import get_active_model_name, get_training_example_counts
 
     config = load_config()
     llm_ok = is_llm_available(config)
@@ -402,9 +401,9 @@ def _cmd_trades() -> str:
         with sqlite3.connect("ai_research_desk.sqlite3") as conn:
             conn.row_factory = sqlite3.Row
             rows = conn.execute(
-                """SELECT ticker, entry_price, current_price, pnl_pct, days_open
+                """SELECT ticker, entry_price, pnl_pct, pnl_dollars, created_at
                 FROM shadow_trades WHERE status = 'open'
-                ORDER BY pnl_pct DESC"""
+                ORDER BY created_at DESC"""
             ).fetchall()
 
         if not rows:
@@ -414,9 +413,16 @@ def _cmd_trades() -> str:
         for r in rows:
             emoji = "🟢" if (r["pnl_pct"] or 0) >= 0 else "🔴"
             pnl = r["pnl_pct"] or 0
+            # Compute days held
+            try:
+                from datetime import datetime
+                opened = datetime.fromisoformat(r["created_at"][:19])
+                days = (datetime.now() - opened).days
+            except Exception:
+                days = "?"
             lines.append(
                 f"  {emoji} {r['ticker']}: ${r['entry_price']:.2f} "
-                f"({pnl:+.1f}%) Day {r['days_open'] or '?'}"
+                f"({pnl:+.1f}%) Day {days}"
             )
         return "\n".join(lines)
     except Exception as e:
@@ -463,17 +469,18 @@ def _cmd_last_scan() -> str:
     try:
         with sqlite3.connect("ai_research_desk.sqlite3") as conn:
             conn.row_factory = sqlite3.Row
-            row = conn.execute(
-                """SELECT ticker, score, created_at
+            rows = conn.execute(
+                """SELECT ticker, priority_score, created_at
                 FROM recommendations ORDER BY created_at DESC LIMIT 5"""
             ).fetchall()
 
-        if not row:
+        if not rows:
             return "📭 No scans yet."
 
         lines = ["📊 <b>RECENT RECOMMENDATIONS</b>"]
-        for r in row:
-            lines.append(f"  • {r['ticker']} (score: {r['score']}) — {r['created_at'][:16]}")
+        for r in rows:
+            score = r["priority_score"] or 0
+            lines.append(f"  • {r['ticker']} (score: {score:.0f}) — {r['created_at'][:16]}")
         return "\n".join(lines)
     except Exception:
         return "📭 No scan data available yet."
