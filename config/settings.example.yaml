@@ -50,7 +50,7 @@ llm:
   base_url: "http://localhost:11434"
   temperature: 0.7
   max_tokens: 1500
-  timeout_seconds: 60
+  timeout_seconds: 180
 
 training:
   enabled: true
@@ -89,6 +89,7 @@ bootcamp:
   max_positions: 50                 # No practical limit during bootcamp
   # Email preferences
   email_mode: full_stream           # full_stream / daily_summary / silent
+  max_packets_per_scan: 8           # Cap packets per scan to fit in 30-min window
   scan_interval_minutes: 30         # How often to re-scan during market hours
 
 # ── Telegram Notifications ───────────────────────────────────────

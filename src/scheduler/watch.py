@@ -253,12 +253,14 @@ class WatchLoop:
             send_email(subject, body)
             print("[WATCH] Morning watchlist email sent.")
 
-        # Telegram watchlist notification
+        # Telegram watchlist notification — send packet-worthy (high-conviction) names
         try:
             from src.notifications.telegram import notify_watchlist, is_telegram_enabled
             if is_telegram_enabled():
-                tickers = [c["ticker"] for c in candidates.get("watchlist", [])]
-                notify_watchlist(tickers, len(tickers))
+                pw_tickers = [c["ticker"] for c in candidates.get("packet_worthy", [])]
+                wl_count = len(candidates.get("watchlist", []))
+                notify_watchlist(pw_tickers[:5], len(pw_tickers),
+                                 watchlist_count=wl_count)
         except Exception:
             pass
 
@@ -300,6 +302,15 @@ class WatchLoop:
         ranked = rank_universe(features)
         candidates = get_top_candidates(ranked)
         packet_worthy = candidates["packet_worthy"]
+
+        # Cap packets per scan to avoid bleeding into next scan window
+        bootcamp_cfg = self.config.get("bootcamp", {})
+        max_packets = bootcamp_cfg.get("max_packets_per_scan", 8)
+        if len(packet_worthy) > max_packets:
+            overflow = packet_worthy[max_packets:]
+            packet_worthy = packet_worthy[:max_packets]
+            print(f"[WATCH] Capped at {max_packets} packets "
+                  f"({len(overflow)} deferred to next scan)")
 
         if not packet_worthy:
             print(f"[WATCH] No packet-worthy setups. {len(candidates['watchlist'])} on watchlist.")
@@ -473,8 +484,8 @@ class WatchLoop:
                     self._safe_run("Saturday reports", self._run_saturday_reports)
                     self._saturday_reports_done = True
 
-                # ── Overnight schedule (weekdays only, --overnight flag) ──
-                elif self.overnight and now.weekday() < 5:
+                # ── Overnight schedule (weekdays only, --overnight flag, NOT during market hours) ──
+                elif self.overnight and now.weekday() < 5 and not self._is_market_open(now):
                     ran = False
 
                     # Morning VRAM handoff (5:15 AM) — kill training, reload Ollama

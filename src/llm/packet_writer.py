@@ -84,6 +84,31 @@ Event Risk: {packet.event_risk}"""
     return prompt
 
 
+def _build_condensed_prompt(packet: TradePacket, features: dict) -> str:
+    """Build a condensed prompt with only technical data and trade parameters.
+
+    Used as a retry when the full prompt (with enrichment context) times out.
+    """
+    ticker = packet.ticker
+    company_name = packet.company_name
+
+    return f"""=== TECHNICAL DATA ===
+Ticker: {ticker} ({company_name})
+Current Price: ${features.get('current_price', 0):.2f}
+Trend State: {features.get('trend_state', 'n/a')} | SMA50 slope: {features.get('sma50_slope', 'n/a')} | SMA200 slope: {features.get('sma200_slope', 'n/a')}
+Price vs SMA50: {features.get('price_vs_sma50_pct', 0):.1f}% | Price vs SMA200: {features.get('price_vs_sma200_pct', 0):.1f}%
+Relative Strength: {features.get('relative_strength_state', 'n/a')}
+Pullback Depth: {features.get('pullback_depth_pct', 0):.1f}% from 50-day high
+ATR(14): ${features.get('atr_14', 0):.2f} ({features.get('atr_pct', 0):.1f}% of price)
+Volume Ratio: {features.get('volume_ratio_20d', 0):.2f}x 20-day average
+
+=== TRADE PARAMETERS ===
+Score: {features.get('_score', 0):.0f}/100 | Confidence: {packet.confidence}/10
+Entry Zone: {packet.entry_zone} | Stop: {packet.stop_invalidation} | Targets: {packet.targets}
+Position Size: ${packet.position_sizing.allocation_dollars:.0f} ({packet.position_sizing.allocation_pct:.1f}% of capital)
+Event Risk: {packet.event_risk}"""
+
+
 def _parse_llm_response(response: str) -> tuple[int | None, str | None, str | None]:
     """Parse XML-tagged response into conviction, why_now, and deeper_analysis.
 
@@ -173,6 +198,13 @@ def enhance_packet_with_llm(packet: TradePacket, features: dict,
 
     prompt = _build_feature_prompt(packet, features)
     response = generate(prompt, PACKET_SYSTEM_PROMPT)
+
+    if response is None:
+        # Retry with condensed prompt (technical + trade params only, no enrichment)
+        logger.info("[LLM] Full prompt timed out for %s, retrying with condensed prompt",
+                    packet.ticker)
+        condensed = _build_condensed_prompt(packet, features)
+        response = generate(condensed, PACKET_SYSTEM_PROMPT)
 
     if response is None:
         logger.warning("[LLM] Generation failed — fallback to template for %s", packet.ticker)

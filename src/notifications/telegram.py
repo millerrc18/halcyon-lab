@@ -181,15 +181,18 @@ def notify_model_event(event: str, model_name: str, detail: str = "") -> bool:
 # ── Additional notification events ────────────────────────────────────────
 
 
-def notify_watchlist(tickers: list[str], count: int) -> bool:
-    """Alert: morning watchlist generated."""
+def notify_watchlist(tickers: list[str], count: int,
+                     watchlist_count: int = 0) -> bool:
+    """Alert: morning watchlist with high-conviction (packet-worthy) names."""
     now = datetime.now(ET).strftime("%H:%M ET")
     msg = f"☀️ <b>MORNING WATCHLIST</b> ({now})\n"
     if tickers:
-        msg += f"{count} candidates identified:\n"
+        msg += f"🎯 {count} packet-worthy (score 40+):\n"
         msg += "\n".join(f"  • {t}" for t in tickers[:10])
         if count > 10:
             msg += f"\n  ...and {count - 10} more"
+        if watchlist_count:
+            msg += f"\n📋 {watchlist_count} additional on watchlist (25-40)"
     else:
         msg += "No qualifying setups found."
     return send_telegram(msg)
