@@ -5,6 +5,8 @@ import { WebSocketProvider, useWebSocketContext } from './contexts/WebSocketCont
 import Layout from './components/Layout'
 import ErrorBoundary from './components/ErrorBoundary'
 import ToastContainer, { toast } from './components/Toast'
+import AuthGate from './components/AuthGate'
+import { IS_CLOUD } from './config'
 import Dashboard from './pages/Dashboard'
 import Packets from './pages/Packets'
 import ShadowLedger from './pages/ShadowLedger'
@@ -57,7 +59,7 @@ function CacheInvalidator() {
 }
 
 export default function App() {
-  return (
+  const content = (
     <QueryClientProvider client={queryClient}>
       <ErrorBoundary>
         <WebSocketProvider>
@@ -84,4 +86,6 @@ export default function App() {
       </ErrorBoundary>
     </QueryClientProvider>
   )
+
+  return IS_CLOUD ? <AuthGate>{content}</AuthGate> : content
 }

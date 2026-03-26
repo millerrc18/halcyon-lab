@@ -95,6 +95,31 @@ python -m src.sync.render_sync --push
    - CTO Report with fund metrics
 3. Check the API health endpoint: `https://halcyon-api.onrender.com/api/status`
 
+## Dashboard Authentication
+
+The cloud dashboard is protected by a password gate when `API_SECRET` is configured.
+
+### How It Works
+
+- Set `API_SECRET` as an environment variable on the Render API service
+- The same value acts as the **dashboard password** users enter to sign in
+- The frontend stores the password in `sessionStorage` (cleared when the browser tab closes)
+- Sessions automatically expire after **24 hours**, requiring re-authentication
+- If `API_SECRET` is empty or unset, authentication is disabled (open access)
+
+### Setting Up
+
+1. In the Render dashboard, go to **halcyon-api > Environment**
+2. Add or update `API_SECRET` with a strong random string (e.g., `openssl rand -hex 32`)
+3. On the frontend service, set `VITE_IS_CLOUD=true` so the auth gate appears
+4. Redeploy both services
+
+### Security Notes
+
+- The password is sent as a `Bearer` token in the `Authorization` header
+- All API endpoints require the token when `API_SECRET` is set
+- On 401 responses, the frontend clears the session and shows the login screen
+
 ## Troubleshooting
 
 ### Frontend shows "API connection error"
