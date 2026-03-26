@@ -2,7 +2,6 @@
 # https://render.com/docs/blueprint-spec
 
 services:
-services:
   # ── Static site: React frontend ────────────────────────────────────
   - type: web
     name: halcyon-frontend
