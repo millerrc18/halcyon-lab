@@ -75,6 +75,7 @@ class WatchLoop:
         self._scorer = GuardedScorer()
         self._scoring_in_progress = False
         self._daily_scored = 0
+        self._tg_last_update_id = 0
 
         # VRAM handoff flags
         self._vram_handoff_done = False
@@ -251,6 +252,15 @@ class WatchLoop:
             subject = f"[TRADE DESK] Morning Watchlist - {date_str}"
             send_email(subject, body)
             print("[WATCH] Morning watchlist email sent.")
+
+        # Telegram watchlist notification
+        try:
+            from src.notifications.telegram import notify_watchlist, is_telegram_enabled
+            if is_telegram_enabled():
+                tickers = [c["ticker"] for c in candidates.get("watchlist", [])]
+                notify_watchlist(tickers, len(tickers))
+        except Exception:
+            pass
 
     def _run_scan(self):
         """Execute a market-hours scan cycle."""
@@ -432,6 +442,18 @@ class WatchLoop:
                       and not self._daily_audit_done):
                     self._safe_run("daily audit", self._run_daily_audit)
                     self._daily_audit_done = True
+                    # Send daily scoring summary via Telegram
+                    try:
+                        from src.notifications.telegram import notify_scoring_summary, is_telegram_enabled
+                        if is_telegram_enabled() and self._daily_scored > 0:
+                            import sqlite3
+                            with sqlite3.connect("ai_research_desk.sqlite3") as conn:
+                                backlog = conn.execute(
+                                    "SELECT COUNT(*) FROM training_examples WHERE quality_score IS NULL"
+                                ).fetchone()[0]
+                            notify_scoring_summary(self._daily_scored, backlog)
+                    except Exception:
+                        pass
 
                 # 5. Training data collection (4:30 PM ET)
                 elif (self.training_enabled and hour == 16 and now.minute >= 30
@@ -557,6 +579,21 @@ class WatchLoop:
                               f"{self._minutes_until_next_scan(now):.0f} min{scored_str}")
                     elif not (self.overnight and now.weekday() < 5):
                         print(f"[WATCH] {time_str} ET -- market closed")
+
+                # 9. Poll Telegram commands
+                try:
+                    from src.notifications.telegram import (
+                        poll_commands, handle_command, send_telegram, is_telegram_enabled
+                    )
+                    if is_telegram_enabled():
+                        commands, self._tg_last_update_id = poll_commands(
+                            self._tg_last_update_id
+                        )
+                        for cmd in commands:
+                            response = handle_command(cmd["command"], cmd["args"])
+                            send_telegram(response)
+                except Exception:
+                    pass
 
                 time.sleep(60)
 
@@ -938,8 +975,20 @@ class WatchLoop:
             )
             self._vram_manager = vm
             print("[WATCH] VRAM handoff complete — overnight training started")
+            try:
+                from src.notifications.telegram import notify_vram_handoff, is_telegram_enabled
+                if is_telegram_enabled():
+                    notify_vram_handoff("training", True)
+            except Exception:
+                pass
         else:
             print("[WATCH] VRAM handoff FAILED — staying in inference mode")
+            try:
+                from src.notifications.telegram import notify_vram_handoff, is_telegram_enabled
+                if is_telegram_enabled():
+                    notify_vram_handoff("training", False, "Staying in inference mode")
+            except Exception:
+                pass
 
     def _run_morning_handoff(self):
         """5:15 AM ET — Kill training subprocess, reload Ollama."""
@@ -958,8 +1007,20 @@ class WatchLoop:
         if vm.handoff_to_inference():
             stop_flag.unlink(missing_ok=True)
             print("[WATCH] Morning handoff complete — Ollama loaded and warm")
+            try:
+                from src.notifications.telegram import notify_vram_handoff, is_telegram_enabled
+                if is_telegram_enabled():
+                    notify_vram_handoff("inference", True)
+            except Exception:
+                pass
         else:
             print("[WATCH] Morning handoff FAILED — attempting Ollama restart")
+            try:
+                from src.notifications.telegram import notify_vram_handoff, is_telegram_enabled
+                if is_telegram_enabled():
+                    notify_vram_handoff("inference", False, "Attempting restart")
+            except Exception:
+                pass
             # Fallback: try reload anyway
             stop_flag.unlink(missing_ok=True)
             try:
