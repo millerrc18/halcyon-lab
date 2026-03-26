@@ -24,14 +24,14 @@ services:
   - type: web
     name: halcyon-api
     runtime: python
-    plan: free
+    plan: standard
     buildCommand: pip install -r requirements-cloud.txt
     startCommand: uvicorn src.api.cloud_app:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: DATABASE_URL
-        sync: false
+        sync: false  # Set manually in Render dashboard (Internal Database URL)
       - key: API_SECRET
-        sync: false
+        sync: false # Set manually in Render dashboard
       - key: PYTHON_VERSION
         value: "3.11.6"
-    healthCheckPath: /healthz
+    healthCheckPath: /api/status
