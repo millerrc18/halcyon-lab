@@ -1,3 +1,4 @@
+<!-- TODO: Counts need updating after M22 mega sprint (CLI commands, dashboard pages, research docs, tables, API routes). -->
 # AGENTS.md — Halcyon Lab Governance Document
 
 ## Purpose

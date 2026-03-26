@@ -1,3 +1,4 @@
+<!-- TODO: Counts need updating after M22 mega sprint (tables, API routes, schedule slots, schema). -->
 # Halcyon Lab — System Architecture
 
 ## System Pipeline
