@@ -501,29 +501,42 @@ def cmd_collect_data(args):
     print("\n=== DATA COLLECTION ===\n")
     universe = get_sp100_universe()
 
-    print("[1/6] Collecting options chains...")
+    print("[1/7] Collecting options chains...")
     r = collect_options_chains(universe)
     print(f"  {r}")
 
-    print("[2/6] Computing options metrics...")
+    print("[2/7] Computing options metrics...")
     r = compute_options_metrics(universe)
     print(f"  {r}")
 
-    print("[3/6] VIX term structure...")
+    print("[3/7] VIX term structure...")
     r = collect_vix_term_structure()
     print(f"  {r}")
 
-    print("[4/6] CBOE ratios...")
+    print("[4/7] CBOE ratios...")
     r = collect_cboe_ratios()
     print(f"  {r}")
 
-    print("[5/6] FRED macro indicators...")
+    print("[5/7] FRED macro indicators...")
     r = collect_macro_snapshots()
     print(f"  {r}")
 
-    print("[6/6] Google Trends (batch)...")
+    print("[6/7] Google Trends (batch)...")
     r = collect_google_trends(universe, batch_size=20)
     print(f"  {r}")
+
+    print("[7/7] Earnings calendar...")
+    try:
+        from scripts.fetch_earnings_calendar import fetch_earnings_dates
+        r = fetch_earnings_dates(universe)
+        print(f"  {r}")
+        upcoming = r.get("upcoming_7d", [])
+        if upcoming:
+            print(f"\n  ⚠️  EARNINGS THIS WEEK:")
+            for item in upcoming:
+                print(f"    • {item}")
+    except Exception as e:
+        print(f"  Earnings fetch failed: {e}")
 
     print("\nData collection complete.")
 

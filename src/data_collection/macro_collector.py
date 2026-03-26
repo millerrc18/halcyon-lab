@@ -25,16 +25,22 @@ FRED_SERIES = {
     "DGS2": "2-Year Treasury Yield",
     "CPIAUCSL": "CPI All Urban Consumers",
     "UNRATE": "Unemployment Rate",
-    # New expanded series
+    # Expanded macro series
     "GSCPI": "NY Fed Global Supply Chain Pressure Index",
     "NAPMSDEL": "ISM Supplier Deliveries Index",
     "ISRATIO": "Total Business Inventory/Sales Ratio",
     "T10Y2Y": "10Y-2Y Treasury Spread",
     "TEDRATE": "TED Spread",
     "VIXCLS": "VIX Close (FRED)",
-    "BAMLH0A0HYM2": "High Yield Spread",
+    "BAMLH0A0HYM2": "High Yield Spread (OAS)",
     "DCOILWTICO": "WTI Crude Oil Price",
     "DTWEXBGS": "Trade-Weighted USD Index",
+    # Credit & financial conditions (regime transition signals)
+    "BAMLC0A4CBBB": "BBB Corporate Bond Spread (OAS)",
+    "NFCI": "Chicago Fed National Financial Conditions Index",
+    "STLFSI2": "St. Louis Fed Financial Stress Index",
+    "ICSA": "Initial Jobless Claims (Weekly)",
+    "T10YIE": "10-Year Breakeven Inflation Rate",
 }
 
 _INIT_SQL = """

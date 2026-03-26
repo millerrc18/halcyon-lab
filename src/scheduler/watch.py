@@ -733,28 +733,41 @@ class WatchLoop:
         results = {}
 
         # 1. Options chains (most important)
-        print("[WATCH]   [1/6] Options chains...")
+        print("[WATCH]   [1/7] Options chains...")
         results["options"] = collect_options_chains(universe)
 
         # 2. Derived metrics from chains
-        print("[WATCH]   [2/6] Options metrics...")
+        print("[WATCH]   [2/7] Options metrics...")
         results["metrics"] = compute_options_metrics(universe)
 
         # 3. VIX term structure
-        print("[WATCH]   [3/6] VIX term structure...")
+        print("[WATCH]   [3/7] VIX term structure...")
         results["vix"] = collect_vix_term_structure()
 
         # 4. CBOE ratios
-        print("[WATCH]   [4/6] CBOE ratios...")
+        print("[WATCH]   [4/7] CBOE ratios...")
         results["cboe"] = collect_cboe_ratios()
 
         # 5. FRED macro
-        print("[WATCH]   [5/6] FRED macro indicators...")
+        print("[WATCH]   [5/7] FRED macro indicators...")
         results["macro"] = collect_macro_snapshots()
 
         # 6. Google Trends (batched — subset each night)
-        print("[WATCH]   [6/6] Google Trends (batch)...")
+        print("[WATCH]   [6/7] Google Trends (batch)...")
         results["trends"] = collect_google_trends(universe, batch_size=20)
+
+        # 7. Earnings calendar
+        print("[WATCH]   [7/7] Earnings calendar...")
+        try:
+            from scripts.fetch_earnings_calendar import fetch_earnings_dates
+            results["earnings"] = fetch_earnings_dates(universe)
+            upcoming = results["earnings"].get("upcoming_7d", [])
+            if upcoming:
+                logger.warning("[EARNINGS] %d stocks report this week: %s",
+                               len(upcoming), ", ".join(upcoming))
+        except Exception as e:
+            logger.debug("[WATCH] Earnings fetch failed: %s", e)
+            results["earnings"] = {"error": str(e)}
 
         summary = {k: str(v) for k, v in results.items()}
         print(f"[WATCH] Data collection complete: {summary}")
