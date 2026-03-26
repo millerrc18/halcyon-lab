@@ -3,12 +3,12 @@ import { clearAuthSession } from './components/AuthGate'
 
 const TOKEN_KEY = 'hl_token'
 const TOKEN_TS_KEY = 'hl_token_ts'
-const SESSION_MAX_MS = 24 * 60 * 60 * 1000 // 24 hours
+const SESSION_MAX_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
 
 function authHeaders() {
   const headers = { 'Content-Type': 'application/json' }
-  // In cloud mode, use session token; otherwise use static secret
-  const token = sessionStorage.getItem(TOKEN_KEY) || API_SECRET
+  // In cloud mode, use stored token; otherwise use static secret
+  const token = localStorage.getItem(TOKEN_KEY) || API_SECRET
   if (token) {
     headers['Authorization'] = `Bearer ${token}`
   }
@@ -17,7 +17,7 @@ function authHeaders() {
 
 function checkSessionTimeout() {
   if (!IS_CLOUD) return
-  const ts = sessionStorage.getItem(TOKEN_TS_KEY)
+  const ts = localStorage.getItem(TOKEN_TS_KEY)
   if (ts && Date.now() - parseInt(ts, 10) > SESSION_MAX_MS) {
     clearAuthSession()
     window.location.reload()

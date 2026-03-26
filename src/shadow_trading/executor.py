@@ -575,7 +575,12 @@ def open_live_trade(
     max_shares_by_bp = int(buying_power / entry_price) if entry_price > 0 else 0
     planned_shares = min(planned_shares, max(1, max_shares_by_bp))
 
+    # Use notional (dollar) ordering for fractional share support
+    # Cap at 95% of buying power to buffer for market price movement
     planned_allocation = planned_shares * entry_price
+    if planned_allocation > buying_power and buying_power > 1.0:
+        planned_allocation = round(buying_power * 0.95, 2)
+        planned_shares = max(1, int(planned_allocation / entry_price))
 
     et = ZoneInfo("America/New_York")
     now = datetime.now(et)
@@ -602,7 +607,7 @@ def open_live_trade(
     # Place live order
     try:
         from src.shadow_trading.alpaca_adapter import place_live_entry
-        order = place_live_entry(ticker, planned_shares)
+        order = place_live_entry(ticker, planned_shares, notional=planned_allocation)
         trade_data["alpaca_order_id"] = order.get("order_id")
         trade_data["order_type"] = "simple"
 

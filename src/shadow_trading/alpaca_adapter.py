@@ -355,32 +355,47 @@ def get_live_account_info() -> dict:
     }
 
 
-def place_live_entry(ticker: str, shares: int) -> dict:
-    """Place a LIVE market buy order. Returns order details dict."""
+def place_live_entry(ticker: str, shares: int, notional: float | None = None) -> dict:
+    """Place a LIVE market buy order. Returns order details dict.
+
+    Args:
+        ticker: Stock symbol
+        shares: Number of whole shares (used if notional is None)
+        notional: Dollar amount to invest (enables fractional shares).
+                  If provided, overrides shares parameter.
+    """
     cfg = _get_live_config()
     if not cfg["enabled"]:
         raise LiveTradingError("Live trading is disabled in config.")
-
-    logger.info("[LIVE] Placing LIVE BUY: %d shares of %s", shares, ticker)
 
     client = _get_live_trading_client()
 
     from alpaca.trading.requests import MarketOrderRequest
     from alpaca.trading.enums import OrderSide, TimeInForce
 
-    request = MarketOrderRequest(
-        symbol=ticker,
-        qty=shares,
-        side=OrderSide.BUY,
-        time_in_force=TimeInForce.DAY,
-    )
+    if notional and notional > 1.0:
+        logger.info("[LIVE] Placing LIVE BUY: $%.2f notional of %s", notional, ticker)
+        request = MarketOrderRequest(
+            symbol=ticker,
+            notional=round(notional, 2),
+            side=OrderSide.BUY,
+            time_in_force=TimeInForce.DAY,
+        )
+    else:
+        logger.info("[LIVE] Placing LIVE BUY: %d shares of %s", shares, ticker)
+        request = MarketOrderRequest(
+            symbol=ticker,
+            qty=shares,
+            side=OrderSide.BUY,
+            time_in_force=TimeInForce.DAY,
+        )
 
     order = client.submit_order(request)
 
     return {
         "order_id": str(order.id),
         "symbol": str(order.symbol),
-        "qty": int(order.qty) if order.qty else shares,
+        "qty": float(order.qty) if order.qty else shares,
         "side": str(order.side),
         "type": str(order.type),
         "status": str(order.status),
@@ -390,22 +405,44 @@ def place_live_entry(ticker: str, shares: int) -> dict:
     }
 
 
-def place_live_exit(ticker: str, shares: int) -> dict:
-    """Place a LIVE market sell order. Returns order details dict."""
+def place_live_exit(ticker: str, shares: int | float = 0) -> dict:
+    """Place a LIVE market sell order. Returns order details dict.
+
+    If shares is 0 or not provided, closes the entire position via
+    Alpaca's close_position API (handles fractional shares automatically).
+    """
     cfg = _get_live_config()
     if not cfg["enabled"]:
         raise LiveTradingError("Live trading is disabled in config.")
 
-    logger.info("[LIVE] Placing LIVE SELL: %d shares of %s", shares, ticker)
-
     client = _get_live_trading_client()
+
+    # Use close_position for clean fractional exits
+    if shares <= 0:
+        logger.info("[LIVE] Closing entire position for %s", ticker)
+        try:
+            order = client.close_position(ticker)
+            return {
+                "order_id": str(order.id) if hasattr(order, 'id') else "close_position",
+                "symbol": ticker,
+                "qty": float(order.qty) if hasattr(order, 'qty') and order.qty else 0,
+                "side": "sell",
+                "type": "market",
+                "status": str(order.status) if hasattr(order, 'status') else "closed",
+                "filled_avg_price": float(order.filled_avg_price) if hasattr(order, 'filled_avg_price') and order.filled_avg_price else None,
+                "filled_at": str(order.filled_at) if hasattr(order, 'filled_at') and order.filled_at else None,
+            }
+        except Exception as e:
+            logger.warning("[LIVE] close_position failed for %s: %s, trying market sell", ticker, e)
+
+    logger.info("[LIVE] Placing LIVE SELL: %s shares of %s", shares, ticker)
 
     from alpaca.trading.requests import MarketOrderRequest
     from alpaca.trading.enums import OrderSide, TimeInForce
 
     request = MarketOrderRequest(
         symbol=ticker,
-        qty=shares,
+        qty=float(shares),
         side=OrderSide.SELL,
         time_in_force=TimeInForce.DAY,
     )
@@ -415,7 +452,7 @@ def place_live_exit(ticker: str, shares: int) -> dict:
     return {
         "order_id": str(order.id),
         "symbol": str(order.symbol),
-        "qty": int(order.qty) if order.qty else shares,
+        "qty": float(order.qty) if order.qty else shares,
         "side": str(order.side),
         "type": str(order.type),
         "status": str(order.status),

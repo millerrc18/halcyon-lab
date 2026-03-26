@@ -3,19 +3,19 @@ import { API_BASE, IS_CLOUD } from '../config'
 
 const TOKEN_KEY = 'hl_token'
 const TOKEN_TS_KEY = 'hl_token_ts'
-const SESSION_MAX_MS = 24 * 60 * 60 * 1000 // 24 hours
+const SESSION_MAX_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
 
 function isSessionValid() {
-  const token = sessionStorage.getItem(TOKEN_KEY)
-  const ts = sessionStorage.getItem(TOKEN_TS_KEY)
+  const token = localStorage.getItem(TOKEN_KEY)
+  const ts = localStorage.getItem(TOKEN_TS_KEY)
   if (!token || !ts) return false
   const elapsed = Date.now() - parseInt(ts, 10)
   return elapsed < SESSION_MAX_MS
 }
 
 export function clearAuthSession() {
-  sessionStorage.removeItem(TOKEN_KEY)
-  sessionStorage.removeItem(TOKEN_TS_KEY)
+  localStorage.removeItem(TOKEN_KEY)
+  localStorage.removeItem(TOKEN_TS_KEY)
 }
 
 export default function AuthGate({ children }) {
@@ -44,8 +44,8 @@ export default function AuthGate({ children }) {
         headers: { Authorization: `Bearer ${password}` },
       })
       if (res.ok) {
-        sessionStorage.setItem(TOKEN_KEY, password)
-        sessionStorage.setItem(TOKEN_TS_KEY, String(Date.now()))
+        localStorage.setItem(TOKEN_KEY, password)
+        localStorage.setItem(TOKEN_TS_KEY, String(Date.now()))
         setAuthed(true)
       } else {
         setError('Invalid password')
