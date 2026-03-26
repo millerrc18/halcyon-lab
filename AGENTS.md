@@ -1,4 +1,4 @@
-<!-- Counts verified 2026-03-26: 121 Python files, 22,172 LOC, 49 test files, 582 tests, 49 CLI commands, 48 API routes, 24 DB tables, 27 research docs. -->
+<!-- Counts verified 2026-03-26: 121 Python files, 22,174 LOC, 50 test files, 583 tests, 49 CLI commands, 62 API routes, 25 DB tables, 29 research docs. -->
 
 # AGENTS.md — Halcyon Lab Governance Document
 
@@ -105,7 +105,7 @@ Universe (S&P 100 → expanding to ~325 stocks)
 | 2:30 AM         | Leakage detector with model probing                          | Training         |
 | 4:30 AM         | DB maintenance, health checks, backups                       | CPU              |
 
-## Dashboard Pages (9)
+## Dashboard Pages (11)
 
 - **Dashboard** — KPIs, cumulative P&L, open trades, action buttons, live activity feed
 - **Packets** — Trade recommendations with expandable analysis
@@ -115,7 +115,7 @@ Universe (S&P 100 → expanding to ~325 stocks)
 - **CTO Report** — Performance analytics, fund metrics, metric trends
 - **Settings** — Configuration, API costs, data collection stats, system health
 - **Roadmap** — 5-phase plan with live gate metrics
-- **Docs** — 27 research documents + 7 core docs (34 total)
+- **Docs** — 29 research documents + 7 core docs (34 total)
 
 ## CLI Commands (49)
 
@@ -207,7 +207,7 @@ Each desk launches only after the previous desk is profitable. See docs/roadmap.
 - **SEC EDGAR** — Fundamental data
 - **Telegram Bot API** — Real-time push notifications
 
-## Research Library (27 documents)
+## Research Library (29 documents)
 
 See the dashboard Docs page for the complete research library covering:
 
