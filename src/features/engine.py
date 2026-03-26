@@ -211,6 +211,21 @@ def compute_all_features(ohlcv_data: dict[str, pd.DataFrame],
             # Sector conditioning (9C)
             _add_sector_features(feat, ticker, sector_profiles)
 
+            # Setup classification (Workstream 5)
+            try:
+                from src.features.setup_classifier import classify_setup, log_setup_signal
+                classification = classify_setup(feat, df)
+                feat["setup_type"] = classification["setup_type"]
+                feat["setup_confidence"] = classification["confidence"]
+                feat["setup_desk"] = classification["tradeable_by_desk"]
+                log_setup_signal(ticker, classification, feat,
+                                 regime=regime.get("regime_label", ""))
+            except Exception as e:
+                logger.debug("Setup classification failed for %s: %s", ticker, e)
+                feat["setup_type"] = "unknown"
+                feat["setup_confidence"] = 0.0
+                feat["setup_desk"] = "none"
+
             results[ticker] = feat
         except Exception as e:
             logger.warning("Failed to compute features for %s: %s", ticker, e)
