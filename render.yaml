@@ -20,7 +20,7 @@ services:
   - type: web
     name: halcyon-api
     runtime: python
-    plan: free
+    plan: basic-256mb
     buildCommand: pip install -r requirements-cloud.txt
     startCommand: uvicorn src.api.cloud_app:app --host 0.0.0.0 --port $PORT
     envVars:
@@ -29,14 +29,7 @@ services:
           name: halcyon-db
           property: connectionString
       - key: API_SECRET
-        sync: false  # Set manually in Render dashboard
+        sync: false # Set manually in Render dashboard
       - key: PYTHON_VERSION
         value: "3.11.6"
     healthCheckPath: /api/status
-
-databases:
-  # ── Free Postgres database ─────────────────────────────────────────
-  - name: halcyon-db
-    plan: free
-    databaseName: halcyon
-    user: halcyon_user
