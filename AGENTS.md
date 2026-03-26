@@ -1,4 +1,5 @@
 <!-- Counts verified 2026-03-26: 121 Python files, 22,172 LOC, 49 test files, 582 tests, 49 CLI commands, 48 API routes, 24 DB tables, 27 research docs. -->
+
 # AGENTS.md — Halcyon Lab Governance Document
 
 ## Purpose
@@ -37,6 +38,7 @@ Universe (S&P 100 → expanding to ~325 stocks)
 ## Data Sources (7+ enrichment, 6 collection)
 
 ### Enrichment (used in every scan)
+
 1. **Technical Data** — Price, volume, moving averages, RSI, ATR, trend state, relative strength
 2. **Market Regime** — SPY trend, volatility, breadth, drawdown, regime classification
 3. **Sector Context** — Sector relative strength rank, sector average score
@@ -46,6 +48,7 @@ Universe (S&P 100 → expanding to ~325 stocks)
 7. **Macro Context** — FRED: Fed Funds rate, yield curve, unemployment, CPI, GDP + 9 expanded series
 
 ### Data Collection (overnight pipeline — irreplaceable daily snapshots)
+
 1. **Options Chains** — Full EOD chain snapshots via yfinance (strikes, IV, Greeks, OI)
 2. **Options Metrics** — Derived signals: IV rank, put/call ratios, IV skew, unusual activity
 3. **VIX Term Structure** — VIX, VIX9D, VIX3M, VIX1Y + contango/backwardation classification
@@ -76,31 +79,31 @@ Universe (S&P 100 → expanding to ~325 stocks)
 
 **Target: 73% GPU utilization** (inference ≤30%, training ≤45%, slack ≥25%)
 
-| Time (ET) | Task | GPU Mode |
-|-----------|------|----------|
-| 5:15 AM | Morning VRAM handoff (training → Ollama) | Transition |
-| 5:30 AM | Post-close capture (MFE/MAE update, regime logging) | Inference |
-| 6:00 AM | Pre-market refresh + rolling feature computation | CPU + Inference |
-| 7:00 AM | Self-blinded training data generation (historical) | Inference |
-| 8:00 AM | Morning watchlist | Inference |
-| 8:02 AM | Overnight news scoring + sentiment analysis | Inference |
-| 9:00 AM | Pre-market candidate analysis | Inference |
-| 9:25 AM | Guard band — verify model warm | Idle |
-| 9:30 AM–4:00 PM | Market scans (every 30 min) + between-scan scoring | Inference |
-| 4:00 PM | EOD recap + daily P&L | CPU + Inference |
-| 4:15 PM | Training data scoring (LLM-as-judge, ~50 examples) | Inference |
-| 5:30 PM | Post-close capture | CPU |
-| 6:00 PM | Training data collection from closed trades | CPU |
-| 6:45 PM | DPO preference pair generation | Inference |
-| 6:50 PM | Evening VRAM handoff (Ollama → training subprocess) | Transition |
-| 7:00 PM | Walk-forward backtesting | Training |
-| 9:30 PM | Data collection (options, VIX, FRED, trends, CBOE, earnings) | CPU (concurrent) |
-| 10:00 PM | News ingestion (full universe) | CPU (concurrent) |
-| 11:00 PM | Enrichment pre-cache | CPU (concurrent) |
-| 11:05 PM | Auxiliary model training (regime classifier) | Training |
-| 1:00 AM | Feature importance computation | Training |
-| 2:30 AM | Leakage detector with model probing | Training |
-| 4:30 AM | DB maintenance, health checks, backups | CPU |
+| Time (ET)       | Task                                                         | GPU Mode         |
+| --------------- | ------------------------------------------------------------ | ---------------- |
+| 5:15 AM         | Morning VRAM handoff (training → Ollama)                     | Transition       |
+| 5:30 AM         | Post-close capture (MFE/MAE update, regime logging)          | Inference        |
+| 6:00 AM         | Pre-market refresh + rolling feature computation             | CPU + Inference  |
+| 7:00 AM         | Self-blinded training data generation (historical)           | Inference        |
+| 8:00 AM         | Morning watchlist                                            | Inference        |
+| 8:02 AM         | Overnight news scoring + sentiment analysis                  | Inference        |
+| 9:00 AM         | Pre-market candidate analysis                                | Inference        |
+| 9:25 AM         | Guard band — verify model warm                               | Idle             |
+| 9:30 AM–4:00 PM | Market scans (every 30 min) + between-scan scoring           | Inference        |
+| 4:00 PM         | EOD recap + daily P&L                                        | CPU + Inference  |
+| 4:15 PM         | Training data scoring (LLM-as-judge, ~50 examples)           | Inference        |
+| 5:30 PM         | Post-close capture                                           | CPU              |
+| 6:00 PM         | Training data collection from closed trades                  | CPU              |
+| 6:45 PM         | DPO preference pair generation                               | Inference        |
+| 6:50 PM         | Evening VRAM handoff (Ollama → training subprocess)          | Transition       |
+| 7:00 PM         | Walk-forward backtesting                                     | Training         |
+| 9:30 PM         | Data collection (options, VIX, FRED, trends, CBOE, earnings) | CPU (concurrent) |
+| 10:00 PM        | News ingestion (full universe)                               | CPU (concurrent) |
+| 11:00 PM        | Enrichment pre-cache                                         | CPU (concurrent) |
+| 11:05 PM        | Auxiliary model training (regime classifier)                 | Training         |
+| 1:00 AM         | Feature importance computation                               | Training         |
+| 2:30 AM         | Leakage detector with model probing                          | Training         |
+| 4:30 AM         | DB maintenance, health checks, backups                       | CPU              |
 
 ## Dashboard Pages (9)
 
@@ -119,35 +122,45 @@ Universe (S&P 100 → expanding to ~325 stocks)
 See docs/cli-reference.md for full documentation with options and descriptions.
 
 ### Core Pipeline (8)
+
 `init-db`, `demo-packet`, `send-test-email`, `send-test-telegram`, `ingest`, `scan`, `morning-watchlist`, `eod-recap`
 
 ### Shadow Trading (4)
+
 `shadow-status`, `shadow-history`, `shadow-close`, `shadow-account`
 
 ### Live Trading (3)
+
 `live-status`, `live-history`, `live-close`
 
 ### Review & Analysis (6)
+
 `review`, `mark-executed`, `review-scorecard`, `review-bootcamp`, `postmortems`, `postmortem`
 
 ### Training — Data (5)
+
 `training-status`, `training-history`, `training-report`, `bootstrap-training`, `backfill-training`
 
 ### Training — Quality (5)
+
 `classify-training-data`, `score-training-data`, `validate-training-data`, `generate-contrastive`, `generate-preferences`
 
 ### Training — Execution (2)
+
 `train [--force|--rollback|--export]`, `train-pipeline [--force]`
 
 ### Evaluation (7)
+
 `cto-report`, `evaluate-holdout`, `model-evaluation-status`, `promote-model`, `feature-importance`, `backtest`, `compare-models`, `check-leakage`
 
 ### Operations (9)
+
 `collect-data`, `fetch-earnings`, `halt-trading`, `resume-trading`, `preflight`, `council`, `watch [--overnight]`, `dashboard`
 
 ## Scope
 
 ### In Scope
+
 - S&P 100 universe (expanding to ~325 stocks), long-only equity swing trades (2-15 day holds)
 - Systematic scoring + LLM commentary + bracket execution
 - Self-improving training pipeline with quality gates
@@ -155,12 +168,14 @@ See docs/cli-reference.md for full documentation with options and descriptions.
 - Passive options/volatility data collection
 
 ### Out of Scope (Current Phase)
+
 - Options trading (passive data collection only — Options Volatility Desk in Phase 3-4)
 - Short selling
 - High-frequency / intraday trading (Intraday Desk is Phase 6+)
 - Live trading with real money (Phase 2)
 
 ### Future Desks (Gated by Performance)
+
 Each desk launches only after the previous desk is profitable. See docs/roadmap.md for full specifications.
 
 - **Equity Research Desk** (Phase 2) — Same model, lower thresholds (score ≥ 30), separate paper account, training data volume
@@ -195,6 +210,7 @@ Each desk launches only after the previous desk is profitable. See docs/roadmap.
 ## Research Library (27 documents)
 
 See the dashboard Docs page for the complete research library covering:
+
 - Training methodology (formats, rubric, self-blinding, degradation prevention, gaps/innovation, GRPO)
 - Strategy (alternative data, Halcyon Framework, optimal universe size, options trading)
 - Business (fund path/regulatory/tax, scaling plan)
@@ -203,6 +219,7 @@ See the dashboard Docs page for the complete research library covering:
 ## Roadmap
 
 See the dashboard Roadmap page or docs/roadmap.md for the 6-phase development plan:
+
 1. **Bootcamp** (current) — Equity Swing Desk, paper $100K, prove edge
 2. **Micro Live** — Swing Desk live ($500-$1K) + Research Desk (paper, training data volume)
 3. **Growth** — Options Volatility Desk (paper), sector/regime LoRA adapters

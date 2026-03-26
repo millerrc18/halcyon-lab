@@ -60,7 +60,7 @@ Each desk is gated: the PREVIOUS desk must be profitable before the next desk la
 - Telegram push notifications for trade alerts and system events
 - Earnings calendar with scan-time proximity checks
 - 19 FRED series including credit spreads, financial conditions, breakeven inflation
-- 25 research documents (regime timeline, company profiles, compute schedule, API comparison, options, fund path, market assessment, v2 training spec, master business plan)
+- 22 research documents (regime timeline, company profiles, compute schedule, API comparison, options, fund path, market assessment, v2 training spec, master business plan)
 - Email CC support for secondary notification address
 
 ---
