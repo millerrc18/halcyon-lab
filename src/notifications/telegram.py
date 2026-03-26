@@ -376,21 +376,31 @@ def handle_command(command: str, args: str) -> str:
 
 def _cmd_status() -> str:
     """System status summary."""
-    from src.config import load_config
-    from src.llm.client import is_llm_available
-    from src.training.versioning import get_active_model_name, get_training_example_counts
-
-    config = load_config()
-    llm_ok = is_llm_available(config)
-    model = get_active_model_name()
-    counts = get_training_example_counts()
     now = datetime.now(ET)
+
+    # Check Ollama directly instead of importing is_llm_available
+    try:
+        resp = requests.get("http://localhost:11434/api/tags", timeout=3)
+        llm_ok = resp.status_code == 200
+    except Exception:
+        llm_ok = False
+
+    try:
+        from src.training.versioning import get_active_model_name, get_training_example_counts
+        model = get_active_model_name()
+        counts = get_training_example_counts()
+        total = counts['total']
+    except Exception:
+        model = "unknown"
+        total = "?"
+
+    market_open = 9 <= now.hour < 16 and now.weekday() < 5
 
     return (
         f"🔧 <b>SYSTEM STATUS</b> ({now.strftime('%H:%M ET')})\n"
         f"LLM: {'✅' if llm_ok else '❌'} {model}\n"
-        f"Training examples: {counts['total']}\n"
-        f"Market: {'Open' if 9 <= now.hour < 16 and now.weekday() < 5 else 'Closed'}"
+        f"Training examples: {total}\n"
+        f"Market: {'Open' if market_open else 'Closed'}"
     )
 
 
