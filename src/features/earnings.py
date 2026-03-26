@@ -30,7 +30,8 @@ def get_next_earnings_date(ticker: str) -> str | None:
     # Fallback to yfinance
     try:
         import yfinance as yf
-        t = yf.Ticker(ticker)
+        from src.universe.sp100 import to_yfinance_ticker
+        t = yf.Ticker(to_yfinance_ticker(ticker))
         # Try .calendar first — returns a dict or DataFrame with earnings dates
         cal = t.calendar
         if cal is not None:

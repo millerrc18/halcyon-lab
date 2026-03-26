@@ -171,6 +171,146 @@ def cmd_shadow_account(args):
         print(f"Failed to connect to Alpaca: {e}")
 
 
+# ── Live Trading ─────────────────────────────────────────────────────
+
+def cmd_live_status(args):
+    """Show live account balance and open positions."""
+    from src.config import load_config
+    config = load_config()
+    live_cfg = config.get("live_trading", {})
+
+    if not live_cfg.get("enabled", False):
+        print("LIVE TRADING — Disabled in config.")
+        print("  Set live_trading.enabled: true in settings.local.yaml")
+        return
+
+    try:
+        from src.shadow_trading.alpaca_adapter import get_live_account_info, get_live_positions
+        acct = get_live_account_info()
+        print(f"\nLIVE ACCOUNT:")
+        print(f"  Equity:       ${acct['equity']:.2f}")
+        print(f"  Cash:         ${acct['cash']:.2f}")
+        print(f"  Buying Power: ${acct['buying_power']:.2f}")
+        print(f"  Status:       {acct['status']}")
+
+        starting = live_cfg.get("starting_capital", 100)
+        pnl = acct['equity'] - starting
+        pnl_pct = (pnl / starting * 100) if starting > 0 else 0
+        print(f"  Starting:     ${starting:.2f}")
+        print(f"  Total P&L:    ${pnl:+.2f} ({pnl_pct:+.1f}%)")
+
+        positions = get_live_positions()
+        if positions:
+            print(f"\n  OPEN POSITIONS ({len(positions)}):")
+            for p in positions:
+                print(f"    {p['symbol']:6s}  qty={p['qty']}  "
+                      f"entry=${p['avg_entry_price']:.2f}  "
+                      f"current=${p['current_price']:.2f}  "
+                      f"P&L=${p['unrealized_pl']:+.2f}")
+        else:
+            print("\n  No open positions.")
+
+    except Exception as e:
+        print(f"Failed to connect to live Alpaca account: {e}")
+
+
+def cmd_live_history(args):
+    """Show live trade history from the journal."""
+    import sqlite3
+    days = getattr(args, "days", 30)
+    try:
+        from src.journal.store import initialize_database
+        initialize_database()
+        with sqlite3.connect("ai_research_desk.sqlite3") as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                """SELECT ticker, actual_entry_price, actual_exit_price,
+                       pnl_dollars, pnl_pct, exit_reason, created_at, actual_exit_time,
+                       status
+                FROM shadow_trades
+                WHERE source = 'live'
+                ORDER BY created_at DESC
+                LIMIT 50"""
+            ).fetchall()
+
+        if not rows:
+            print("LIVE TRADING — No live trades recorded.")
+            return
+
+        open_trades = [r for r in rows if r["status"] == "open"]
+        closed_trades = [r for r in rows if r["status"] == "closed"]
+
+        print(f"\nLIVE TRADE HISTORY:")
+
+        if open_trades:
+            print(f"\n  OPEN ({len(open_trades)}):")
+            for t in open_trades:
+                print(f"    {t['ticker']:6s}  entry=${(t['actual_entry_price'] or 0):.2f}  "
+                      f"opened={t['created_at'][:10]}")
+
+        if closed_trades:
+            print(f"\n  CLOSED ({len(closed_trades)}):")
+            total_pnl = 0.0
+            wins = 0
+            for t in closed_trades:
+                pnl = t["pnl_dollars"] or 0
+                total_pnl += pnl
+                if pnl > 0:
+                    wins += 1
+                print(f"    {t['ticker']:6s}  P&L=${pnl:+.2f} ({(t['pnl_pct'] or 0):+.1f}%)  "
+                      f"{t['exit_reason'] or '?'}  {(t['actual_exit_time'] or '')[:10]}")
+
+            win_rate = (wins / len(closed_trades) * 100) if closed_trades else 0
+            print(f"\n  Total: ${total_pnl:+.2f} | {len(closed_trades)} trades | "
+                  f"{win_rate:.0f}% win rate")
+    except Exception as e:
+        print(f"Error loading live trade history: {e}")
+
+
+def cmd_live_close(args):
+    """Manually close a live position."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    from src.journal.store import get_open_shadow_trades, close_shadow_trade
+    from src.shadow_trading.executor import _get_current_price_safe
+
+    ticker = args.ticker.upper()
+    reason = getattr(args, "reason", "manual")
+
+    # Find the live trade
+    open_trades = get_open_shadow_trades()
+    trade = next(
+        (t for t in open_trades if t["ticker"] == ticker and t.get("source") == "live"),
+        None,
+    )
+    if not trade:
+        print(f"No open LIVE trade found for {ticker}.")
+        return
+
+    entry = trade.get("actual_entry_price") or trade.get("entry_price", 0)
+    current = _get_current_price_safe(ticker) or entry
+    shares = trade.get("planned_shares", 1)
+    pnl_dollars = round((current - entry) * shares, 2)
+    pnl_pct = round((current - entry) / entry * 100, 2) if entry > 0 else 0
+
+    et = ZoneInfo("America/New_York")
+    now = datetime.now(et)
+
+    # Place live sell order
+    try:
+        from src.shadow_trading.alpaca_adapter import place_live_exit
+        place_live_exit(ticker, shares)
+    except Exception as e:
+        print(f"WARNING: Live sell order failed: {e}")
+        print("Closing journal record anyway.")
+
+    close_shadow_trade(
+        trade["trade_id"], exit_price=current, exit_time=now.isoformat(),
+        exit_reason=reason, pnl_dollars=pnl_dollars, pnl_pct=pnl_pct,
+    )
+    print(f"Closed LIVE {ticker}: {reason} | P&L=${pnl_dollars:+.2f} ({pnl_pct:+.1f}%)")
+
+
 # ── Review & Evaluation ──────────────────────────────────────────────
 
 def cmd_review(args):
@@ -591,6 +731,19 @@ def cmd_fetch_earnings(args):
             print(f"  • {item['ticker']:6s} {item['earnings_date']} ({item['days_away']}d) {item.get('earnings_time') or ''}")
 
 
+def cmd_council(args):
+    from src.council.engine import CouncilEngine
+    session_type = getattr(args, "type", "daily")
+    print(f"Running AI Council session (type: {session_type})...")
+    engine = CouncilEngine()
+    result = engine.run_session(session_type=session_type)
+    consensus = result.get("consensus", "unknown")
+    contested = result.get("is_contested", False)
+    print(f"\nConsensus: {consensus.upper()}"
+          f"{' (CONTESTED)' if contested else ''}")
+    print(f"Rounds: {result.get('rounds_completed', 0)} | "
+          f"Cost: ${result.get('total_cost', 0):.2f}")
+
 def cmd_watch(args):
     from src.config import load_config
     from src.scheduler.watch import WatchLoop
@@ -626,6 +779,11 @@ def build_parser() -> argparse.ArgumentParser:
     _p = sp.add_parser("shadow-history"); _p.add_argument("--days", type=int, default=30); _p.set_defaults(func=cmd_shadow_history)
     _p = sp.add_parser("shadow-close"); _p.add_argument("ticker"); _p.add_argument("--reason", default="manual"); _p.set_defaults(func=cmd_shadow_close)
     sp.add_parser("shadow-account").set_defaults(func=cmd_shadow_account)
+
+    # Live trading
+    sp.add_parser("live-status", help="Show live account balance and open positions").set_defaults(func=cmd_live_status)
+    _p = sp.add_parser("live-history", help="Show live trade history"); _p.add_argument("--days", type=int, default=30); _p.set_defaults(func=cmd_live_history)
+    _p = sp.add_parser("live-close", help="Close a live position"); _p.add_argument("ticker"); _p.add_argument("--reason", default="manual"); _p.set_defaults(func=cmd_live_close)
 
     # Review
     _p = sp.add_parser("review"); _p.add_argument("review_sub", nargs="?", default="list"); _p.set_defaults(func=cmd_review)
@@ -667,6 +825,7 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_parser("halt-trading").set_defaults(func=cmd_halt_trading)
     sp.add_parser("resume-trading").set_defaults(func=cmd_resume_trading)
     sp.add_parser("preflight").set_defaults(func=cmd_preflight)
+    _p = sp.add_parser("council", help="Run an AI Council session"); _p.add_argument("--type", default="daily", choices=["daily", "strategic", "on_demand"]); _p.set_defaults(func=cmd_council)
     _p = sp.add_parser("watch"); _p.add_argument("--email-mode", choices=["full_stream", "daily_summary", "silent"]); _p.add_argument("--overnight", action="store_true", help="Enable overnight schedule (post-close, news, enrichment, pre-market)"); _p.set_defaults(func=cmd_watch)
     _p = sp.add_parser("dashboard"); _p.add_argument("--port", type=int, default=8000); _p.set_defaults(func=cmd_dashboard)
 
@@ -675,7 +834,13 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main():
     from src.log_config import setup_logging
-    setup_logging()
+    from src.config import load_config
+    config = load_config()
+    log_cfg = config.get("logging", {})
+    setup_logging(
+        level=log_cfg.get("level", "INFO"),
+        log_file=log_cfg.get("file", "logs/halcyon.log"),
+    )
     initialize_database()
     args = build_parser().parse_args()
     args.func(args)

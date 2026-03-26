@@ -68,7 +68,7 @@ class TestSelfBlindingDataCollector:
 
         # Track what prompts are sent to Claude
         calls = []
-        def capture_call(system, user):
+        def capture_call(system, user, **kwargs):
             calls.append({"system": system, "user": user})
             return "<why_now>Test</why_now><analysis>Test analysis</analysis><metadata>Conviction: 7</metadata>"
         mock_gen.side_effect = capture_call
@@ -114,7 +114,7 @@ class TestSelfBlindingDataCollector:
         mock_conn.return_value = ctx
 
         calls = []
-        def capture_call(system, user):
+        def capture_call(system, user, **kwargs):
             calls.append({"system": system, "user": user})
             return "<why_now>Test</why_now><analysis>Test</analysis><metadata>Conviction: 7</metadata>"
         mock_gen.side_effect = capture_call
@@ -190,7 +190,7 @@ class TestSelfBlindingDataCollector:
 
         # Stage 1 succeeds, Stage 2 fails
         call_count = [0]
-        def side_effect(system, user):
+        def side_effect(system, user, **kwargs):
             call_count[0] += 1
             if call_count[0] == 1:
                 return "<why_now>Stage1</why_now><analysis>Stage1 analysis</analysis><metadata>Conviction: 7</metadata>"

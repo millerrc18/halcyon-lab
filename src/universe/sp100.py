@@ -5,6 +5,22 @@ Source: S&P Dow Jones Indices / public OEX constituent lists.
 Refresh periodically — constituents change with index rebalances.
 """
 
+# yfinance uses hyphens for share classes (BRK-B), not dots (BRK.B)
+YFINANCE_TICKER_MAP = {
+    "BRK.B": "BRK-B",
+}
+
+
+def to_yfinance_ticker(ticker: str) -> str:
+    """Map a canonical ticker to its yfinance-compatible form."""
+    return YFINANCE_TICKER_MAP.get(ticker, ticker)
+
+
+def from_yfinance_ticker(ticker: str) -> str:
+    """Map a yfinance ticker back to its canonical form."""
+    reverse = {v: k for k, v in YFINANCE_TICKER_MAP.items()}
+    return reverse.get(ticker, ticker)
+
 
 def get_sp100_universe() -> list[str]:
     """Return the current S&P 100 constituent ticker list, alphabetically sorted."""

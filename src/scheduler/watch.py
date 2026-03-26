@@ -86,6 +86,8 @@ class WatchLoop:
         self._premarket_training_done = False
         self._premarket_news_done = False
         self._premarket_candidates_done = False
+        self._ollama_warmup_done = False
+        self._council_done = False
 
     def _reset_daily_state(self):
         """Reset daily flags at midnight ET."""
@@ -114,6 +116,8 @@ class WatchLoop:
         self._premarket_training_done = False
         self._premarket_news_done = False
         self._premarket_candidates_done = False
+        self._ollama_warmup_done = False
+        self._council_done = False
 
     def _is_market_open(self, now: datetime) -> bool:
         """Check if market is currently open (weekday, between open and close)."""
@@ -253,12 +257,14 @@ class WatchLoop:
             send_email(subject, body)
             print("[WATCH] Morning watchlist email sent.")
 
-        # Telegram watchlist notification
+        # Telegram watchlist notification — send packet-worthy (high-conviction) names
         try:
             from src.notifications.telegram import notify_watchlist, is_telegram_enabled
             if is_telegram_enabled():
-                tickers = [c["ticker"] for c in candidates.get("watchlist", [])]
-                notify_watchlist(tickers, len(tickers))
+                pw_tickers = [c["ticker"] for c in candidates.get("packet_worthy", [])]
+                wl_count = len(candidates.get("watchlist", []))
+                notify_watchlist(pw_tickers[:5], len(pw_tickers),
+                                 watchlist_count=wl_count)
         except Exception:
             pass
 
@@ -301,6 +307,15 @@ class WatchLoop:
         candidates = get_top_candidates(ranked)
         packet_worthy = candidates["packet_worthy"]
 
+        # Cap packets per scan to avoid bleeding into next scan window
+        bootcamp_cfg = self.config.get("bootcamp", {})
+        max_packets = bootcamp_cfg.get("max_packets_per_scan", 8)
+        if len(packet_worthy) > max_packets:
+            overflow = packet_worthy[max_packets:]
+            packet_worthy = packet_worthy[:max_packets]
+            print(f"[WATCH] Capped at {max_packets} packets "
+                  f"({len(overflow)} deferred to next scan)")
+
         if not packet_worthy:
             print(f"[WATCH] No packet-worthy setups. {len(candidates['watchlist'])} on watchlist.")
             try:
@@ -332,6 +347,32 @@ class WatchLoop:
             print(f"  -> Logged {ticker}: {rec_id}")
             self._trades_managed_today += 1
 
+            # ═══ SHADOW TRADE EXECUTION (enables the training flywheel) ═══
+            try:
+                from src.shadow_trading.executor import open_shadow_trade
+                trade_id = open_shadow_trade(rec_id, packet, feat)
+                if trade_id:
+                    print(f"  -> Shadow trade opened: {trade_id}")
+                else:
+                    print(f"  -> Shadow trade skipped (risk governor or position limit)")
+            except Exception as e:
+                logger.warning("[WATCH] Shadow trade failed for %s: %s", ticker, e)
+
+            # ═══ LIVE TRADE EXECUTION (dual execution if enabled) ═══
+            live_cfg = self.config.get("live_trading", {})
+            now_live = datetime.now(ET)
+            hour_live = now_live.hour
+            if (live_cfg.get("enabled", False)
+                    and getattr(packet, 'llm_conviction', None) is not None
+                    and not (hour_live == 9 and now_live.minute < 31)):  # Skip first scan
+                try:
+                    from src.shadow_trading.executor import open_live_trade
+                    live_id = open_live_trade(rec_id, packet, feat)
+                    if live_id:
+                        print(f"  -> LIVE trade opened: {live_id}")
+                except Exception as e:
+                    logger.warning("[WATCH] Live trade failed for %s: %s", ticker, e)
+
             try:
                 broadcast_sync("trade_opened", {"ticker": ticker, "side": "BUY",
                                                 "score": candidate["score"]})
@@ -345,7 +386,9 @@ class WatchLoop:
                     ps = packet.position_sizing
                     notify_trade_opened(
                         ticker, ps.entry_price, ps.stop_level, ps.target_1,
-                        candidate["score"], ps.shares)
+                        candidate["score"], ps.shares,
+                        setup_type=feat.get("setup_type"),
+                        setup_confidence=feat.get("setup_confidence"))
             except Exception:
                 pass
 
@@ -355,6 +398,29 @@ class WatchLoop:
                 print(f"  -> Email sent for {ticker}")
             elif self.email_mode == "daily_summary":
                 self._daily_packets.append(rendered)
+
+        # Manage existing open trades (stop/target/timeout exits)
+        try:
+            from src.shadow_trading.executor import check_and_manage_open_trades
+            actions = check_and_manage_open_trades()
+            for action in actions:
+                print(f"  -> Trade action: {action['ticker']} — {action['action']} "
+                      f"(P&L: ${action.get('pnl_dollars', 0):+.2f})")
+                # Telegram close notification
+                try:
+                    from src.notifications.telegram import notify_trade_closed, is_telegram_enabled
+                    if is_telegram_enabled() and action.get("action") == "closed":
+                        notify_trade_closed(
+                            action["ticker"],
+                            action.get("pnl_dollars", 0),
+                            action.get("pnl_pct", 0),
+                            action.get("exit_reason", "unknown"),
+                            action.get("days_held", 0),
+                        )
+                except Exception:
+                    pass
+        except Exception as e:
+            logger.warning("[WATCH] Trade management failed: %s", e)
 
         try:
             broadcast_sync("scan_complete", {"tickers_scanned": len(universe),
@@ -421,6 +487,17 @@ class WatchLoop:
                 hour = now.hour
                 time_str = now.strftime("%H:%M")
 
+                # 0. Ollama warm-up (9:25 AM — before first scan)
+                if (hour == 9 and now.minute >= 25 and now.minute < 30
+                        and not self._ollama_warmup_done):
+                    self._safe_run("Ollama warm-up", self._run_ollama_warmup)
+                    self._ollama_warmup_done = True
+
+                # 0.5. Daily AI Council (8:30 AM — after watchlist, before first scan)
+                if (hour == 8 and now.minute >= 30 and not self._council_done):
+                    self._safe_run("daily council", self._run_daily_council)
+                    self._council_done = True
+
                 # 1. Morning watchlist
                 if hour == self.morning_hour and not self._morning_done:
                     self._safe_run("morning watchlist", self._run_morning_watchlist)
@@ -473,8 +550,8 @@ class WatchLoop:
                     self._safe_run("Saturday reports", self._run_saturday_reports)
                     self._saturday_reports_done = True
 
-                # ── Overnight schedule (weekdays only, --overnight flag) ──
-                elif self.overnight and now.weekday() < 5:
+                # ── Overnight schedule (weekdays only, --overnight flag, NOT during market hours) ──
+                elif self.overnight and now.weekday() < 5 and not self._is_market_open(now):
                     ran = False
 
                     # Morning VRAM handoff (5:15 AM) — kill training, reload Ollama
@@ -1027,6 +1104,80 @@ class WatchLoop:
                 vm._reload_ollama()
             except Exception as e:
                 logger.error("[WATCH] Ollama restart failed: %s", e)
+
+    # ── AI Council ────────────────────────────────────────────────
+
+    def _run_daily_council(self):
+        """8:30 AM ET — Run the daily AI Council session."""
+        print("[WATCH] Running daily AI Council session...")
+        try:
+            from src.council.engine import CouncilEngine
+            engine = CouncilEngine()
+            result = engine.run_session(session_type="daily")
+            consensus = result.get("consensus", "unknown")
+            cost = result.get("total_cost", 0)
+            rounds = result.get("rounds_completed", 0)
+            contested = result.get("is_contested", False)
+            print(f"[WATCH] Council complete: {consensus} "
+                  f"({'CONTESTED' if contested else 'agreed'}) "
+                  f"({rounds} rounds, ${cost:.2f})")
+
+            # Telegram notification
+            try:
+                from src.notifications.telegram import send_telegram, is_telegram_enabled
+                if is_telegram_enabled():
+                    now = datetime.now(ET).strftime("%H:%M ET")
+                    msg = f"🏛️ <b>AI COUNCIL SESSION</b> ({now})\n"
+                    msg += f"Consensus: <b>{consensus.upper()}</b>"
+                    if contested:
+                        msg += " ⚠️ CONTESTED"
+                    msg += f"\nCost: ${cost:.2f} | Rounds: {rounds}"
+                    send_telegram(msg)
+            except Exception:
+                pass
+        except Exception as e:
+            logger.error("[WATCH] Council session failed: %s", e)
+            print(f"[WATCH] Council session failed: {e}")
+
+    # ── Ollama Warm-Up ─────────────────────────────────────────────
+
+    def _run_ollama_warmup(self):
+        """9:25 AM ET — Full-length warm-up inference before first scan.
+
+        Not just a health check — runs a real prompt of similar length to
+        what the scan will generate, warming up the KV cache and CUDA kernels.
+        """
+        from pathlib import Path
+        from src.llm.client import generate, is_llm_available
+
+        if not is_llm_available():
+            print("[WATCH] Ollama not available — skipping warm-up")
+            return
+
+        warmup_path = Path("data/reference/warmup_prompt.txt")
+        if warmup_path.exists():
+            warmup_prompt = warmup_path.read_text(encoding="utf-8")
+        else:
+            warmup_prompt = (
+                "Analyze a hypothetical pullback trade in AAPL at $195.00. "
+                "The stock has pulled back 6% from its 50-day high in a strong uptrend. "
+                "SMA50 is rising, price is 3% above SMA200. Volume is contracting on "
+                "the pullback (0.7x average). RSI is at 42. The broader market regime "
+                "is calm_uptrend with healthy breadth (68% above 50d MA). "
+                "Provide conviction (1-10), why_now analysis, and deeper analysis."
+            )
+
+        import time as _time
+        start = _time.time()
+        system_prompt = "You are a senior equity research analyst. Analyze the setup."
+        result = generate(warmup_prompt, system_prompt)
+        elapsed = _time.time() - start
+
+        if result:
+            print(f"[WATCH] Ollama warm-up complete — {elapsed:.1f}s — ready for first scan")
+        else:
+            print(f"[WATCH] WARNING: Ollama warm-up failed ({elapsed:.1f}s) — "
+                  "first scan may be slow")
 
     # ── Pre-Market Pipeline Methods ──────────────────────────────────
 

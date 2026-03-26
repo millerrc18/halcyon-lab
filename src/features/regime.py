@@ -142,6 +142,54 @@ def compute_market_regime(spy: pd.DataFrame, ohlcv_data: dict[str, pd.DataFrame]
     }
 
 
+def classify_regime(regime_data: dict) -> str:
+    """Classify current market into one of 7 categorical regime types.
+
+    Uses the raw regime data from compute_market_regime() to produce a
+    higher-level classification for threshold and sizing decisions.
+
+    Returns one of:
+        BULL_LOW_VOL, BULL_HIGH_VOL, TRANSITION, CORRECTION,
+        BEAR_EARLY, BEAR_ESTABLISHED, CRISIS
+    """
+    vix_proxy = regime_data.get("vix_proxy", 15)
+    spy_above_200 = regime_data.get("spy_above_sma200", True)
+    spy_above_50 = regime_data.get("spy_above_sma50", True)
+    regime_label = regime_data.get("regime_label", "transitional")
+    drawdown = regime_data.get("spy_drawdown_from_high", 0)
+    breadth_pct = regime_data.get("market_breadth_pct", 50)
+
+    # Crisis: VIX > 35 or drawdown > 20%
+    if vix_proxy > 35 or drawdown < -20:
+        return "CRISIS"
+
+    # Bear established: below both MAs, drawdown > 15%
+    if not spy_above_200 and not spy_above_50 and drawdown < -15:
+        return "BEAR_ESTABLISHED"
+
+    # Bear early: below 200MA, drawdown 10-15%
+    if not spy_above_200 and drawdown < -10:
+        return "BEAR_EARLY"
+
+    # Correction: VIX 25-35, drawdown 5-10%
+    if vix_proxy > 25 and drawdown < -5:
+        return "CORRECTION"
+
+    # Transition: VIX 20-35 grinding, narrow breadth, or mixed signals
+    if regime_label == "transitional" or (vix_proxy > 20 and breadth_pct < 40):
+        return "TRANSITION"
+
+    # Bull with elevated vol
+    if spy_above_200 and spy_above_50 and vix_proxy > 20:
+        return "BULL_HIGH_VOL"
+
+    # Bull low vol — default when everything looks good
+    if spy_above_200 and spy_above_50:
+        return "BULL_LOW_VOL"
+
+    return "TRANSITION"
+
+
 def compute_sector_context(ticker: str, score: float, all_features: dict) -> dict:
     """Compare ticker against its sector peers.
 

@@ -292,3 +292,165 @@ def get_order_status(order_id: str) -> dict:
         "filled_avg_price": float(order.filled_avg_price) if order.filled_avg_price else None,
         "filled_at": str(order.filled_at) if order.filled_at else None,
     }
+
+
+# ── Live Trading Adapter ──────────────────────────────────────────────
+#
+# Separate client creation for live (real-money) Alpaca account.
+# Uses live_trading config section, NOT the paper alpaca section.
+# No paper-safety checks — this deliberately connects to a live account.
+# ──────────────────────────────────────────────────────────────────────
+
+
+class LiveTradingError(Exception):
+    """Raised when live trading operations fail."""
+
+
+def _get_live_config() -> dict:
+    """Load live trading config from settings."""
+    config = load_config()
+    live_cfg = config.get("live_trading", {})
+
+    api_key = os.environ.get("ALPACA_LIVE_API_KEY", live_cfg.get("api_key", ""))
+    api_secret = os.environ.get("ALPACA_LIVE_SECRET_KEY", live_cfg.get("secret_key", ""))
+
+    if not api_key or not api_secret:
+        raise LiveTradingError(
+            "Live trading API credentials not configured. "
+            "Set live_trading.api_key and live_trading.secret_key in config."
+        )
+
+    return {
+        "api_key": api_key,
+        "api_secret": api_secret,
+        "enabled": live_cfg.get("enabled", False),
+        "starting_capital": live_cfg.get("starting_capital", 100),
+        "max_open_positions": live_cfg.get("max_open_positions", 2),
+    }
+
+
+def _get_live_trading_client():
+    """Create and return an Alpaca TradingClient for LIVE trading."""
+    cfg = _get_live_config()
+    from alpaca.trading.client import TradingClient
+    return TradingClient(
+        api_key=cfg["api_key"],
+        secret_key=cfg["api_secret"],
+        paper=False,  # LIVE account
+    )
+
+
+def get_live_account_info() -> dict:
+    """Get live account info: balance, buying power, equity."""
+    client = _get_live_trading_client()
+    account = client.get_account()
+    return {
+        "account_id": str(account.id),
+        "status": str(account.status),
+        "cash": float(account.cash),
+        "buying_power": float(account.buying_power),
+        "equity": float(account.equity),
+        "portfolio_value": float(account.portfolio_value),
+        "currency": str(account.currency),
+    }
+
+
+def place_live_entry(ticker: str, shares: int) -> dict:
+    """Place a LIVE market buy order. Returns order details dict."""
+    cfg = _get_live_config()
+    if not cfg["enabled"]:
+        raise LiveTradingError("Live trading is disabled in config.")
+
+    logger.info("[LIVE] Placing LIVE BUY: %d shares of %s", shares, ticker)
+
+    client = _get_live_trading_client()
+
+    from alpaca.trading.requests import MarketOrderRequest
+    from alpaca.trading.enums import OrderSide, TimeInForce
+
+    request = MarketOrderRequest(
+        symbol=ticker,
+        qty=shares,
+        side=OrderSide.BUY,
+        time_in_force=TimeInForce.DAY,
+    )
+
+    order = client.submit_order(request)
+
+    return {
+        "order_id": str(order.id),
+        "symbol": str(order.symbol),
+        "qty": int(order.qty) if order.qty else shares,
+        "side": str(order.side),
+        "type": str(order.type),
+        "status": str(order.status),
+        "filled_avg_price": float(order.filled_avg_price) if order.filled_avg_price else None,
+        "filled_at": str(order.filled_at) if order.filled_at else None,
+        "created_at": str(order.created_at) if order.created_at else None,
+    }
+
+
+def place_live_exit(ticker: str, shares: int) -> dict:
+    """Place a LIVE market sell order. Returns order details dict."""
+    cfg = _get_live_config()
+    if not cfg["enabled"]:
+        raise LiveTradingError("Live trading is disabled in config.")
+
+    logger.info("[LIVE] Placing LIVE SELL: %d shares of %s", shares, ticker)
+
+    client = _get_live_trading_client()
+
+    from alpaca.trading.requests import MarketOrderRequest
+    from alpaca.trading.enums import OrderSide, TimeInForce
+
+    request = MarketOrderRequest(
+        symbol=ticker,
+        qty=shares,
+        side=OrderSide.SELL,
+        time_in_force=TimeInForce.DAY,
+    )
+
+    order = client.submit_order(request)
+
+    return {
+        "order_id": str(order.id),
+        "symbol": str(order.symbol),
+        "qty": int(order.qty) if order.qty else shares,
+        "side": str(order.side),
+        "type": str(order.type),
+        "status": str(order.status),
+        "filled_avg_price": float(order.filled_avg_price) if order.filled_avg_price else None,
+        "filled_at": str(order.filled_at) if order.filled_at else None,
+    }
+
+
+def get_live_positions() -> list[dict]:
+    """Get all open live positions."""
+    client = _get_live_trading_client()
+    positions = client.get_all_positions()
+    return [
+        {
+            "symbol": str(pos.symbol),
+            "qty": int(pos.qty),
+            "avg_entry_price": float(pos.avg_entry_price),
+            "current_price": float(pos.current_price),
+            "market_value": float(pos.market_value),
+            "unrealized_pl": float(pos.unrealized_pl),
+            "unrealized_plpc": float(pos.unrealized_plpc),
+        }
+        for pos in positions
+    ]
+
+
+def get_live_order_status(order_id: str) -> dict:
+    """Check the status of a live order."""
+    client = _get_live_trading_client()
+    order = client.get_order_by_id(order_id)
+    return {
+        "order_id": str(order.id),
+        "symbol": str(order.symbol),
+        "status": str(order.status),
+        "filled_qty": str(order.filled_qty) if order.filled_qty else "0",
+        "filled_avg_price": float(order.filled_avg_price) if order.filled_avg_price else None,
+        "filled_at": str(order.filled_at) if order.filled_at else None,
+    }

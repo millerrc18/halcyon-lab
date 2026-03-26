@@ -66,9 +66,9 @@ class TestLeakageDetectorWithBiasedData:
             result = check_outcome_leakage(db_path)
 
             assert result["n_examples"] == 80
-            assert result["test_accuracy"] is not None
+            assert result["balanced_accuracy"] is not None
             # With obviously biased text, accuracy should be high
-            assert result["test_accuracy"] > 0.55
+            assert result["balanced_accuracy"] > 0.55
             assert result["is_leaking"] is True
         finally:
             os.unlink(db_path)
@@ -93,9 +93,9 @@ class TestLeakageDetectorWithBiasedData:
             result = check_outcome_leakage(db_path)
 
             assert result["n_examples"] == 80
-            assert result["test_accuracy"] is not None
+            assert result["balanced_accuracy"] is not None
             # With identical text, accuracy should be near 50%
-            assert result["test_accuracy"] <= 0.60  # Small margin for randomness
+            assert result["balanced_accuracy"] <= 0.60  # Small margin for randomness
             assert result["is_leaking"] is False
         finally:
             os.unlink(db_path)
@@ -118,7 +118,7 @@ class TestLeakageDetectorEdgeCases:
             from src.training.leakage_detector import check_outcome_leakage
             result = check_outcome_leakage(db_path)
 
-            assert result["test_accuracy"] is None
+            assert result["balanced_accuracy"] is None
             assert result["is_leaking"] is None
             assert result["n_examples"] == 10
             assert "at least 50" in result.get("note", "")
@@ -132,7 +132,7 @@ class TestLeakageDetectorEdgeCases:
             from src.training.leakage_detector import check_outcome_leakage
             result = check_outcome_leakage(db_path)
 
-            assert result["test_accuracy"] is None
+            assert result["balanced_accuracy"] is None
             assert result["n_examples"] == 0
         finally:
             os.unlink(db_path)

@@ -1,10 +1,40 @@
-const BASE = '/api'
+import { API_BASE, API_SECRET, IS_CLOUD } from './config'
+import { clearAuthSession } from './components/AuthGate'
+
+const TOKEN_KEY = 'hl_token'
+const TOKEN_TS_KEY = 'hl_token_ts'
+const SESSION_MAX_MS = 24 * 60 * 60 * 1000 // 24 hours
+
+function authHeaders() {
+  const headers = { 'Content-Type': 'application/json' }
+  // In cloud mode, use session token; otherwise use static secret
+  const token = sessionStorage.getItem(TOKEN_KEY) || API_SECRET
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`
+  }
+  return headers
+}
+
+function checkSessionTimeout() {
+  if (!IS_CLOUD) return
+  const ts = sessionStorage.getItem(TOKEN_TS_KEY)
+  if (ts && Date.now() - parseInt(ts, 10) > SESSION_MAX_MS) {
+    clearAuthSession()
+    window.location.reload()
+  }
+}
 
 export async function fetchApi(path, options = {}) {
-  const res = await fetch(`${BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json', ...options.headers },
+  checkSessionTimeout()
+  const res = await fetch(`${API_BASE}${path}`, {
+    headers: { ...authHeaders(), ...options.headers },
     ...options,
   })
+  if (res.status === 401 && IS_CLOUD) {
+    clearAuthSession()
+    window.location.reload()
+    throw new Error('Session expired')
+  }
   if (!res.ok) throw new Error(`API error: ${res.status}`)
   return res.json()
 }
@@ -44,10 +74,16 @@ export const api = {
   getDoc: (docId) => fetchApi(`/docs/${docId}`),
   getMetricHistory: (days = 90) => fetchApi(`/metric-history?days=${days}`),
   getCosts: (days = 30) => fetchApi(`/costs?days=${days}`),
+  // Council
+  getCouncilLatest: () => fetchApi('/council/latest'),
+  getCouncilHistory: (days = 30) => fetchApi(`/council/history?days=${days}`),
+  // Health Score
+  getHealthScore: () => fetchApi('/health/score'),
   // Actions
   triggerActionScan: () => fetchApi('/actions/scan', { method: 'POST' }),
   triggerCtoReport: () => fetchApi('/actions/cto-report', { method: 'POST' }),
   triggerCollectTraining: () => fetchApi('/actions/collect-training', { method: 'POST' }),
   triggerTrainPipeline: () => fetchApi('/actions/train-pipeline', { method: 'POST' }),
   triggerScore: () => fetchApi('/actions/score', { method: 'POST' }),
+  triggerCouncil: () => fetchApi('/actions/council', { method: 'POST' }),
 }

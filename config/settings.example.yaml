@@ -36,6 +36,27 @@ shadow_trading:
   default_order_type: market
   timeout_days: 15  # Auto-close after this many days
 
+# ── Live Trading (Dual Execution) ────────────────────────────────
+# When enabled, qualifying setups execute on BOTH paper and live
+# accounts simultaneously. Paper trades continue as before for the
+# training flywheel; live trades use real capital with tighter risk.
+# SAFETY: Requires LLM commentary (no template fallback), skips
+# first scan of day, halts if equity drops below 50% of starting.
+# ─────────────────────────────────────────────────────────────────
+live_trading:
+  enabled: false
+  api_key: "your-live-alpaca-api-key"
+  secret_key: "your-live-alpaca-secret-key"
+  starting_capital: 100       # USD starting capital for live account
+  max_open_positions: 2       # Conservative limit for live trading
+  risk:
+    planned_risk_pct_max: 0.02    # 2% max risk per trade
+    stop_atr_multiplier: 1.0      # ATR multiplier for stop placement
+    target_atr_multiplier: 2.0    # ATR multiplier for target placement
+    timeout_days: 7               # Auto-close live trades after N days
+  min_score: null             # Optional: minimum priority score for live trades
+  max_price: null             # Optional: maximum stock price for live trades
+
 automation:
   morning_watchlist_hour_et: 8
   eod_recap_hour_et: 16
@@ -50,12 +71,21 @@ llm:
   base_url: "http://localhost:11434"
   temperature: 0.7
   max_tokens: 1500
-  timeout_seconds: 60
+  timeout_seconds: 180
+
+api:
+  models:
+    training_generation: "claude-sonnet-4-20250514"
+    training_generation_anchor: "claude-opus-4-20250514"
+    quality_scoring: "claude-sonnet-4-20250514"
+    council_automated: "claude-sonnet-4-20250514"
+  anchor_count: 75
+  anchor_min_score: 4.5
 
 training:
   enabled: true
   anthropic_api_key: "your-anthropic-api-key-here"
-  claude_model: "claude-haiku-4-5-20251001"
+  claude_model: "claude-haiku-4-5-20251001"  # legacy fallback
   auto_train_threshold: 50       # Fine-tune when N new examples accumulate
   auto_train_time_days: 7        # Or fine-tune if N days since last train
   auto_train_min_examples: 20    # Min new examples for time-based trigger
@@ -79,6 +109,9 @@ risk_governor:
   max_correlated: 3               # Max positions in same sector
   vol_halt_pct: 35.0              # Halt new longs if VIX proxy > 35%
 
+regime_adaptive:
+  enabled: true  # Auto-adjust qualification thresholds by market regime
+
 bootcamp:
   enabled: false
   phase: 1                          # 1 = data collection, 2 = optimization, 3 = ML/LLM learning
@@ -89,6 +122,7 @@ bootcamp:
   max_positions: 50                 # No practical limit during bootcamp
   # Email preferences
   email_mode: full_stream           # full_stream / daily_summary / silent
+  max_packets_per_scan: 8           # Cap packets per scan to fit in 30-min window
   scan_interval_minutes: 30         # How often to re-scan during market hours
 
 # ── Telegram Notifications ───────────────────────────────────────
@@ -98,7 +132,16 @@ bootcamp:
 #        message your bot → /start → get chat_id from
 #        https://api.telegram.org/bot<TOKEN>/getUpdates
 # ─────────────────────────────────────────────────────────────────
+logging:
+  level: INFO
+  file: logs/halcyon.log
+
 telegram:
   enabled: false
   bot_token: "your-bot-token-from-botfather"
   chat_id: "your-chat-id"
+
+render:
+  enabled: false
+  database_url: "postgresql://user:pass@host:5432/halcyon"
+  sync_interval_seconds: 120

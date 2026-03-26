@@ -35,7 +35,7 @@ def _get_llm_config() -> dict:
         "base_url": llm_cfg.get("base_url", "http://localhost:11434"),
         "temperature": llm_cfg.get("temperature", 0.7),
         "max_tokens": llm_cfg.get("max_tokens", 1500),
-        "timeout_seconds": llm_cfg.get("timeout_seconds", 60),
+        "timeout_seconds": llm_cfg.get("timeout_seconds", 180),
     }
 
 

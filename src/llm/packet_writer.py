@@ -38,11 +38,16 @@ SPY: {features.get('spy_20d_return', 0):+.1f}% (20d) | {features.get('spy_drawdo
 Breadth: {features.get('market_breadth_label', 'n/a')} ({features.get('market_breadth_pct', 0):.0f}% above 50d MA)
 Regime: {features.get('regime_label', 'n/a')}"""
 
-    # SECTION 3: Sector Context (new)
+    # SECTION 3: Sector Context (enhanced 9C)
+    sector_factors = features.get('sector_key_factors', [])
+    factors_str = "\n".join(f"  - {f}" for f in sector_factors) if sector_factors else "  No sector-specific factors available"
     prompt += f"""
 
 === SECTOR CONTEXT ===
-Sector: {features.get('sector', 'n/a')} | Rank: {features.get('sector_rs_rank', 'n/a')} | Sector Avg Score: {features.get('sector_avg_score', 0):.0f}"""
+Sector: {features.get('sector', 'n/a')} | Rank: {features.get('sector_rs_rank', 'n/a')} | Sector Avg Score: {features.get('sector_avg_score', 0):.0f}
+Typical pullback depth: {features.get('sector_pullback_depth', 'n/a')} | Recovery: {features.get('sector_recovery_speed', 'n/a')}
+Sector-specific factors:
+{factors_str}"""
 
     # SECTION 4: Fundamental Snapshot (new)
     fundamental_text = features.get('fundamental_summary', 'No fundamental data available')
@@ -72,6 +77,24 @@ Sector: {features.get('sector', 'n/a')} | Rank: {features.get('sector_rs_rank', 
 === MACRO CONTEXT ===
 {macro_text}"""
 
+    # SECTION 7.5: Options Context (9A)
+    iv_rank = features.get('iv_rank')
+    if iv_rank is not None:
+        prompt += f"""
+
+=== OPTIONS CONTEXT ===
+IV Rank: {iv_rank:.0f} | Put/Call Vol: {features.get('put_call_vol_ratio', 0):.2f} | Put/Call OI: {features.get('put_call_oi_ratio', 0):.2f}
+IV Skew: {features.get('iv_skew', 0):.2f} | Unusual Activity: {'YES' if features.get('unusual_options_activity') else 'No'}"""
+
+    # SECTION 7.6: Event Context (9B)
+    event_type = features.get('event_proximity_type')
+    if event_type:
+        prompt += f"""
+
+=== EVENT CONTEXT ===
+{event_type} in {features.get('event_proximity_days', '?')} day(s): {features.get('event_proximity_desc', '')}
+Events within 3 days: {features.get('events_within_3d', 0)}"""
+
     # SECTION 8: Entry/Stop/Targets
     prompt += f"""
 
@@ -82,6 +105,31 @@ Position Size: ${packet.position_sizing.allocation_dollars:.0f} ({packet.positio
 Event Risk: {packet.event_risk}"""
 
     return prompt
+
+
+def _build_condensed_prompt(packet: TradePacket, features: dict) -> str:
+    """Build a condensed prompt with only technical data and trade parameters.
+
+    Used as a retry when the full prompt (with enrichment context) times out.
+    """
+    ticker = packet.ticker
+    company_name = packet.company_name
+
+    return f"""=== TECHNICAL DATA ===
+Ticker: {ticker} ({company_name})
+Current Price: ${features.get('current_price', 0):.2f}
+Trend State: {features.get('trend_state', 'n/a')} | SMA50 slope: {features.get('sma50_slope', 'n/a')} | SMA200 slope: {features.get('sma200_slope', 'n/a')}
+Price vs SMA50: {features.get('price_vs_sma50_pct', 0):.1f}% | Price vs SMA200: {features.get('price_vs_sma200_pct', 0):.1f}%
+Relative Strength: {features.get('relative_strength_state', 'n/a')}
+Pullback Depth: {features.get('pullback_depth_pct', 0):.1f}% from 50-day high
+ATR(14): ${features.get('atr_14', 0):.2f} ({features.get('atr_pct', 0):.1f}% of price)
+Volume Ratio: {features.get('volume_ratio_20d', 0):.2f}x 20-day average
+
+=== TRADE PARAMETERS ===
+Score: {features.get('_score', 0):.0f}/100 | Confidence: {packet.confidence}/10
+Entry Zone: {packet.entry_zone} | Stop: {packet.stop_invalidation} | Targets: {packet.targets}
+Position Size: ${packet.position_sizing.allocation_dollars:.0f} ({packet.position_sizing.allocation_pct:.1f}% of capital)
+Event Risk: {packet.event_risk}"""
 
 
 def _parse_llm_response(response: str) -> tuple[int | None, str | None, str | None]:
@@ -173,6 +221,13 @@ def enhance_packet_with_llm(packet: TradePacket, features: dict,
 
     prompt = _build_feature_prompt(packet, features)
     response = generate(prompt, PACKET_SYSTEM_PROMPT)
+
+    if response is None:
+        # Retry with condensed prompt (technical + trade params only, no enrichment)
+        logger.info("[LLM] Full prompt timed out for %s, retrying with condensed prompt",
+                    packet.ticker)
+        condensed = _build_condensed_prompt(packet, features)
+        response = generate(condensed, PACKET_SYSTEM_PROMPT)
 
     if response is None:
         logger.warning("[LLM] Generation failed — fallback to template for %s", packet.ticker)

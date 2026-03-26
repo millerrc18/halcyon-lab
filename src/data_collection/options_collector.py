@@ -12,6 +12,8 @@ from zoneinfo import ZoneInfo
 
 import yfinance as yf
 
+from src.universe.sp100 import to_yfinance_ticker
+
 logger = logging.getLogger(__name__)
 ET = ZoneInfo("America/New_York")
 
@@ -72,7 +74,7 @@ def collect_options_chains(
 
     for ticker in tickers:
         try:
-            stock = yf.Ticker(ticker)
+            stock = yf.Ticker(to_yfinance_ticker(ticker))
 
             # Get available expirations
             try:

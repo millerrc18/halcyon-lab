@@ -7,10 +7,23 @@ from src.config import load_config
 logger = logging.getLogger(__name__)
 
 
-def _load_thresholds() -> dict:
+REGIME_THRESHOLDS = {
+    "BULL_LOW_VOL": {"packet_worthy": 40, "position_pct": 1.0},
+    "BULL_HIGH_VOL": {"packet_worthy": 50, "position_pct": 0.85},
+    "TRANSITION": {"packet_worthy": 60, "position_pct": 0.70},
+    "CORRECTION": {"packet_worthy": 65, "position_pct": 0.60},
+    "BEAR_EARLY": {"packet_worthy": 75, "position_pct": 0.40},
+    "BEAR_ESTABLISHED": {"packet_worthy": 80, "position_pct": 0.30},
+    "CRISIS": {"packet_worthy": 90, "position_pct": 0.20},
+}
+
+
+def _load_thresholds(regime_type: str | None = None) -> dict:
     """Load scoring thresholds from config, with defaults.
 
     If bootcamp is enabled, uses bootcamp-specific thresholds.
+    If regime_adaptive is enabled and regime_type is provided, overrides
+    the packet_worthy threshold based on market conditions.
     """
     config = load_config()
     bootcamp_cfg = config.get("bootcamp", {})
@@ -19,6 +32,7 @@ def _load_thresholds() -> dict:
         thresholds = {
             "packet_worthy": bootcamp_cfg.get("qualification_threshold", 40),
             "watchlist": bootcamp_cfg.get("watchlist_threshold", 25),
+            "position_pct": 1.0,
         }
         logger.info("[BOOTCAMP] Using bootcamp thresholds: "
                      "packet_worthy=%s, watchlist=%s",
@@ -26,10 +40,26 @@ def _load_thresholds() -> dict:
         return thresholds
 
     ranking_cfg = config.get("ranking", {})
-    return {
+    base = {
         "packet_worthy": ranking_cfg.get("packet_worthy_threshold", 70),
         "watchlist": ranking_cfg.get("watchlist_threshold", 45),
+        "position_pct": 1.0,
     }
+
+    # Regime-adaptive override
+    regime_cfg = config.get("regime_adaptive", {})
+    if regime_cfg.get("enabled", False) and regime_type:
+        regime_overrides = REGIME_THRESHOLDS.get(regime_type, {})
+        if regime_overrides:
+            old_pw = base["packet_worthy"]
+            base["packet_worthy"] = regime_overrides["packet_worthy"]
+            base["position_pct"] = regime_overrides["position_pct"]
+            logger.info("[RANKER] Regime %s: threshold %d (normal %d), "
+                        "position sizing at %.0f%%",
+                        regime_type, base["packet_worthy"], old_pw,
+                        base["position_pct"] * 100)
+
+    return base
 
 
 def _regime_adjustment(features: dict) -> float:
@@ -102,6 +132,15 @@ def _score_ticker(features: dict) -> float:
     if vol_ratio < 0.8:
         score += 10
 
+    # Options sentiment (9A) — IV rank and put/call as signals
+    iv_rank = features.get("iv_rank")
+    pc_vol = features.get("put_call_vol_ratio")
+    if iv_rank is not None:
+        if iv_rank < 25:
+            score += 3  # Cheap options = less fear
+        elif iv_rank > 75 and pc_vol and pc_vol > 1.2:
+            score -= 3  # High IV + bearish flow = caution
+
     # Regime adjustment
     adj = _regime_adjustment(features)
     score += adj
@@ -120,9 +159,18 @@ def rank_universe(features: dict[str, dict]) -> list[dict]:
         List of dicts with keys: ticker, score, qualification, features.
         Sorted by score descending.
     """
-    from src.features.regime import compute_sector_context
+    from src.features.regime import compute_sector_context, classify_regime
 
-    thresholds = _load_thresholds()
+    # Detect current regime for adaptive thresholds
+    regime_type = None
+    sample_feat = next(iter(features.values()), {})
+    if sample_feat:
+        try:
+            regime_type = classify_regime(sample_feat)
+        except Exception:
+            pass
+
+    thresholds = _load_thresholds(regime_type=regime_type)
     packet_threshold = thresholds["packet_worthy"]
     watchlist_threshold = thresholds["watchlist"]
 

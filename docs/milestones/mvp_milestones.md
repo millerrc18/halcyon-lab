@@ -110,9 +110,18 @@
 - Market event calendar CSV (422 events, 2020-2027)
 - 19 research documents on dashboard (regime timeline, company profiles, compute schedule, API comparison)
 
+### M22 — Mega Sprint (Cloud + Council + Telegram + Docs)
+- Render cloud deployment: Blueprint (render.yaml), Postgres schema, local→cloud sync, cloud-only FastAPI app
+- AI Council system: 5-agent Modified Delphi protocol (Risk Officer, Alpha Strategist, Data Scientist, Regime Analyst, Devil's Advocate), 3-round deliberation, SQLite persistence, dashboard integration
+- Setup classifier: rule-based classification (pullback, breakout, momentum, mean_reversion, range_bound, breakdown) with confidence scoring
+- Expanded Telegram bot: /council command (on-demand council sessions), setup_type in trade notifications, interactive command handler with 10 commands
+- Dashboard v3: Council page, Deployment page, roadmap enhancements
+- Deployment guide (docs/deployment.md) with step-by-step Render instructions
+- Documentation updates across AGENTS.md, architecture.md, milestones
+
 ## Upcoming
 
-### M22 — Phase 2 Preparation
+### M23 — Phase 2 Preparation
 - Universe expansion to ~325 stocks
 - GICS sector conditioning feature
 - Polygon.io integration

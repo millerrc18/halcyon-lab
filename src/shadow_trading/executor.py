@@ -176,6 +176,9 @@ def open_shadow_trade(
             trade_data["max_favorable_excursion"] = 0.0
             trade_data["max_adverse_excursion"] = 0.0
 
+    # Source tagging: paper trades always tagged as "paper"
+    trade_data["source"] = "paper"
+
     trade_id = insert_shadow_trade(trade_data, db_path)
 
     # Update journal with shadow entry
@@ -393,6 +396,242 @@ def check_and_manage_open_trades(
                 pass
 
     return actions
+
+
+def open_live_trade(
+    recommendation_id: str,
+    packet: TradePacket,
+    features: dict,
+    db_path: str = "ai_research_desk.sqlite3",
+) -> str | None:
+    """Open a LIVE trade for a packet-worthy recommendation.
+
+    Uses live_trading config section with separate risk parameters.
+    Includes additional safety guards beyond paper trading:
+    - Capital guard: halt if equity < 50% of starting capital
+    - Daily loss limit: halt if daily P&L < -5% of capital
+    - LLM commentary required (no template fallback)
+    - First scan of day (9:30 AM) is skipped (handled by caller)
+
+    Returns trade_id on success, None on failure.
+    """
+    config = load_config()
+    live_cfg = config.get("live_trading", {})
+
+    if not live_cfg.get("enabled", False):
+        logger.info("[LIVE] Live trading disabled, skipping")
+        return None
+
+    # Safety guard: Must have LLM commentary (not template fallback)
+    llm_conviction = getattr(packet, 'llm_conviction', None)
+    if llm_conviction is None:
+        logger.warning("[LIVE] No LLM conviction — skipping live trade for %s", packet.ticker)
+        return None
+
+    # Safety guard: min_score filter
+    min_score = live_cfg.get("min_score")
+    if min_score is not None:
+        score = features.get("_score", 0)
+        if score < min_score:
+            logger.info("[LIVE] Score %.1f below min_score %s for %s", score, min_score, packet.ticker)
+            return None
+
+    # Safety guard: max_price filter
+    max_price = live_cfg.get("max_price")
+    entry_price = _parse_price(packet.entry_zone)
+    if max_price is not None and entry_price > max_price:
+        logger.info("[LIVE] Price $%.2f above max_price $%s for %s", entry_price, max_price, packet.ticker)
+        return None
+
+    # Safety guard: Capital check — halt if equity < 50% of starting capital
+    starting_capital = live_cfg.get("starting_capital", 100)
+    try:
+        from src.shadow_trading.alpaca_adapter import get_live_account_info
+        live_acct = get_live_account_info()
+        live_equity = live_acct.get("equity", 0)
+
+        if live_equity < starting_capital * 0.50:
+            logger.warning(
+                "[LIVE] CAPITAL GUARD: Equity $%.2f < 50%% of starting $%.2f — HALTING",
+                live_equity, starting_capital,
+            )
+            try:
+                from src.notifications.telegram import notify_risk_alert, is_telegram_enabled
+                if is_telegram_enabled():
+                    notify_risk_alert(
+                        "LIVE CAPITAL GUARD",
+                        f"Live equity ${live_equity:.2f} below 50% of starting ${starting_capital:.2f}. "
+                        f"Live trading halted.",
+                    )
+            except Exception:
+                pass
+            return None
+    except Exception as e:
+        logger.warning("[LIVE] Could not check live account: %s — skipping", e)
+        return None
+
+    # Safety guard: Daily loss limit — halt if daily P&L < -5% of capital
+    try:
+        from src.journal.store import get_open_shadow_trades
+        live_trades_today = [
+            t for t in get_open_shadow_trades(db_path)
+            if t.get("source") == "live"
+        ]
+        daily_live_pnl = 0.0
+        for t in live_trades_today:
+            t_entry = t.get("actual_entry_price") or t.get("entry_price", 0)
+            if t_entry > 0:
+                current = _get_current_price_safe(t["ticker"])
+                if current:
+                    shares = t.get("planned_shares", 1)
+                    daily_live_pnl += (current - t_entry) * shares
+
+        if starting_capital > 0 and daily_live_pnl < -(starting_capital * 0.05):
+            logger.warning(
+                "[LIVE] DAILY LOSS GUARD: Live P&L $%.2f exceeds -5%% of $%.2f — HALTING for day",
+                daily_live_pnl, starting_capital,
+            )
+            try:
+                from src.notifications.telegram import notify_risk_alert, is_telegram_enabled
+                if is_telegram_enabled():
+                    notify_risk_alert(
+                        "LIVE DAILY LOSS LIMIT",
+                        f"Live daily P&L ${daily_live_pnl:.2f} exceeds -5% of ${starting_capital:.2f}. "
+                        f"No more live trades today.",
+                    )
+            except Exception:
+                pass
+            return None
+    except Exception as e:
+        logger.debug("[LIVE] Daily loss check failed: %s", e)
+
+    # Position limit check (live-specific)
+    max_positions = live_cfg.get("max_open_positions", 2)
+    try:
+        open_live_trades = [
+            t for t in get_open_shadow_trades(db_path)
+            if t.get("source") == "live"
+        ]
+        if len(open_live_trades) >= max_positions:
+            logger.info("[LIVE] At live position limit (%d), skipping", max_positions)
+            return None
+    except Exception:
+        pass
+
+    # Duplicate check (live-specific)
+    ticker = packet.ticker
+    try:
+        open_live_trades = [
+            t for t in get_open_shadow_trades(db_path)
+            if t.get("source") == "live"
+        ]
+        if any(t["ticker"] == ticker for t in open_live_trades):
+            logger.info("[LIVE] Already have live trade for %s, skipping", ticker)
+            return None
+    except Exception:
+        pass
+
+    # Use live-specific risk parameters
+    live_risk = live_cfg.get("risk", {})
+    risk_pct_max = live_risk.get("planned_risk_pct_max", 0.02)
+    stop_atr_mult = live_risk.get("stop_atr_multiplier", 1.0)
+    target_atr_mult = live_risk.get("target_atr_multiplier", 2.0)
+    timeout_days = live_risk.get("timeout_days", 7)
+
+    # Calculate live position sizing based on live risk parameters
+    stop_price = _parse_price(packet.stop_invalidation)
+    atr = features.get("atr_14", 0)
+
+    # Override stop/target with ATR-based if ATR available
+    if atr > 0 and entry_price > 0:
+        stop_price = entry_price - (atr * stop_atr_mult)
+        target_price = entry_price + (atr * target_atr_mult)
+    else:
+        targets_parts = packet.targets.split("/")
+        target_price = _parse_price(targets_parts[0]) if targets_parts else 0.0
+
+    # Position size: risk_pct_max of live equity
+    risk_per_share = entry_price - stop_price if entry_price > stop_price > 0 else entry_price * 0.02
+    if risk_per_share > 0:
+        max_risk_dollars = live_equity * risk_pct_max
+        planned_shares = max(1, int(max_risk_dollars / risk_per_share))
+    else:
+        planned_shares = 1
+
+    # Ensure we don't exceed available buying power
+    buying_power = live_acct.get("buying_power", 0)
+    max_shares_by_bp = int(buying_power / entry_price) if entry_price > 0 else 0
+    planned_shares = min(planned_shares, max(1, max_shares_by_bp))
+
+    planned_allocation = planned_shares * entry_price
+
+    et = ZoneInfo("America/New_York")
+    now = datetime.now(et)
+
+    trade = ShadowTrade(
+        recommendation_id=recommendation_id,
+        ticker=ticker,
+        direction="long",
+        status="pending",
+        entry_price=entry_price,
+        stop_price=stop_price,
+        target_1=target_price,
+        target_2=0.0,
+        planned_shares=planned_shares,
+        planned_allocation=planned_allocation,
+        earnings_adjacent=features.get("event_risk_level", "none") in ("elevated", "imminent"),
+        created_at=now.isoformat(),
+        updated_at=now.isoformat(),
+    )
+
+    trade_data = trade.to_dict()
+    trade_data["source"] = "live"
+
+    # Place live order
+    try:
+        from src.shadow_trading.alpaca_adapter import place_live_entry
+        order = place_live_entry(ticker, planned_shares)
+        trade_data["alpaca_order_id"] = order.get("order_id")
+        trade_data["order_type"] = "simple"
+
+        fill_price = order.get("filled_avg_price")
+        if fill_price:
+            trade_data["actual_entry_price"] = fill_price
+        else:
+            trade_data["actual_entry_price"] = entry_price
+        trade_data["actual_entry_time"] = now.isoformat()
+        trade_data["status"] = "open"
+        trade_data["max_favorable_excursion"] = 0.0
+        trade_data["max_adverse_excursion"] = 0.0
+
+    except Exception as e:
+        logger.warning("[LIVE] Live order failed for %s: %s", ticker, e)
+        return None  # Do not record a live trade that failed to submit
+
+    trade_id = insert_shadow_trade(trade_data, db_path)
+
+    actual_price = trade_data.get("actual_entry_price", entry_price)
+    logger.info(
+        "[LIVE] Opened LIVE trade for %s at $%.2f (%d shares, risk $%.2f)",
+        ticker, actual_price, planned_shares, risk_per_share * planned_shares,
+    )
+
+    # Telegram notification for live trade
+    try:
+        from src.notifications.telegram import notify_trade_opened, is_telegram_enabled
+        if is_telegram_enabled():
+            ps = packet.position_sizing
+            notify_trade_opened(
+                ticker, actual_price, stop_price, target_price,
+                int(features.get("_score", 0)), planned_shares,
+                setup_type=features.get("setup_type"),
+                setup_confidence=features.get("setup_confidence"),
+                source="live",
+            )
+    except Exception:
+        pass
+
+    return trade_id
 
 
 def _get_current_price_safe(ticker: str) -> float | None:

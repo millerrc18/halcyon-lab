@@ -5,6 +5,8 @@ import { WebSocketProvider, useWebSocketContext } from './contexts/WebSocketCont
 import Layout from './components/Layout'
 import ErrorBoundary from './components/ErrorBoundary'
 import ToastContainer, { toast } from './components/Toast'
+import AuthGate from './components/AuthGate'
+import { IS_CLOUD } from './config'
 import Dashboard from './pages/Dashboard'
 import Packets from './pages/Packets'
 import ShadowLedger from './pages/ShadowLedger'
@@ -14,6 +16,8 @@ import CTOReport from './pages/CTOReport'
 import Settings from './pages/Settings'
 import Roadmap from './pages/Roadmap'
 import Docs from './pages/Docs'
+import Council from './pages/Council'
+import Health from './pages/Health'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -55,7 +59,7 @@ function CacheInvalidator() {
 }
 
 export default function App() {
-  return (
+  const content = (
     <QueryClientProvider client={queryClient}>
       <ErrorBoundary>
         <WebSocketProvider>
@@ -72,6 +76,8 @@ export default function App() {
                 <Route path="/settings" element={<Settings />} />
                 <Route path="/roadmap" element={<Roadmap />} />
                 <Route path="/docs" element={<Docs />} />
+                <Route path="/council" element={<Council />} />
+                <Route path="/health" element={<Health />} />
               </Route>
             </Routes>
           </BrowserRouter>
@@ -80,4 +86,6 @@ export default function App() {
       </ErrorBoundary>
     </QueryClientProvider>
   )
+
+  return IS_CLOUD ? <AuthGate>{content}</AuthGate> : content
 }
