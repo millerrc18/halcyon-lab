@@ -347,6 +347,17 @@ class WatchLoop:
             print(f"  -> Logged {ticker}: {rec_id}")
             self._trades_managed_today += 1
 
+            # ═══ SHADOW TRADE EXECUTION (enables the training flywheel) ═══
+            try:
+                from src.shadow_trading.executor import open_shadow_trade
+                trade_id = open_shadow_trade(rec_id, packet, feat)
+                if trade_id:
+                    print(f"  -> Shadow trade opened: {trade_id}")
+                else:
+                    print(f"  -> Shadow trade skipped (risk governor or position limit)")
+            except Exception as e:
+                logger.warning("[WATCH] Shadow trade failed for %s: %s", ticker, e)
+
             try:
                 broadcast_sync("trade_opened", {"ticker": ticker, "side": "BUY",
                                                 "score": candidate["score"]})
@@ -372,6 +383,29 @@ class WatchLoop:
                 print(f"  -> Email sent for {ticker}")
             elif self.email_mode == "daily_summary":
                 self._daily_packets.append(rendered)
+
+        # Manage existing open trades (stop/target/timeout exits)
+        try:
+            from src.shadow_trading.executor import check_and_manage_open_trades
+            actions = check_and_manage_open_trades()
+            for action in actions:
+                print(f"  -> Trade action: {action['ticker']} — {action['action']} "
+                      f"(P&L: ${action.get('pnl_dollars', 0):+.2f})")
+                # Telegram close notification
+                try:
+                    from src.notifications.telegram import notify_trade_closed, is_telegram_enabled
+                    if is_telegram_enabled() and action.get("action") == "closed":
+                        notify_trade_closed(
+                            action["ticker"],
+                            action.get("pnl_dollars", 0),
+                            action.get("pnl_pct", 0),
+                            action.get("exit_reason", "unknown"),
+                            action.get("days_held", 0),
+                        )
+                except Exception:
+                    pass
+        except Exception as e:
+            logger.warning("[WATCH] Trade management failed: %s", e)
 
         try:
             broadcast_sync("scan_complete", {"tickers_scanned": len(universe),
