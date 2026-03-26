@@ -41,6 +41,7 @@ DOCS = [
     {"id": "research-regime-timeline", "path": "docs/research/US_Equity_Market_Regime_Timeline_2015-2026.md", "title": "Research: Market Regime Timeline (2015-2026)"},
     {"id": "research-sp100-profiles", "path": "docs/research/SP100_Pullback_Trading_Profiles.md", "title": "Research: S&P 100 Pullback Trading Profiles"},
     {"id": "research-compute-schedule", "path": "docs/research/Optimal_24x7_GPU_Schedule_for_Solo_AI_Trading.md", "title": "Research: 24/7 GPU Compute Schedule (2% → 73%)"},
+    {"id": "research-market-assessment", "path": "docs/research/SP100_Current_Market_Assessment_2026-03-25.pdf", "title": "Research: S&P 100 Market Assessment (3/25/2026)"},
 ]
 
 
