@@ -88,6 +88,9 @@ risk_governor:
   max_correlated: 3               # Max positions in same sector
   vol_halt_pct: 35.0              # Halt new longs if VIX proxy > 35%
 
+regime_adaptive:
+  enabled: true  # Auto-adjust qualification thresholds by market regime
+
 bootcamp:
   enabled: false
   phase: 1                          # 1 = data collection, 2 = optimization, 3 = ML/LLM learning

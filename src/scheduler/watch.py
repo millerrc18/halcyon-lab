@@ -86,6 +86,7 @@ class WatchLoop:
         self._premarket_training_done = False
         self._premarket_news_done = False
         self._premarket_candidates_done = False
+        self._ollama_warmup_done = False
 
     def _reset_daily_state(self):
         """Reset daily flags at midnight ET."""
@@ -114,6 +115,7 @@ class WatchLoop:
         self._premarket_training_done = False
         self._premarket_news_done = False
         self._premarket_candidates_done = False
+        self._ollama_warmup_done = False
 
     def _is_market_open(self, now: datetime) -> bool:
         """Check if market is currently open (weekday, between open and close)."""
@@ -431,6 +433,12 @@ class WatchLoop:
 
                 hour = now.hour
                 time_str = now.strftime("%H:%M")
+
+                # 0. Ollama warm-up (9:25 AM — before first scan)
+                if (hour == 9 and now.minute >= 25 and now.minute < 30
+                        and not self._ollama_warmup_done):
+                    self._safe_run("Ollama warm-up", self._run_ollama_warmup)
+                    self._ollama_warmup_done = True
 
                 # 1. Morning watchlist
                 if hour == self.morning_hour and not self._morning_done:
@@ -1038,6 +1046,46 @@ class WatchLoop:
                 vm._reload_ollama()
             except Exception as e:
                 logger.error("[WATCH] Ollama restart failed: %s", e)
+
+    # ── Ollama Warm-Up ─────────────────────────────────────────────
+
+    def _run_ollama_warmup(self):
+        """9:25 AM ET — Full-length warm-up inference before first scan.
+
+        Not just a health check — runs a real prompt of similar length to
+        what the scan will generate, warming up the KV cache and CUDA kernels.
+        """
+        from pathlib import Path
+        from src.llm.client import generate, is_llm_available
+
+        if not is_llm_available():
+            print("[WATCH] Ollama not available — skipping warm-up")
+            return
+
+        warmup_path = Path("data/reference/warmup_prompt.txt")
+        if warmup_path.exists():
+            warmup_prompt = warmup_path.read_text(encoding="utf-8")
+        else:
+            warmup_prompt = (
+                "Analyze a hypothetical pullback trade in AAPL at $195.00. "
+                "The stock has pulled back 6% from its 50-day high in a strong uptrend. "
+                "SMA50 is rising, price is 3% above SMA200. Volume is contracting on "
+                "the pullback (0.7x average). RSI is at 42. The broader market regime "
+                "is calm_uptrend with healthy breadth (68% above 50d MA). "
+                "Provide conviction (1-10), why_now analysis, and deeper analysis."
+            )
+
+        import time as _time
+        start = _time.time()
+        system_prompt = "You are a senior equity research analyst. Analyze the setup."
+        result = generate(warmup_prompt, system_prompt)
+        elapsed = _time.time() - start
+
+        if result:
+            print(f"[WATCH] Ollama warm-up complete — {elapsed:.1f}s — ready for first scan")
+        else:
+            print(f"[WATCH] WARNING: Ollama warm-up failed ({elapsed:.1f}s) — "
+                  "first scan may be slow")
 
     # ── Pre-Market Pipeline Methods ──────────────────────────────────
 

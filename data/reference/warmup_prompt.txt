@@ -1,0 +1,27 @@
+=== TECHNICAL DATA ===
+Ticker: AAPL (Apple Inc.)
+Current Price: $195.50
+Trend State: uptrend | SMA50 slope: positive | SMA200 slope: positive
+Price vs SMA50: -3.2% | Price vs SMA200: +8.5%
+Relative Strength: outperformer
+RS vs SPY — 1m: +2.1% | 3m: +4.8% | 6m: +7.2%
+Pullback Depth: -6.1% from 50-day high
+ATR(14): $3.45 (1.8% of price)
+Volume Ratio: 0.72x 20-day average
+Distance to SMA20: -1.8%
+
+=== MARKET REGIME ===
+Market Trend: uptrend | SPY RSI(14): 52.3
+Volatility: normal (14.2% realized vol)
+SPY: +1.2% (20d) | -3.5% from 52-week high
+Breadth: healthy (68% above 50d MA)
+Regime: calm_uptrend
+
+=== SECTOR CONTEXT ===
+Sector: Technology | Rank: top_quartile | Sector Avg Score: 55
+
+=== TRADE PARAMETERS ===
+Score: 72/100 | Confidence: 7/10
+Entry Zone: $194.00-196.00 | Stop: $185.00 | Targets: $210.00, $220.00
+Position Size: $9,800 (9.8% of capital) | Risk: $195.00
+Event Risk: none
