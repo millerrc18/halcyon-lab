@@ -10,6 +10,7 @@ from zoneinfo import ZoneInfo
 
 from src.config import load_config
 from src.llm.client import is_llm_available
+from src.scheduler.scorer import GuardedScorer
 
 logger = logging.getLogger(__name__)
 
@@ -70,6 +71,21 @@ class WatchLoop:
         self._enrichment_precache_done = False
         self._pre_market_done = False
 
+        # Between-scan scoring
+        self._scorer = GuardedScorer()
+        self._scoring_in_progress = False
+        self._daily_scored = 0
+
+        # VRAM handoff flags
+        self._vram_handoff_done = False
+        self._morning_handoff_done = False
+
+        # Pre-market pipeline flags
+        self._premarket_features_done = False
+        self._premarket_training_done = False
+        self._premarket_news_done = False
+        self._premarket_candidates_done = False
+
     def _reset_daily_state(self):
         """Reset daily flags at midnight ET."""
         self._morning_done = False
@@ -88,6 +104,15 @@ class WatchLoop:
         self._news_ingestion_done = False
         self._enrichment_precache_done = False
         self._pre_market_done = False
+        # Scoring + VRAM handoffs
+        self._daily_scored = 0
+        self._vram_handoff_done = False
+        self._morning_handoff_done = False
+        # Pre-market pipeline
+        self._premarket_features_done = False
+        self._premarket_training_done = False
+        self._premarket_news_done = False
+        self._premarket_candidates_done = False
 
     def _is_market_open(self, now: datetime) -> bool:
         """Check if market is currently open (weekday, between open and close)."""
@@ -153,6 +178,13 @@ class WatchLoop:
    Market scans: every {self.scan_interval} min ({self.market_open_hour}:{self.market_open_minute:02d}-{self.market_close_hour}:00 ET)
    EOD recap: {self.eod_hour}:00 ET
    Overnight: {'enabled' if self.overnight else 'disabled'}
+
+ Compute Schedule:
+   Between-scan scoring: enabled (guard={self._scorer.guard_minutes}min)
+   Overnight training: {'enabled (6:50PM-5:15AM)' if self.overnight else 'disabled'}
+   Pre-market inference: {'enabled (6:00-9:25AM)' if self.overnight else 'disabled'}
+   VRAM handoff: {'enabled' if self.overnight else 'disabled'}
+   Target utilization: {'73%' if self.overnight else '~3%'}
 
  Press Ctrl+C to stop.
 {'='*45}
@@ -397,7 +429,16 @@ class WatchLoop:
                 # ── Overnight schedule (weekdays only, --overnight flag) ──
                 elif self.overnight and now.weekday() < 5:
                     ran = False
-                    if hour == 17 and now.minute >= 30 and not self._post_close_done:
+
+                    # Morning VRAM handoff (5:15 AM) — kill training, reload Ollama
+                    if (hour == 5 and now.minute >= 15
+                            and not self._morning_handoff_done):
+                        self._safe_run("morning VRAM handoff",
+                                       self._run_morning_handoff)
+                        self._morning_handoff_done = True
+                        ran = True
+
+                    elif hour == 17 and now.minute >= 30 and not self._post_close_done:
                         self._safe_run("post-close capture", self._run_post_close_capture)
                         self._post_close_done = True
                         ran = True
@@ -407,6 +448,17 @@ class WatchLoop:
                                        self._run_overnight_training_collection)
                         self._overnight_training_collection_done = True
                         ran = True
+
+                    # Evening VRAM handoff (6:50 PM) — unload Ollama, launch training
+                    elif (hour == 18 and now.minute >= 50
+                          and not self._vram_handoff_done):
+                        self._safe_run("evening VRAM handoff",
+                                       self._run_evening_handoff)
+                        self._vram_handoff_done = True
+                        ran = True
+
+                    # NOTE: 9:30 PM data collection, 10 PM news, 11 PM enrichment
+                    # are CPU/network only — they run concurrently with GPU training
                     elif (hour == 21 and now.minute >= 30
                           and not self._data_collection_done):
                         self._safe_run("data collection", self._run_data_collection)
@@ -424,15 +476,61 @@ class WatchLoop:
                         self._safe_run("pre-market refresh", self._run_pre_market_refresh)
                         self._pre_market_done = True
                         ran = True
+
+                    # ── Pre-market inference tasks (6-9:25 AM) ──
+                    elif (hour == 6 and now.minute >= 2
+                          and not self._premarket_features_done):
+                        self._safe_run("rolling features",
+                                       self._run_premarket_rolling_features)
+                        self._premarket_features_done = True
+                        ran = True
+                    elif hour == 7 and not self._premarket_training_done:
+                        self._safe_run("premarket training gen",
+                                       self._run_premarket_training)
+                        self._premarket_training_done = True
+                        ran = True
+                    elif (hour == 8 and now.minute >= 2
+                          and not self._premarket_news_done):
+                        self._safe_run("premarket news scoring",
+                                       self._run_premarket_news_scoring)
+                        self._premarket_news_done = True
+                        ran = True
+                    elif (hour == 9 and now.minute < 25
+                          and not self._premarket_candidates_done):
+                        self._safe_run("premarket candidates",
+                                       self._run_premarket_candidates)
+                        self._premarket_candidates_done = True
+                        ran = True
+
                     if not ran:
                         print(f"[WATCH] {time_str} ET -- overnight mode")
 
-                # 7. Status log
-                else:
+                # 7. Between-scan scoring (market hours only)
+                if self._is_market_open(now) and self._scorer.is_scoring_window():
+                    if not self._scoring_in_progress:
+                        self._scoring_in_progress = True
+                        try:
+                            result = self._scorer.score_batch()
+                            if result["scored"] > 0:
+                                self._daily_scored += result["scored"]
+                                print(f"[WATCH] Scored {result['scored']} examples "
+                                      f"({result['remaining']} remaining, "
+                                      f"stopped: {result['stopped_reason']})")
+                        except Exception as e:
+                            logger.debug("[WATCH] Scoring error: %s", e)
+                        finally:
+                            self._scoring_in_progress = False
+
+                # 8. Status log
+                if not (self._should_scan(now) or
+                        (hour == self.morning_hour and not self._morning_done) or
+                        (hour == self.eod_hour and not self._eod_done)):
                     if self._is_market_open(now):
+                        scored_str = (f", {self._daily_scored} scored"
+                                      if self._daily_scored > 0 else "")
                         print(f"[WATCH] {time_str} ET -- market open, next scan in "
-                              f"{self._minutes_until_next_scan(now):.0f} min")
-                    else:
+                              f"{self._minutes_until_next_scan(now):.0f} min{scored_str}")
+                    elif not (self.overnight and now.weekday() < 5):
                         print(f"[WATCH] {time_str} ET -- market closed")
 
                 time.sleep(60)
@@ -784,3 +882,81 @@ class WatchLoop:
             return 0
         elapsed = (now - self._last_scan_time).total_seconds() / 60
         return max(0, self.scan_interval - elapsed)
+
+    # ── VRAM Handoff Methods ─────────────────────────────────────────
+
+    def _run_evening_handoff(self):
+        """6:50 PM ET — Unload Ollama, launch overnight training subprocess."""
+        from pathlib import Path
+        from src.scheduler.vram_manager import VRAMManager
+
+        vm = VRAMManager()
+        if vm.handoff_to_training():
+            vm.launch_training_subprocess(
+                "overnight",
+                ["-m", "scripts.overnight_train"],
+            )
+            self._vram_manager = vm
+            print("[WATCH] VRAM handoff complete — overnight training started")
+        else:
+            print("[WATCH] VRAM handoff FAILED — staying in inference mode")
+
+    def _run_morning_handoff(self):
+        """5:15 AM ET — Kill training subprocess, reload Ollama."""
+        from pathlib import Path
+        from src.scheduler.vram_manager import VRAMManager
+
+        # Signal overnight pipeline to stop
+        stop_flag = Path("data/STOP_OVERNIGHT")
+        stop_flag.parent.mkdir(parents=True, exist_ok=True)
+        stop_flag.touch()
+
+        # Give subprocess time to checkpoint and exit
+        time.sleep(60)
+
+        vm = getattr(self, '_vram_manager', None) or VRAMManager()
+        if vm.handoff_to_inference():
+            stop_flag.unlink(missing_ok=True)
+            print("[WATCH] Morning handoff complete — Ollama loaded and warm")
+        else:
+            print("[WATCH] Morning handoff FAILED — attempting Ollama restart")
+            # Fallback: try reload anyway
+            stop_flag.unlink(missing_ok=True)
+            try:
+                vm._reload_ollama()
+            except Exception as e:
+                logger.error("[WATCH] Ollama restart failed: %s", e)
+
+    # ── Pre-Market Pipeline Methods ──────────────────────────────────
+
+    def _run_premarket_rolling_features(self):
+        """6:02 AM ET — Pre-compute rolling features for faster scans."""
+        from src.scheduler.premarket import PreMarketPipeline
+        pipeline = PreMarketPipeline()
+        result = pipeline.run_rolling_features()
+        print(f"[WATCH] Rolling features: {result['computed']} computed")
+
+    def _run_premarket_training(self):
+        """7:00 AM ET — Verify Ollama + generate self-blinded training data."""
+        from src.scheduler.premarket import PreMarketPipeline
+        pipeline = PreMarketPipeline()
+        if not pipeline.verify_ollama_warm():
+            print("[WATCH] Ollama not warm — skipping training generation")
+            return
+        result = pipeline.run_training_generation()
+        print(f"[WATCH] Premarket training: {result['generated']} generated, "
+              f"{result['unscored']} unscored")
+
+    def _run_premarket_news_scoring(self):
+        """8:02 AM ET — Score overnight news for market impact."""
+        from src.scheduler.premarket import PreMarketPipeline
+        pipeline = PreMarketPipeline()
+        result = pipeline.run_news_scoring()
+        print(f"[WATCH] News scoring: {result['scored']} articles scored")
+
+    def _run_premarket_candidates(self):
+        """9:00 AM ET — Pre-analyze candidates for first scan."""
+        from src.scheduler.premarket import PreMarketPipeline
+        pipeline = PreMarketPipeline()
+        result = pipeline.run_candidate_analysis()
+        print(f"[WATCH] Pre-analyzed {result['count']} candidates")

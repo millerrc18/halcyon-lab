@@ -315,6 +315,16 @@ def upcoming_earnings(days: int = 14):
         }
 
 
+@router.get("/schedule-metrics")
+def schedule_metrics(days: int = 30):
+    """Return compute schedule metrics for dashboard display."""
+    from src.scheduler.metrics import get_metrics, get_todays_metrics
+    return {
+        "today": get_todays_metrics(),
+        "history": get_metrics(days=days),
+    }
+
+
 @router.put("/config")
 def update_config(updates: dict):
     import yaml
