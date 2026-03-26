@@ -358,6 +358,21 @@ class WatchLoop:
             except Exception as e:
                 logger.warning("[WATCH] Shadow trade failed for %s: %s", ticker, e)
 
+            # ═══ LIVE TRADE EXECUTION (dual execution if enabled) ═══
+            live_cfg = self.config.get("live_trading", {})
+            now_live = datetime.now(ET)
+            hour_live = now_live.hour
+            if (live_cfg.get("enabled", False)
+                    and getattr(packet, 'llm_conviction', None) is not None
+                    and not (hour_live == 9 and now_live.minute < 31)):  # Skip first scan
+                try:
+                    from src.shadow_trading.executor import open_live_trade
+                    live_id = open_live_trade(rec_id, packet, feat)
+                    if live_id:
+                        print(f"  -> LIVE trade opened: {live_id}")
+                except Exception as e:
+                    logger.warning("[WATCH] Live trade failed for %s: %s", ticker, e)
+
             try:
                 broadcast_sync("trade_opened", {"ticker": ticker, "side": "BUY",
                                                 "score": candidate["score"]})

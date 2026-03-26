@@ -141,6 +141,13 @@ def initialize_database(db_path: str = "ai_research_desk.sqlite3") -> None:
         except sqlite3.OperationalError:
             pass
 
+        # Migration: add source column to shadow_trades for paper/live tracking
+        try:
+            conn.execute("ALTER TABLE shadow_trades ADD COLUMN source TEXT DEFAULT 'paper'")
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+
 
 def log_recommendation(
     packet: TradePacket,
