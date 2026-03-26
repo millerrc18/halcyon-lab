@@ -1,4 +1,4 @@
-<!-- TODO: Counts need updating after M22 mega sprint (CLI commands, dashboard pages, research docs, tables, API routes). -->
+<!-- Counts verified 2026-03-26: 121 Python files, 22,172 LOC, 49 test files, 582 tests, 49 CLI commands, 48 API routes, 24 DB tables, 27 research docs. -->
 # AGENTS.md — Halcyon Lab Governance Document
 
 ## Purpose
@@ -112,33 +112,38 @@ Universe (S&P 100 → expanding to ~325 stocks)
 - **CTO Report** — Performance analytics, fund metrics, metric trends
 - **Settings** — Configuration, API costs, data collection stats, system health
 - **Roadmap** — 5-phase plan with live gate metrics
-- **Docs** — 25 research documents + core documentation
+- **Docs** — 27 research documents + 7 core docs (34 total)
 
-## CLI Commands (44)
+## CLI Commands (49)
 
-### Core Pipeline
-`scan`, `morning-watchlist`, `eod-recap`, `ingest`, `send-test-email`, `init-db`, `demo-packet`
+See docs/cli-reference.md for full documentation with options and descriptions.
 
-### Shadow Ledger
+### Core Pipeline (8)
+`init-db`, `demo-packet`, `send-test-email`, `send-test-telegram`, `ingest`, `scan`, `morning-watchlist`, `eod-recap`
+
+### Shadow Trading (4)
 `shadow-status`, `shadow-history`, `shadow-close`, `shadow-account`
 
-### Review
+### Live Trading (3)
+`live-status`, `live-history`, `live-close`
+
+### Review & Analysis (6)
 `review`, `mark-executed`, `review-scorecard`, `review-bootcamp`, `postmortems`, `postmortem`
 
-### Training — Data
+### Training — Data (5)
 `training-status`, `training-history`, `training-report`, `bootstrap-training`, `backfill-training`
 
-### Training — Quality
-`classify-training-data`, `score-training-data`, `validate-training-data`, `generate-contrastive`, `generate-preferences`, `check-leakage`
+### Training — Quality (5)
+`classify-training-data`, `score-training-data`, `validate-training-data`, `generate-contrastive`, `generate-preferences`
 
-### Training — Execution
-`train [--force]`, `train-pipeline [--force]`, `evaluate-holdout`
+### Training — Execution (2)
+`train [--force|--rollback|--export]`, `train-pipeline [--force]`
 
-### Evaluation
-`cto-report`, `feature-importance`, `backtest`, `compare-models`, `model-evaluation-status`, `promote-model`
+### Evaluation (7)
+`cto-report`, `evaluate-holdout`, `model-evaluation-status`, `promote-model`, `feature-importance`, `backtest`, `compare-models`, `check-leakage`
 
-### Operations
-`watch [--overnight]`, `dashboard`, `halt-trading`, `resume-trading`, `collect-data`, `fetch-earnings`, `send-test-telegram`
+### Operations (9)
+`collect-data`, `fetch-earnings`, `halt-trading`, `resume-trading`, `preflight`, `council`, `watch [--overnight]`, `dashboard`
 
 ## Scope
 
@@ -187,7 +192,7 @@ Each desk launches only after the previous desk is profitable. See docs/roadmap.
 - **SEC EDGAR** — Fundamental data
 - **Telegram Bot API** — Real-time push notifications
 
-## Research Library (25 documents)
+## Research Library (27 documents)
 
 See the dashboard Docs page for the complete research library covering:
 - Training methodology (formats, rubric, self-blinding, degradation prevention, gaps/innovation, GRPO)
