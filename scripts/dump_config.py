@@ -22,6 +22,8 @@ SENSITIVE_KEYS = {
     "api_key", "secret_key", "bot_token", "chat_id", "password",
     "database_url", "api_secret", "token", "secret", "smtp_password",
     "smtp_user", "from_email", "to_email", "fred_api_key",
+    "anthropic_api_key", "finnhub_api_key", "openai_api_key",
+    "polygon_api_key", "alpaca_api_key", "alpaca_secret_key",
 }
 
 
