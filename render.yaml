@@ -2,6 +2,7 @@
 # https://render.com/docs/blueprint-spec
 
 services:
+services:
   # ── Static site: React frontend ────────────────────────────────────
   - type: web
     name: halcyon-frontend
@@ -10,11 +11,15 @@ services:
     staticPublishPath: frontend/dist
     envVars:
       - key: VITE_API_URL
-        value: https://halcyon-api.onrender.com
+        value: https://halcyon-api.onrender.com/api
     headers:
       - path: /*
         name: Cache-Control
         value: public, max-age=3600
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
 
   # ── Python web service: read-only API ──────────────────────────────
   - type: web
@@ -25,11 +30,9 @@ services:
     startCommand: uvicorn src.api.cloud_app:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: DATABASE_URL
-        fromDatabase:
-          name: halcyon-db
-          property: connectionString
+        sync: false
       - key: API_SECRET
-        sync: false # Set manually in Render dashboard
+        sync: false
       - key: PYTHON_VERSION
         value: "3.11.6"
     healthCheckPath: /api/status
