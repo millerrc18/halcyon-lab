@@ -10,10 +10,21 @@
 - **test_filing_nlp.py** (17 tests) — Loughran-McDonald sentiment scoring, cautionary phrase detection, filing delta computation, tech-fundamental divergence
 - **test_broker.py** (11 tests) — Broker abstraction, AlpacaAdapter methods, factory function, abstract interface
 
+### Full Test Gap Closure (Priority 2-3)
+- **test_backtester.py** (7 tests) — Walk-forward backtest with mocked market data, compare_models winner selection
+- **test_services.py** (39 tests) — All 7 service modules: scan, shadow, system, training, review, recap, watchlist
+- **test_docs_collector.py** (12 tests) — File scanning, title extraction, category assignment, table population
+- **test_data_integrity.py** (21 tests) — Feature validation, trade entry validation, universe validation
+- **test_activity_logger.py** (8 tests) — Activity log insertion, metadata, missing table handling
+- **test_packet_builders.py** (16 tests) — Template packet builder, watchlist builder, EOD recap builder
+- **test_llm_writers.py** (10 tests) — Postmortem writer, watchlist narrative generator
+- **test_local_api_routes.py** (24 tests) — Packets, training, scan, review route endpoints
+- **test_websocket.py** (7 tests) — ConnectionManager connect/disconnect/broadcast
+
 ### Coverage Impact
-- Tests: 853 (up from 701, +152 new tests)
-- All 7 critical money-path modules now tested
-- Test files: 60 (up from 54)
+- Tests: 1,035 (up from 657 baseline, +378 new tests)
+- All critical money-path, service layer, utility, and API route modules now tested
+- Test files: 69 (up from 52)
 
 ---
 
