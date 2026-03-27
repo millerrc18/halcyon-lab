@@ -928,7 +928,7 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_parser("resume-trading").set_defaults(func=cmd_resume_trading)
     sp.add_parser("preflight").set_defaults(func=cmd_preflight)
     _p = sp.add_parser("council", help="Run an AI Council session"); _p.add_argument("--type", default="daily", choices=["daily", "strategic", "on_demand"]); _p.set_defaults(func=cmd_council)
-    _p = sp.add_parser("watch"); _p.add_argument("--email-mode", choices=["full_stream", "daily_summary", "silent"]); _p.add_argument("--overnight", action="store_true", help="Enable overnight schedule (post-close, news, enrichment, pre-market)"); _p.set_defaults(func=cmd_watch)
+    _p = sp.add_parser("watch"); _p.add_argument("--email-mode", choices=["full_stream", "daily_summary", "digest", "silent"]); _p.add_argument("--overnight", action="store_true", help="Enable overnight schedule (post-close, news, enrichment, pre-market)"); _p.set_defaults(func=cmd_watch)
     _p = sp.add_parser("dashboard"); _p.add_argument("--port", type=int, default=8000); _p.set_defaults(func=cmd_dashboard)
 
     return p
