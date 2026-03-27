@@ -844,12 +844,13 @@ class TestReconcileEndpoint:
         assert r.json()["error"] == "cloud_mode"
 
 
-class TestCtoReportShape:
-    """Tests for /api/cto-report response shape matching frontend."""
+class TestFrontendContracts:
+    """Verify API responses match the exact field paths each frontend page reads."""
 
     @patch("src.api.cloud_app._query_one")
     @patch("src.api.cloud_app._query")
-    def test_cto_report_has_expected_keys(self, mock_query, mock_one, client):
+    def test_cto_report_shape(self, mock_query, mock_one, client):
+        """Dashboard.jsx reads: headline_kpis.sharpe_ratio, trade_summary.trades_closed, etc."""
         mock_one.side_effect = [{"c": 5}, None, None]
         mock_query.side_effect = [
             [{"ticker": "AAPL", "pnl_dollars": 100, "pnl_pct": 4.0, "exit_reason": "target"}],
@@ -862,3 +863,77 @@ class TestCtoReportShape:
         ts = data["trade_summary"]
         assert "trades_closed" in ts
         assert "total_pnl" in ts
+        assert "expectancy_dollars" in ts
+
+    @patch("src.api.cloud_app._query_one")
+    @patch("src.api.cloud_app._query")
+    def test_health_score_shape(self, mock_query, mock_one, client):
+        """Health.jsx reads: score.overall, score.dimensions.{5 keys}, score.dimension_metrics, score.weights, score.phase."""
+        mock_query.side_effect = [
+            [{"pnl_dollars": 100, "pnl_pct": 4.0}, {"pnl_dollars": -50, "pnl_pct": -2.0}],
+            [{"source": "backfill", "cnt": 700}],
+        ]
+        mock_one.side_effect = [
+            {"c": 10}, {"count": 500}, None, None,
+            {"llm_success": 17, "llm_total": 20},
+            {"cnt": 3}, {"cnt": 50},
+        ]
+        r = client.get("/api/health/score")
+        data = r.json()
+        score = data.get("score", data)
+        assert "overall" in score
+        assert "dimensions" in score
+        assert "dimension_metrics" in score
+        assert "weights" in score
+        assert "phase" in score
+        dm = score.get("dimension_metrics", {})
+        for key in ["performance", "model_quality", "data_asset", "flywheel_velocity", "defensibility"]:
+            assert key in dm, f"dimension_metrics missing {key}"
+
+    @patch("src.api.cloud_app._query")
+    def test_live_trades_shape(self, mock_query, client):
+        """LiveLedger.jsx reads: {open: [...], closed: [...]}."""
+        mock_query.side_effect = [[], []]
+        r = client.get("/api/live/trades")
+        data = r.json()
+        assert "open" in data
+        assert "closed" in data
+        assert isinstance(data["open"], list)
+        assert isinstance(data["closed"], list)
+
+    @patch("src.api.cloud_app._query")
+    @patch("src.api.cloud_app._query_one")
+    def test_council_session_shape(self, mock_one, mock_query, client):
+        """Council.jsx reads: {session: {...}, votes: [...]}."""
+        mock_one.return_value = {"session_id": "s1", "session_type": "daily", "consensus": "BULLISH"}
+        mock_query.return_value = [{"agent_name": "Risk Officer", "position": "BULLISH", "confidence": 8}]
+        r = client.get("/api/council/session/s1")
+        data = r.json()
+        assert "session" in data
+        assert "votes" in data
+        assert isinstance(data["votes"], list)
+
+    @patch("src.api.cloud_app._query")
+    def test_shadow_account_shape(self, mock_query, client):
+        """ShadowLedger.jsx reads: equity, starting_capital, closed_pnl, open_positions."""
+        mock_query.side_effect = [
+            [{"entry_price": 100, "planned_shares": 10, "pnl_dollars": 0}],
+            [{"pnl_dollars": 50, "pnl_pct": 2.0}],
+        ]
+        r = client.get("/api/shadow/account")
+        data = r.json()
+        assert "equity" in data
+        assert "starting_capital" in data
+        assert "closed_pnl" in data
+        assert "open_positions" in data
+
+    @patch("src.api.cloud_app._query_one")
+    @patch("src.api.cloud_app._query")
+    def test_live_summary_shape(self, mock_query, mock_one, client):
+        """LiveLedger.jsx reads: starting_capital, current_equity, total_pnl, open_positions, win_rate."""
+        mock_query.return_value = [{"pnl_dollars": 5.0, "pnl_pct": 2.0}]
+        mock_one.return_value = {"c": 1}
+        r = client.get("/api/live/summary")
+        data = r.json()
+        for key in ["starting_capital", "current_equity", "total_pnl", "open_positions", "win_rate"]:
+            assert key in data, f"live/summary missing {key}"

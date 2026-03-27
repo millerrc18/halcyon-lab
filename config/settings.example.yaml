@@ -121,9 +121,18 @@ bootcamp:
   # Override position limits
   max_positions: 50                 # No practical limit during bootcamp
   # Email preferences
-  email_mode: full_stream           # full_stream / daily_summary / silent
+  email_mode: full_stream           # full_stream / daily_summary / digest / silent
   max_packets_per_scan: 8           # Cap packets per scan to fit in 30-min window
   scan_interval_minutes: 30         # How often to re-scan during market hours
+
+# ── Email Digest Schedule (when email_mode: digest) ──────────────
+# Four daily emails at fixed times (ET). Risk alerts still send immediately.
+email:
+  digest_times:
+    premarket: "07:30"               # Portfolio status, overnight events
+    midday: "12:00"                  # Morning trades, P&L, risk alerts
+    eod: "16:15"                     # Full day recap, cumulative stats
+    evening: "20:00"                 # Training data, model quality, costs
 
 # ── Telegram Notifications ───────────────────────────────────────
 # Real-time push alerts for trade opens/closes, earnings warnings,
