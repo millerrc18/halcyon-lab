@@ -175,6 +175,31 @@ MIGRATIONS = [
         UNIQUE(comm_type, date, title)
     )"""),
 
+    ("api_costs", None, """CREATE TABLE IF NOT EXISTS api_costs (
+        id SERIAL PRIMARY KEY,
+        model TEXT,
+        purpose TEXT,
+        input_tokens INTEGER,
+        output_tokens INTEGER,
+        estimated_cost REAL,
+        created_at TEXT
+    )"""),
+
+    ("training_examples", None, """CREATE TABLE IF NOT EXISTS training_examples (
+        id SERIAL PRIMARY KEY,
+        example_id TEXT UNIQUE,
+        ticker TEXT,
+        trade_date TEXT,
+        input_text TEXT,
+        output_text TEXT,
+        quality_score REAL,
+        curriculum_stage TEXT,
+        outcome TEXT,
+        source TEXT,
+        model_version TEXT,
+        created_at TEXT
+    )"""),
+
     ("analyst_estimates", None, """CREATE TABLE IF NOT EXISTS analyst_estimates (
         id SERIAL PRIMARY KEY,
         ticker TEXT NOT NULL,

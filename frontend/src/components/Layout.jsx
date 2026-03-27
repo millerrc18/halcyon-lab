@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Outlet, NavLink } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../api'
+import { IS_CLOUD } from '../config'
 import { LayoutDashboard, FileText, TrendingUp, Brain, ClipboardCheck, BarChart3, Settings, Map, BookOpen, Users, Activity, Menu, X } from 'lucide-react'
 import StatusBadge from './StatusBadge'
 
@@ -61,15 +62,21 @@ export default function Layout() {
           <div className="p-4 border-t border-[var(--slate-600)] text-xs space-y-1">
             <div className="flex justify-between">
               <span style={{ color: 'var(--slate-400)' }}>LLM</span>
-              <StatusBadge text={status.ollama_available ? 'Online' : 'Offline'} variant={status.ollama_available ? 'success' : 'danger'} />
+              {IS_CLOUD
+                ? <StatusBadge text="Cloud" variant="info" />
+                : <StatusBadge text={status.ollama_available ? 'Online' : 'Offline'} variant={status.ollama_available ? 'success' : 'danger'} />
+              }
             </div>
             <div className="flex justify-between">
               <span style={{ color: 'var(--slate-400)' }}>Model</span>
-              <span style={{ color: 'var(--slate-300)' }}>{status.model_version}</span>
+              <span style={{ color: 'var(--slate-300)' }}>{status.model_version || (IS_CLOUD ? 'cloud' : '--')}</span>
             </div>
             <div className="flex justify-between">
               <span style={{ color: 'var(--slate-400)' }}>Shadow</span>
-              <StatusBadge text={status.shadow_trading_enabled ? 'Active' : 'Off'} variant={status.shadow_trading_enabled ? 'success' : 'neutral'} />
+              {IS_CLOUD
+                ? <StatusBadge text="Cloud" variant="info" />
+                : <StatusBadge text={status.shadow_trading_enabled ? 'Active' : 'Off'} variant={status.shadow_trading_enabled ? 'success' : 'neutral'} />
+              }
             </div>
           </div>
         )}

@@ -108,6 +108,16 @@ SYNC_TABLES: dict[str, dict] = {
         "time_col": "collected_at",
         "pk": "id",
     },
+    "api_costs": {
+        "mode": "incremental",
+        "time_col": "created_at",
+        "pk": "id",
+    },
+    "training_examples": {
+        "mode": "incremental",
+        "time_col": "created_at",
+        "pk": "id",
+    },
 }
 
 # ── Sync state table (local SQLite) ─────────────────────────────────

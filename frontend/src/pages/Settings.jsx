@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../api'
+import { IS_CLOUD } from '../config'
 import LoadingSpinner from '../components/LoadingSpinner'
 import StatusBadge from '../components/StatusBadge'
 import MetricCard from '../components/MetricCard'
@@ -31,7 +32,9 @@ export default function Settings() {
       <h2 className="text-xl font-medium" style={{ color: 'var(--slate-100)' }}>Settings</h2>
 
       <div className="rounded-lg p-3 text-sm" style={{ background: 'rgba(245, 158, 11, 0.15)', border: '1px solid rgba(245, 158, 11, 0.4)', color: 'var(--amber-300)' }}>
-        Configuration changes require a watch loop restart to take effect.
+        {IS_CLOUD
+          ? 'Cloud mode — showing cached configuration. Changes require local access.'
+          : 'Configuration changes require a watch loop restart to take effect.'}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -102,14 +105,14 @@ export default function Settings() {
         <>
           <h3 className="text-sm uppercase tracking-wide" style={{ color: 'var(--slate-400)' }}>API Costs</h3>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <MetricCard label="All Time" value={`$${costs.total_all_time.toFixed(2)}`} />
-            <MetricCard label="Today" value={`$${costs.total_today.toFixed(4)}`} />
-            <MetricCard label="This Week" value={`$${costs.total_week.toFixed(4)}`} />
-            <MetricCard label="API Calls (30d)" value={costs.total_calls} />
+            <MetricCard label="All Time" value={`$${(costs.total_all_time ?? costs.total_cost ?? 0).toFixed(2)}`} />
+            <MetricCard label="Today" value={`$${(costs.total_today ?? 0).toFixed(4)}`} />
+            <MetricCard label="This Week" value={`$${(costs.total_week ?? 0).toFixed(4)}`} />
+            <MetricCard label="API Calls (30d)" value={costs.total_calls ?? (costs.breakdown || []).reduce((s, r) => s + (r.call_count || 0), 0)} />
           </div>
 
-          {/* Breakdown by purpose */}
-          {Object.keys(costs.by_purpose).length > 0 && (
+          {/* Breakdown by purpose (local format) */}
+          {costs.by_purpose && Object.keys(costs.by_purpose).length > 0 && (
             <div className="rounded-lg p-4" style={{ background: 'var(--slate-700)', border: '1px solid var(--slate-600)' }}>
               <h3 className="text-sm uppercase tracking-wide mb-4" style={{ color: 'var(--slate-400)' }}>Cost by Purpose (30d)</h3>
               <div className="space-y-2 text-sm">
@@ -124,6 +127,24 @@ export default function Settings() {
                       </div>
                     </div>
                   ))}
+              </div>
+            </div>
+          )}
+
+          {/* Breakdown (cloud format) */}
+          {!costs.by_purpose && costs.breakdown && costs.breakdown.length > 0 && (
+            <div className="rounded-lg p-4" style={{ background: 'var(--slate-700)', border: '1px solid var(--slate-600)' }}>
+              <h3 className="text-sm uppercase tracking-wide mb-4" style={{ color: 'var(--slate-400)' }}>Cost Breakdown (30d)</h3>
+              <div className="space-y-2 text-sm">
+                {costs.breakdown.map((row, i) => (
+                  <div key={i} className="flex items-center justify-between">
+                    <span className="capitalize" style={{ color: 'var(--slate-300)' }}>{(row.purpose || row.model || 'unknown').replace(/_/g, ' ')}</span>
+                    <div className="flex items-center gap-4" style={{ fontFamily: 'var(--font-mono)' }}>
+                      <span className="text-xs" style={{ color: 'var(--slate-400)' }}>{row.call_count || 0} calls</span>
+                      <span>${(row.total_cost || 0).toFixed(4)}</span>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           )}

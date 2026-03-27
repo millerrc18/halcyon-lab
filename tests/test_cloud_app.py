@@ -19,9 +19,11 @@ def set_env(monkeypatch):
 @pytest.fixture
 def client():
     """Create a test client for the cloud API."""
-    # Re-import to pick up env vars
-    from src.api.cloud_app import app
-    return TestClient(app)
+    # Re-import to pick up env vars and ensure API_SECRET is cleared
+    import importlib
+    import src.api.cloud_app as cloud_mod
+    importlib.reload(cloud_mod)
+    return TestClient(cloud_mod.app)
 
 
 @pytest.fixture
@@ -244,12 +246,21 @@ class TestAuditEndpoint:
 class TestDocsEndpoint:
     """Tests for /api/docs."""
 
-    def test_docs_returns_note(self, client):
+    def test_docs_returns_array(self, client):
         resp = client.get("/api/docs")
         assert resp.status_code == 200
         data = resp.json()
-        assert "note" in data
-        assert data["docs"] == []
+        assert isinstance(data, list)
+        assert len(data) > 0
+        assert "id" in data[0]
+        assert "title" in data[0]
+
+    def test_docs_single_doc(self, client):
+        resp = client.get("/api/docs/agents")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["id"] == "agents"
+        assert "content" in data
 
 
 # ── Council endpoints ────────────────────────────────────────────────
@@ -345,19 +356,29 @@ class TestAuth:
         assert resp.status_code == 401
 
 
-# ── No write endpoints test ──────────────────────────────────────────
+# ── POST stub tests ──────────────────────────────────────────────────
 
-class TestReadOnly:
-    """Verify the cloud API has no write endpoints."""
+CLOUD_POST_STUBS = [
+    "/api/actions/scan",
+    "/api/actions/cto-report",
+    "/api/actions/collect-training",
+    "/api/actions/train-pipeline",
+    "/api/actions/score",
+    "/api/actions/council",
+    "/api/halt-trading",
+    "/api/resume-trading",
+]
 
-    def test_no_post_endpoints(self, client):
-        """Cloud API should not expose any POST endpoints."""
-        routes = client.app.routes
-        post_routes = []
-        for route in routes:
-            if hasattr(route, "methods") and "POST" in route.methods:
-                post_routes.append(route.path)
-        assert post_routes == [], f"Found POST endpoints: {post_routes}"
+class TestPostStubs:
+    """Verify POST action stubs return cloud_mode error."""
+
+    def test_post_stubs_return_cloud_mode(self, client):
+        """All POST stubs should return cloud_mode error."""
+        for path in CLOUD_POST_STUBS:
+            resp = client.post(path)
+            assert resp.status_code == 200, f"{path}: {resp.status_code}"
+            data = resp.json()
+            assert data.get("error") == "cloud_mode", f"{path}: {data}"
 
     def test_no_put_endpoints(self, client):
         """Cloud API should not expose any PUT endpoints."""
@@ -377,13 +398,88 @@ class TestReadOnly:
                 delete_routes.append(route.path)
         assert delete_routes == [], f"Found DELETE endpoints: {delete_routes}"
 
-    def test_all_endpoints_are_get(self, client):
-        """Every API endpoint should be GET-only."""
-        routes = client.app.routes
-        for route in routes:
-            if hasattr(route, "methods") and hasattr(route, "path"):
-                if route.path.startswith("/api/"):
-                    allowed = route.methods - {"HEAD", "OPTIONS"}
-                    assert allowed == {"GET"}, (
-                        f"{route.path} has methods {allowed}, expected only GET"
-                    )
+
+# ── New endpoint tests ───────────────────────────────────────────────
+
+class TestNewEndpoints:
+    """Tests for all new cloud API endpoints."""
+
+    def test_config_returns_sections(self, client):
+        resp = client.get("/api/config")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "risk" in data
+        assert "shadow_trading" in data
+        assert "llm" in data
+        assert data["environment"] == "cloud"
+
+    def test_halt_status(self, client):
+        resp = client.get("/api/halt-status")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["halted"] is False
+
+    def test_costs_no_db(self, client):
+        resp = client.get("/api/costs")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "total_cost" in data
+        assert data["total_cost"] == 0
+
+    @patch("src.api.cloud_app._query_one")
+    def test_health_score(self, mock_one, client):
+        mock_one.return_value = {"count": 10}
+        resp = client.get("/api/health/score")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "score" in data
+
+    @patch("src.api.cloud_app._query")
+    def test_shadow_account(self, mock_query, client):
+        mock_query.return_value = []
+        resp = client.get("/api/shadow/account")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["starting_capital"] == 100000
+
+    @patch("src.api.cloud_app._query_one")
+    @patch("src.api.cloud_app._query")
+    def test_cto_report(self, mock_query, mock_one, client):
+        mock_query.return_value = []
+        mock_one.return_value = {"c": 0}
+        resp = client.get("/api/cto-report")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "trade_summary" in data
+
+    def test_scan_latest_no_db(self, client):
+        resp = client.get("/api/scan/latest")
+        assert resp.status_code == 200
+
+    def test_review_pending_no_db(self, client):
+        resp = client.get("/api/review/pending")
+        assert resp.status_code == 200
+
+    def test_review_scorecard(self, client):
+        resp = client.get("/api/review/scorecard")
+        assert resp.status_code == 200
+        assert resp.json()["weeks"] == 4
+
+    def test_review_postmortems(self, client):
+        resp = client.get("/api/review/postmortems")
+        assert resp.status_code == 200
+        assert resp.json() == []
+
+    def test_audit_history_no_db(self, client):
+        resp = client.get("/api/audit/history")
+        assert resp.status_code == 200
+
+    def test_training_report_no_db(self, client):
+        resp = client.get("/api/training/report")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total_examples"] == 0
+
+    def test_metric_history_no_db(self, client):
+        resp = client.get("/api/metric-history")
+        assert resp.status_code == 200

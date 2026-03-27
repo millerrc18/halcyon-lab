@@ -31,7 +31,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["GET", "OPTIONS"],
+    allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
 )
 
@@ -373,10 +373,24 @@ def audit_latest():
 
 @app.get("/api/docs", dependencies=[Depends(verify_auth)])
 def docs_list():
-    """Documentation listing (static, no file system access on Render)."""
+    """Documentation listing. Returns array matching local API format."""
+    return [
+        {"id": "agents", "title": "AGENTS.md — System Blueprint", "available": True},
+        {"id": "architecture", "title": "Architecture Overview", "available": True},
+        {"id": "roadmap", "title": "Development Roadmap", "available": True},
+        {"id": "deployment", "title": "Cloud Deployment Guide", "available": True},
+        {"id": "cli-reference", "title": "CLI Command Reference", "available": True},
+        {"id": "telegram-commands", "title": "Telegram Commands", "available": True},
+    ]
+
+
+@app.get("/api/docs/{doc_id}", dependencies=[Depends(verify_auth)])
+def get_doc(doc_id: str):
+    """Individual doc. Cloud mode: return placeholder directing to local."""
     return {
-        "note": "Full documentation is available on the local dashboard.",
-        "docs": [],
+        "id": doc_id,
+        "title": doc_id,
+        "content": f"# {doc_id}\n\nFull document content is available on the local dashboard.\n\nConnect to your local machine to view the complete document.",
     }
 
 
@@ -422,3 +436,300 @@ def council_history(days: int = 30):
     except Exception as exc:
         logger.error("Council history error: %s", exc)
         return []
+
+
+# ── New endpoints — Categories 1-3 ────────────────────────────────
+
+
+@app.get("/api/config", dependencies=[Depends(verify_auth)])
+def get_config():
+    """Return system config for the Settings page. Cloud mode: static config."""
+    return {
+        "risk": {"starting_capital": 100000, "planned_risk_pct_min": 0.005, "planned_risk_pct_max": 0.01, "max_open_positions": 50},
+        "shadow_trading": {"enabled": True, "max_positions": 50, "timeout_days": 15},
+        "llm": {"enabled": True, "model": "halcyonlatest", "temperature": 0.7},
+        "bootcamp": {"enabled": True, "phase": 1, "qualification_threshold": 40, "email_mode": "daily_summary"},
+        "automation": {"morning_watchlist_hour_et": 8, "eod_recap_hour_et": 16, "scan_interval_minutes": 30},
+        "training": {"enabled": True, "claude_model": "claude-sonnet-4-20250514", "auto_train_threshold": 50},
+        "environment": "cloud",
+    }
+
+
+@app.get("/api/halt-status", dependencies=[Depends(verify_auth)])
+def halt_status():
+    """Trading halt status. Cloud mode: always report not halted."""
+    return {"halted": False, "reason": None, "halted_at": None}
+
+
+@app.get("/api/costs", dependencies=[Depends(verify_auth)])
+def costs(days: int = 30):
+    """API cost summary from api_costs table."""
+    try:
+        cutoff = (datetime.now(ET) - timedelta(days=days)).isoformat()
+        rows = _query(
+            "SELECT model, purpose, SUM(input_tokens) as total_input, "
+            "SUM(output_tokens) as total_output, SUM(estimated_cost) as total_cost, "
+            "COUNT(*) as call_count "
+            "FROM api_costs WHERE created_at >= %s "
+            "GROUP BY model, purpose ORDER BY total_cost DESC",
+            (cutoff,),
+        )
+        total = sum(r.get("total_cost", 0) or 0 for r in rows)
+        return {"days": days, "total_cost": round(total, 4), "breakdown": rows}
+    except Exception:
+        return {"days": days, "total_cost": 0, "breakdown": []}
+
+
+@app.get("/api/health/score", dependencies=[Depends(verify_auth)])
+def health_score():
+    """HSHS health score. Computed from available cloud data."""
+    try:
+        closed = _query_one("SELECT COUNT(*) as count FROM shadow_trades WHERE status = 'closed'")
+        closed_count = closed["count"] if closed else 0
+
+        examples = _query_one("SELECT COUNT(*) as count FROM training_examples")
+        example_count = examples["count"] if examples else 0
+
+        model = _query_one("SELECT version_name, status FROM model_versions ORDER BY created_at DESC LIMIT 1")
+        canary = _query_one("SELECT verdict FROM canary_evaluations ORDER BY created_at DESC LIMIT 1")
+
+        data_asset_score = min(100, (example_count / 2800) * 100) if example_count else 0
+        flywheel_score = min(100, (closed_count / 50) * 100) if closed_count else 0
+        overall = round(data_asset_score * 0.35 + flywheel_score * 0.20, 1)
+
+        return {
+            "score": {
+                "overall": overall,
+                "dimensions": {
+                    "performance": 0,
+                    "model_quality": 0,
+                    "data_asset": round(data_asset_score, 1),
+                    "flywheel_velocity": round(flywheel_score, 1),
+                    "defensibility": 0,
+                },
+                "weights": {
+                    "performance": 0.10,
+                    "model_quality": 0.25,
+                    "data_asset": 0.35,
+                    "flywheel_velocity": 0.20,
+                    "defensibility": 0.10,
+                },
+                "phase": "early",
+            },
+            "closed_trades": closed_count,
+            "training_examples": example_count,
+            "model": model,
+            "canary": canary,
+            "history": [],
+        }
+    except Exception as exc:
+        return {"score": {"overall": 0, "dimensions": {}, "weights": {}, "phase": "early"}, "history": [], "error": str(exc)}
+
+
+@app.get("/api/shadow/account", dependencies=[Depends(verify_auth)])
+def shadow_account():
+    """Shadow trading account summary."""
+    try:
+        open_trades = _query(
+            "SELECT entry_price, planned_shares, pnl_dollars FROM shadow_trades WHERE status = 'open'"
+        )
+        closed_trades = _query(
+            "SELECT pnl_dollars, pnl_pct FROM shadow_trades WHERE status = 'closed'"
+        )
+        starting_capital = 100000
+        closed_pnl = sum(t.get("pnl_dollars", 0) or 0 for t in closed_trades)
+        open_alloc = sum((t.get("entry_price", 0) or 0) * (t.get("planned_shares", 0) or 0) for t in open_trades)
+
+        wins = [t for t in closed_trades if (t.get("pnl_dollars", 0) or 0) > 0]
+        losses = [t for t in closed_trades if (t.get("pnl_dollars", 0) or 0) <= 0]
+
+        return {
+            "starting_capital": starting_capital,
+            "equity": starting_capital + closed_pnl,
+            "cash": starting_capital + closed_pnl - open_alloc,
+            "open_positions": len(open_trades),
+            "closed_pnl": round(closed_pnl, 2),
+            "unrealized_pnl": 0,
+            "win_rate": round(len(wins) / len(closed_trades), 3) if closed_trades else None,
+            "total_closed": len(closed_trades),
+            "wins": len(wins),
+            "losses": len(losses),
+        }
+    except Exception as exc:
+        return {"starting_capital": 100000, "equity": 100000, "error": str(exc)}
+
+
+@app.get("/api/cto-report", dependencies=[Depends(verify_auth)])
+def cto_report(days: int = 7):
+    """Generate CTO report from cloud data."""
+    try:
+        cutoff = (datetime.now(ET) - timedelta(days=days)).isoformat()
+
+        open_count = _query_one("SELECT COUNT(*) as c FROM shadow_trades WHERE status = 'open'")
+        closed_recent = _query(
+            "SELECT ticker, pnl_dollars, pnl_pct, exit_reason FROM shadow_trades "
+            "WHERE status = 'closed' AND actual_exit_time >= %s ORDER BY actual_exit_time DESC",
+            (cutoff,),
+        )
+        packet_count = _query_one("SELECT COUNT(*) as c FROM recommendations WHERE created_at >= %s", (cutoff,))
+        latest_audit = _query_one("SELECT overall_assessment, summary FROM audit_reports ORDER BY created_at DESC LIMIT 1")
+
+        # Compute basic KPIs
+        pnls = [t.get("pnl_pct", 0) or 0 for t in closed_recent]
+        wins = [p for p in pnls if p > 0]
+        losses = [p for p in pnls if p <= 0]
+        win_rate = len(wins) / len(pnls) if pnls else 0
+        total_pnl = sum(t.get("pnl_dollars", 0) or 0 for t in closed_recent)
+
+        return {
+            "report_period": {
+                "start": cutoff[:10],
+                "end": datetime.now(ET).strftime("%Y-%m-%d"),
+            },
+            "headline_kpis": {
+                "sharpe_ratio": 0,
+                "win_rate": win_rate,
+                "max_drawdown_pct": 0,
+                "confidence_calibration": 0,
+                "avg_rubric_score": None,
+            },
+            "trade_summary": {
+                "trades_closed": len(closed_recent),
+                "trades_open": open_count["c"] if open_count else 0,
+                "profit_factor": "n/a",
+                "expectancy_dollars": round(total_pnl / len(closed_recent), 2) if closed_recent else None,
+                "total_pnl": round(total_pnl, 2),
+                "avg_winner_pct": round(sum(wins) / len(wins), 1) if wins else None,
+                "avg_loser_pct": round(sum(losses) / len(losses), 1) if losses else None,
+                "max_consecutive_losses": 0,
+            },
+            "system_status": {
+                "model_version": "cloud",
+                "dataset_size": 0,
+            },
+            "period_days": days,
+            "packets_generated": packet_count["c"] if packet_count else 0,
+            "latest_audit": latest_audit,
+            "generated_at": datetime.now(ET).isoformat(),
+        }
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
+@app.get("/api/scan/latest", dependencies=[Depends(verify_auth)])
+def scan_latest():
+    """Latest scan results."""
+    try:
+        latest = _query(
+            "SELECT * FROM recommendations ORDER BY created_at DESC LIMIT 10"
+        )
+        return {"recommendations": latest, "count": len(latest)}
+    except Exception:
+        return {"recommendations": [], "count": 0}
+
+
+@app.get("/api/review/pending", dependencies=[Depends(verify_auth)])
+def review_pending():
+    """Trades pending review."""
+    try:
+        rows = _query(
+            "SELECT * FROM shadow_trades WHERE status = 'closed' "
+            "AND (exit_reason IS NOT NULL) ORDER BY actual_exit_time DESC LIMIT 20"
+        )
+        return rows
+    except Exception:
+        return []
+
+
+@app.get("/api/review/scorecard", dependencies=[Depends(verify_auth)])
+def review_scorecard(weeks: int = 4):
+    """Review scorecard."""
+    return {"weeks": weeks, "scorecard": []}
+
+
+@app.get("/api/review/postmortems", dependencies=[Depends(verify_auth)])
+def review_postmortems():
+    """Recent postmortems."""
+    return []
+
+
+@app.get("/api/audit/history", dependencies=[Depends(verify_auth)])
+def audit_history(days: int = 30):
+    """Audit report history."""
+    try:
+        cutoff = (datetime.now(ET) - timedelta(days=days)).isoformat()
+        rows = _query(
+            "SELECT * FROM audit_reports WHERE created_at >= %s ORDER BY created_at DESC",
+            (cutoff,),
+        )
+        return rows
+    except Exception:
+        return []
+
+
+@app.get("/api/training/report", dependencies=[Depends(verify_auth)])
+def training_report():
+    """Training pipeline report."""
+    try:
+        total = _query_one("SELECT COUNT(*) as c FROM training_examples")
+        scored = _query_one("SELECT COUNT(*) as c FROM training_examples WHERE quality_score IS NOT NULL")
+        avg_score = _query_one("SELECT AVG(quality_score) as avg FROM training_examples WHERE quality_score IS NOT NULL")
+        return {
+            "total_examples": total["c"] if total else 0,
+            "scored": scored["c"] if scored else 0,
+            "unscored": (total["c"] if total else 0) - (scored["c"] if scored else 0),
+            "avg_quality_score": round(avg_score["avg"], 2) if avg_score and avg_score["avg"] else None,
+        }
+    except Exception:
+        return {"total_examples": 0, "scored": 0, "unscored": 0}
+
+
+@app.get("/api/metric-history", dependencies=[Depends(verify_auth)])
+def metric_history(days: int = 90):
+    """Alias for metrics/history — some frontend pages use this path."""
+    return metrics_history(days)
+
+
+# ── POST action stubs (cloud mode) ──────────────────────────────
+
+CLOUD_ACTION_MSG = {"error": "cloud_mode", "message": "This action is only available on the local dashboard."}
+
+
+@app.post("/api/actions/scan", dependencies=[Depends(verify_auth)])
+def action_scan():
+    return CLOUD_ACTION_MSG
+
+
+@app.post("/api/actions/cto-report", dependencies=[Depends(verify_auth)])
+def action_cto_report():
+    return CLOUD_ACTION_MSG
+
+
+@app.post("/api/actions/collect-training", dependencies=[Depends(verify_auth)])
+def action_collect_training():
+    return CLOUD_ACTION_MSG
+
+
+@app.post("/api/actions/train-pipeline", dependencies=[Depends(verify_auth)])
+def action_train_pipeline():
+    return CLOUD_ACTION_MSG
+
+
+@app.post("/api/actions/score", dependencies=[Depends(verify_auth)])
+def action_score():
+    return CLOUD_ACTION_MSG
+
+
+@app.post("/api/actions/council", dependencies=[Depends(verify_auth)])
+def action_council():
+    return CLOUD_ACTION_MSG
+
+
+@app.post("/api/halt-trading", dependencies=[Depends(verify_auth)])
+def halt_trading():
+    return CLOUD_ACTION_MSG
+
+
+@app.post("/api/resume-trading", dependencies=[Depends(verify_auth)])
+def resume_trading():
+    return CLOUD_ACTION_MSG

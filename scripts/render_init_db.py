@@ -372,6 +372,42 @@ CREATE TABLE IF NOT EXISTS analyst_estimates (
 CREATE INDEX IF NOT EXISTS idx_analyst_ticker_date ON analyst_estimates(ticker, date);
 
 
+-- ── API costs tracking ──────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS api_costs (
+    id SERIAL PRIMARY KEY,
+    model TEXT,
+    purpose TEXT,
+    input_tokens INTEGER,
+    output_tokens INTEGER,
+    estimated_cost REAL,
+    created_at TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_api_costs_created ON api_costs(created_at);
+
+
+-- ── Training examples ───────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS training_examples (
+    id SERIAL PRIMARY KEY,
+    example_id TEXT UNIQUE,
+    ticker TEXT,
+    trade_date TEXT,
+    input_text TEXT,
+    output_text TEXT,
+    quality_score REAL,
+    curriculum_stage TEXT,
+    outcome TEXT,
+    source TEXT,
+    model_version TEXT,
+    created_at TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_training_examples_created ON training_examples(created_at);
+CREATE INDEX IF NOT EXISTS idx_training_examples_ticker ON training_examples(ticker);
+
+
 -- ── Sync state (for tracking what has been synced) ──────────────────
 
 CREATE TABLE IF NOT EXISTS sync_state (

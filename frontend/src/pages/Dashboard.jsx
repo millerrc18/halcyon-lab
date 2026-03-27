@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../api'
+import { IS_CLOUD } from '../config'
 import MetricCard from '../components/MetricCard'
 import DataTable from '../components/DataTable'
 import LoadingSpinner from '../components/LoadingSpinner'
@@ -29,21 +30,20 @@ export default function Dashboard() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['halt-status'] }),
   })
 
-  const scanMutation = useMutation({
-    mutationFn: api.triggerActionScan,
-    onSuccess: () => showToast('Scan started...'),
-    onError: (e) => showToast(`Scan failed: ${e.message}`),
+  const handleCloudAction = (fn, successMsg, failMsg) => ({
+    mutationFn: fn,
+    onSuccess: (data) => {
+      if (data?.error === 'cloud_mode') {
+        showToast('This action is only available locally')
+      } else {
+        showToast(successMsg)
+      }
+    },
+    onError: (e) => showToast(`${failMsg}: ${e.message}`),
   })
-  const ctoMutation = useMutation({
-    mutationFn: api.triggerCtoReport,
-    onSuccess: () => showToast('CTO report generating...'),
-    onError: (e) => showToast(`CTO report failed: ${e.message}`),
-  })
-  const collectMutation = useMutation({
-    mutationFn: api.triggerCollectTraining,
-    onSuccess: () => showToast('Training data collection started...'),
-    onError: (e) => showToast(`Collection failed: ${e.message}`),
-  })
+  const scanMutation = useMutation(handleCloudAction(api.triggerActionScan, 'Scan started...', 'Scan failed'))
+  const ctoMutation = useMutation(handleCloudAction(api.triggerCtoReport, 'CTO report generating...', 'CTO report failed'))
+  const collectMutation = useMutation(handleCloudAction(api.triggerCollectTraining, 'Training data collection started...', 'Collection failed'))
 
   const isHalted = haltData?.halted || false
   const auditAssessment = auditData?.overall_assessment || auditData?.audit?.overall_assessment
