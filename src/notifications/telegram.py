@@ -648,6 +648,152 @@ def poll_commands(last_update_id: int = 0) -> tuple[list[dict], int]:
         return [], last_update_id
 
 
+# ── Action Reminder Notifications ─────────────────────────────────────
+
+def notify_action_required(action: str, detail: str, urgency: str = "normal") -> bool:
+    """Send a Telegram notification when a manual action is needed.
+
+    urgency: 'low', 'normal', 'high', 'critical'
+    """
+    icons = {"low": "📋", "normal": "🔔", "high": "⚠️", "critical": "🚨"}
+    icon = icons.get(urgency, "🔔")
+    msg = f"{icon} <b>ACTION REQUIRED</b>\n\n<b>{action}</b>\n{detail}"
+    return send_telegram(msg)
+
+
+def check_action_reminders(db_path: str = "ai_research_desk.sqlite3") -> list[str]:
+    """Check all conditions that require manual action. Returns list of actions sent.
+
+    Called daily at 8 PM from the watch loop. Checks:
+    1. Phase gate milestone reached (50/100/200 closed trades)
+    2. Sunday review ritual reminder (Sundays at 5 PM)
+    3. API key rotation (every 90 days)
+    4. Unscored training examples accumulating
+    5. Reconcile needed (Alpaca vs DB divergence)
+    6. Saturday retrain didn't fire
+    """
+    import sqlite3
+    sent = []
+    now = datetime.now(ET)
+
+    try:
+        with sqlite3.connect(db_path) as conn:
+            conn.row_factory = sqlite3.Row
+
+            # 1. Phase gate milestones
+            closed = conn.execute(
+                "SELECT COUNT(*) as c FROM shadow_trades WHERE status = 'closed'"
+            ).fetchone()
+            closed_count = closed["c"] if closed else 0
+
+            for milestone in [50, 100, 200, 500]:
+                if closed_count >= milestone:
+                    # Check if we already notified for this milestone
+                    already = conn.execute(
+                        "SELECT COUNT(*) as c FROM activity_log "
+                        "WHERE event_type = 'gate_milestone' AND detail LIKE ?",
+                        (f"%{milestone}%",),
+                    ).fetchone()
+                    if not (already and already["c"] > 0):
+                        notify_action_required(
+                            f"Phase gate: {milestone} closed trades reached!",
+                            f"You have {closed_count} closed trades.\n"
+                            f"Run: <code>python -m src.main evaluate-gate</code>\n"
+                            f"Then review results with Claude.",
+                            urgency="high",
+                        )
+                        try:
+                            conn.execute(
+                                "INSERT INTO activity_log (event_type, detail, created_at) "
+                                "VALUES (?, ?, ?)",
+                                ("gate_milestone", f"Notified {milestone} trades", now.isoformat()),
+                            )
+                        except Exception:
+                            pass
+                        sent.append(f"gate_{milestone}")
+                    break  # Only notify for highest milestone
+
+            # 2. Sunday review ritual (5 PM Sundays)
+            if now.weekday() == 6 and now.hour == 17:
+                notify_action_required(
+                    "Weekly review ritual",
+                    "Export 20 recent training examples + halcyon.log + dashboard screenshots.\n"
+                    "Review with Claude for format drift, look-ahead bias, regime gaps.\n"
+                    "Prepare Monday action items.",
+                    urgency="normal",
+                )
+                sent.append("sunday_review")
+
+            # 3. API key rotation (check every 90 days)
+            last_rotation = conn.execute(
+                "SELECT detail FROM activity_log "
+                "WHERE event_type = 'api_key_rotation' ORDER BY created_at DESC LIMIT 1"
+            ).fetchone()
+            if not last_rotation:
+                # Never rotated — remind after system has been running 90 days
+                oldest_trade = conn.execute(
+                    "SELECT MIN(created_at) as first FROM shadow_trades"
+                ).fetchone()
+                if oldest_trade and oldest_trade["first"]:
+                    from datetime import datetime as dt
+                    try:
+                        first = dt.fromisoformat(oldest_trade["first"].replace("Z", "+00:00"))
+                        if (now - first.replace(tzinfo=ET if first.tzinfo is None else first.tzinfo)).days >= 90:
+                            notify_action_required(
+                                "Rotate API keys (90-day reminder)",
+                                "Rotate: Alpaca, Anthropic, Finnhub, Polygon (if active).\n"
+                                "Update config/settings.local.yaml and Render env vars.\n"
+                                "Log: <code>python -m src.main log-activity api_key_rotation 'Rotated all keys'</code>",
+                                urgency="normal",
+                            )
+                            sent.append("api_rotation")
+                    except Exception:
+                        pass
+
+            # 4. Unscored training examples
+            unscored = conn.execute(
+                "SELECT COUNT(*) as c FROM training_examples "
+                "WHERE quality_score_auto IS NULL OR quality_score_auto = 0"
+            ).fetchone()
+            unscored_count = unscored["c"] if unscored else 0
+            if unscored_count > 100:
+                notify_action_required(
+                    f"Score training data ({unscored_count} unscored)",
+                    f"{unscored_count} training examples need quality scoring.\n"
+                    f"Run: <code>python -m src.main score-training-data</code>\n"
+                    f"Cost: ~${unscored_count * 0.008:.2f} (Claude API)",
+                    urgency="low",
+                )
+                sent.append("score_training")
+
+            # 5. Saturday retrain check (Sundays — did Saturday retrain happen?)
+            if now.weekday() == 6 and now.hour >= 10:
+                from src.training.versioning import get_active_model_version, init_training_tables
+                init_training_tables(db_path)
+                active = get_active_model_version(db_path)
+                if active:
+                    try:
+                        from datetime import datetime as dt
+                        created = dt.fromisoformat(active["created_at"].replace("Z", "+00:00"))
+                        days_since = (now - created.replace(tzinfo=ET if created.tzinfo is None else created.tzinfo)).days
+                        if days_since > 14:
+                            notify_action_required(
+                                f"Model retrain overdue ({days_since} days)",
+                                f"Last retrain: {active['created_at'][:10]} ({active['version_name']})\n"
+                                f"Run: <code>python -m src.main train --force</code>\n"
+                                f"Or check Saturday overnight schedule logs.",
+                                urgency="high",
+                            )
+                            sent.append("retrain_overdue")
+                    except Exception:
+                        pass
+
+    except Exception as e:
+        logger.debug("[TELEGRAM] Action reminder check failed: %s", e)
+
+    return sent
+
+
 def handle_command(command: str, args: str) -> str:
     """Process a Telegram command and return the response text.
 

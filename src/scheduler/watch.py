@@ -107,6 +107,7 @@ class WatchLoop:
         self._digest_midday_done = False
         self._digest_eod_done = False
         self._digest_evening_done = False
+        self._action_reminders_done = False
 
         # Collector failure tracking: {collector_name: consecutive_failure_count}
         self._collector_failures: dict[str, int] = {}
@@ -155,6 +156,7 @@ class WatchLoop:
         self._digest_midday_done = False
         self._digest_eod_done = False
         self._digest_evening_done = False
+        self._action_reminders_done = False
 
     def _is_market_open(self, now: datetime) -> bool:
         """Check if market is currently open (weekday, between open and close)."""
@@ -868,6 +870,18 @@ class WatchLoop:
                       and not self._weekly_digest_done):
                     self._safe_run("weekly digest", self._send_weekly_digest)
                     self._weekly_digest_done = True
+
+                # Action reminders (8 PM daily via Telegram)
+                if hour == 20 and not self._action_reminders_done:
+                    try:
+                        from src.notifications.telegram import check_action_reminders, is_telegram_enabled
+                        if is_telegram_enabled():
+                            sent = check_action_reminders()
+                            if sent:
+                                logger.info("[WATCH] Action reminders sent: %s", sent)
+                    except Exception as e:
+                        logger.debug("[WATCH] Action reminders failed: %s", e)
+                    self._action_reminders_done = True
 
                 # 1L. Earnings proximity warning (8:00 AM weekdays)
                 if (hour == 8 and now.minute < 5 and now.weekday() < 5
