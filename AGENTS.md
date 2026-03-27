@@ -1,4 +1,4 @@
-<!-- Counts verified 2026-03-26: 121 Python files, 22,174 LOC, 50 test files, 583 tests, 49 CLI commands, 62 API routes, 25 DB tables, 29 research docs. -->
+<!-- Counts verified 2026-03-26: 126 Python files, 23,800+ LOC, 51 test files, 630+ tests, 49 CLI commands, 62 API routes, 30 DB tables, 29 research docs. -->
 
 # AGENTS.md — Halcyon Lab Governance Document
 
@@ -35,7 +35,7 @@ Universe (S&P 100 → expanding to ~325 stocks)
   → Data Collection (options chains, VIX, macro, trends — overnight)
 ```
 
-## Data Sources (7+ enrichment, 6 collection)
+## Data Sources (7+ enrichment, 12 collection)
 
 ### Enrichment (used in every scan)
 
@@ -47,15 +47,20 @@ Universe (S&P 100 → expanding to ~325 stocks)
 6. **Recent News** — Finnhub Company News: headlines, simple sentiment scoring
 7. **Macro Context** — FRED: Fed Funds rate, yield curve, unemployment, CPI, GDP + 9 expanded series
 
-### Data Collection (overnight pipeline — irreplaceable daily snapshots)
+### Data Collection (overnight pipeline — 12 collectors, irreplaceable daily snapshots)
 
 1. **Options Chains** — Full EOD chain snapshots via yfinance (strikes, IV, Greeks, OI)
 2. **Options Metrics** — Derived signals: IV rank, put/call ratios, IV skew, unusual activity
 3. **VIX Term Structure** — VIX, VIX9D, VIX3M, VIX1Y + contango/backwardation classification
 4. **CBOE Ratios** — Equity, index, and total put/call ratios
-5. **FRED Macro (expanded)** — 19 series including GSCPI, yield curve, credit spreads, financial conditions, crude oil
-6. **Google Trends** — Retail attention signal, batched rotation across universe
+5. **FRED Macro (34+ series)** — Housing, employment, trade, consumer, financial conditions, plus original core
+6. **Google Trends (market-wide)** — 8 sentiment terms: crash, recession, inflation, rates, bubble, correction
 7. **Earnings Calendar** — Next earnings date for every ticker, flagging imminent reports
+8. **SEC EDGAR Filings** — 10-K, 10-Q, 8-K filings with parsed sections (free, 10 req/sec)
+9. **Insider Transactions** — Form 4 buy/sell data via Finnhub (nightly)
+10. **Short Interest** — FINRA short interest snapshots via Finnhub (biweekly)
+11. **Fed Communications** — FOMC statements, minutes, Beige Book, speeches (scraped from federalreserve.gov)
+12. **Analyst Estimates** — Consensus recommendations + price targets via Finnhub (batched 20/night)
 
 ## Execution
 
@@ -97,7 +102,7 @@ Universe (S&P 100 → expanding to ~325 stocks)
 | 6:45 PM         | DPO preference pair generation                               | Inference        |
 | 6:50 PM         | Evening VRAM handoff (Ollama → training subprocess)          | Transition       |
 | 7:00 PM         | Walk-forward backtesting                                     | Training         |
-| 9:30 PM         | Data collection (options, VIX, FRED, trends, CBOE, earnings) | CPU (concurrent) |
+| 9:30 PM         | Data collection (12 collectors: options, VIX, FRED 34+, trends, CBOE, earnings, EDGAR, insider, short interest, Fed, analyst) | CPU (concurrent) |
 | 10:00 PM        | News ingestion (full universe)                               | CPU (concurrent) |
 | 11:00 PM        | Enrichment pre-cache                                         | CPU (concurrent) |
 | 11:05 PM        | Auxiliary model training (regime classifier)                 | Training         |
@@ -203,7 +208,7 @@ Each desk launches only after the previous desk is profitable. See docs/roadmap.
 - **Anthropic Claude API (Haiku 4.5)** — Training data generation, quality scoring
 - **Alpaca Markets API** — Paper trading execution
 - **Finnhub API** — Insider activity, company news
-- **FRED API** — Macroeconomic indicators (19 series)
+- **FRED API** — Macroeconomic indicators (34+ series)
 - **SEC EDGAR** — Fundamental data
 - **Telegram Bot API** — Real-time push notifications
 

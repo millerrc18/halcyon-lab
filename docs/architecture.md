@@ -1,4 +1,4 @@
-<!-- Counts verified 2026-03-26: 24 DB tables, 48 API routes, 121 Python files, 22,172 LOC. -->
+<!-- Counts verified 2026-03-26: 30 DB tables, 48 API routes, 126 Python files, 23,800+ LOC. -->
 # Halcyon Lab — System Architecture
 
 ## System Pipeline
@@ -31,7 +31,7 @@
 └─────────────────────────────────────────────────────────┘
 ```
 
-## Database Schema (24 tables)
+## Database Schema (30 tables)
 
 ### Core Trading
 - **recommendations** — Trade recommendations with scores, thesis, outcomes
@@ -56,13 +56,18 @@
 - **schedule_metrics** — Compute schedule utilization metrics
 - **sync_state** — Render sync state tracking (last_synced_at per table)
 
-### Data Collection (overnight pipeline)
+### Data Collection (overnight pipeline — 12 collectors)
 - **options_chains** — EOD options chain snapshots (strikes, IV, Greeks, OI)
 - **options_metrics** — Derived per-ticker signals (IV rank, put/call ratios, skew)
 - **vix_term_structure** — VIX family snapshots with term structure ratios
 - **cboe_ratios** — Market-wide put/call ratios
-- **macro_snapshots** — FRED macro indicator snapshots (19 series)
-- **google_trends** — Retail attention signal by ticker
+- **macro_snapshots** — FRED macro indicator snapshots (34+ series)
+- **google_trends** — Market-wide sentiment terms (crash, recession, inflation, etc.)
+- **edgar_filings** — SEC 10-K, 10-Q, 8-K filings with parsed sections
+- **insider_transactions** — Form 4 insider buy/sell activity via Finnhub
+- **short_interest** — FINRA short interest snapshots (biweekly)
+- **analyst_estimates** — Consensus recommendations and price targets
+- **fed_communications** — FOMC statements, minutes, Beige Book, speeches
 - **setup_signals** — Setup classifier results per ticker per scan
 
 ### AI Council
@@ -333,7 +338,8 @@ Each classification includes a confidence score and desk routing recommendation.
 6:00 PM  Training data collection (closed trade → training example)
 6:45 PM  DPO preference pair generation
 7:00 PM  Walk-forward backtesting
-9:30 PM  Data collection (options, VIX, macro, trends, CBOE, earnings)
+9:30 PM  Data collection (12 collectors: options, VIX, macro, trends, CBOE, earnings,
+                          EDGAR, insider, short interest, Fed comms, analyst estimates)
 10:00 PM News ingestion (full universe, Finnhub)
 11:00 PM Enrichment pre-cache (fundamentals, insiders, macro)
 11:05 PM Auxiliary model training (regime classifier)

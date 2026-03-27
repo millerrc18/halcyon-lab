@@ -41,6 +41,25 @@ FRED_SERIES = {
     "STLFSI2": "St. Louis Fed Financial Stress Index",
     "ICSA": "Initial Jobless Claims (Weekly)",
     "T10YIE": "10-Year Breakeven Inflation Rate",
+    # Housing
+    "HOUST": "Housing Starts",
+    "PERMIT": "Building Permits",
+    "CSUSHPISA": "Case-Shiller Home Price Index",
+    # Employment (granular)
+    "CCSA": "Continued Jobless Claims",
+    "JTSJOL": "JOLTS Job Openings",
+    # Trade & manufacturing
+    "BOPGSTB": "Trade Balance",
+    "IPMAN": "Industrial Production: Manufacturing",
+    "DGORDER": "Durable Goods Orders",
+    # Consumer
+    "UMCSENT": "Michigan Consumer Sentiment",
+    "PCE": "Personal Consumption Expenditures",
+    "RSAFS": "Retail Sales",
+    # Financial conditions (extended)
+    "WALCL": "Fed Balance Sheet (Total Assets)",
+    "RRPONTSYD": "Overnight Reverse Repo",
+    "M2SL": "M2 Money Supply",
 }
 
 _INIT_SQL = """

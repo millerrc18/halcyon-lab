@@ -279,6 +279,99 @@ CREATE TABLE IF NOT EXISTS council_votes (
 CREATE INDEX IF NOT EXISTS idx_council_votes_session ON council_votes(session_id);
 
 
+-- ── New data collection tables ───────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS edgar_filings (
+    id SERIAL PRIMARY KEY,
+    ticker TEXT NOT NULL,
+    cik TEXT NOT NULL,
+    form_type TEXT NOT NULL,
+    filing_date TEXT NOT NULL,
+    accession_number TEXT UNIQUE NOT NULL,
+    filing_url TEXT,
+    description TEXT,
+    full_text TEXT,
+    sections_json TEXT,
+    word_count INTEGER,
+    collected_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_edgar_ticker_date ON edgar_filings(ticker, filing_date);
+
+
+CREATE TABLE IF NOT EXISTS insider_transactions (
+    id SERIAL PRIMARY KEY,
+    ticker TEXT NOT NULL,
+    insider_name TEXT,
+    title TEXT,
+    transaction_type TEXT,
+    transaction_date TEXT,
+    filing_date TEXT,
+    shares REAL,
+    price REAL,
+    value REAL,
+    shares_after REAL,
+    source TEXT DEFAULT 'finnhub',
+    collected_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_insider_ticker_date ON insider_transactions(ticker, filing_date);
+
+
+CREATE TABLE IF NOT EXISTS short_interest (
+    id SERIAL PRIMARY KEY,
+    ticker TEXT NOT NULL,
+    settlement_date TEXT NOT NULL,
+    short_interest REAL,
+    avg_daily_volume REAL,
+    days_to_cover REAL,
+    short_pct_float REAL,
+    source TEXT DEFAULT 'finnhub',
+    collected_at TEXT NOT NULL,
+    UNIQUE(ticker, settlement_date)
+);
+
+CREATE INDEX IF NOT EXISTS idx_short_interest_ticker_date ON short_interest(ticker, settlement_date);
+
+
+CREATE TABLE IF NOT EXISTS fed_communications (
+    id SERIAL PRIMARY KEY,
+    comm_type TEXT NOT NULL,
+    title TEXT,
+    date TEXT NOT NULL,
+    speaker TEXT,
+    url TEXT,
+    full_text TEXT,
+    word_count INTEGER,
+    collected_at TEXT NOT NULL,
+    UNIQUE(comm_type, date, title)
+);
+
+CREATE INDEX IF NOT EXISTS idx_fed_comm_type_date ON fed_communications(comm_type, date);
+
+
+CREATE TABLE IF NOT EXISTS analyst_estimates (
+    id SERIAL PRIMARY KEY,
+    ticker TEXT NOT NULL,
+    date TEXT NOT NULL,
+    consensus_buy INTEGER,
+    consensus_hold INTEGER,
+    consensus_sell INTEGER,
+    consensus_strong_buy INTEGER,
+    consensus_strong_sell INTEGER,
+    price_target_high REAL,
+    price_target_low REAL,
+    price_target_mean REAL,
+    price_target_median REAL,
+    num_analysts INTEGER,
+    source TEXT DEFAULT 'finnhub',
+    collected_at TEXT NOT NULL,
+    UNIQUE(ticker, date, source)
+);
+
+CREATE INDEX IF NOT EXISTS idx_analyst_ticker_date ON analyst_estimates(ticker, date);
+
+
 -- ── Sync state (for tracking what has been synced) ──────────────────
 
 CREATE TABLE IF NOT EXISTS sync_state (

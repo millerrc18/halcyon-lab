@@ -1025,34 +1025,35 @@ class WatchLoop:
         print("[WATCH] Running comprehensive data collection...")
 
         universe = get_sp100_universe()
+        now = datetime.now(ET)
         results = {}
 
         # 1. Options chains (most important)
-        print("[WATCH]   [1/7] Options chains...")
+        print("[WATCH]   [1/12] Options chains...")
         results["options"] = collect_options_chains(universe)
 
         # 2. Derived metrics from chains
-        print("[WATCH]   [2/7] Options metrics...")
+        print("[WATCH]   [2/12] Options metrics...")
         results["metrics"] = compute_options_metrics(universe)
 
         # 3. VIX term structure
-        print("[WATCH]   [3/7] VIX term structure...")
+        print("[WATCH]   [3/12] VIX term structure...")
         results["vix"] = collect_vix_term_structure()
 
         # 4. CBOE ratios
-        print("[WATCH]   [4/7] CBOE ratios...")
+        print("[WATCH]   [4/12] CBOE ratios...")
         results["cboe"] = collect_cboe_ratios()
 
-        # 5. FRED macro
-        print("[WATCH]   [5/7] FRED macro indicators...")
+        # 5. FRED macro (35+ series)
+        print("[WATCH]   [5/12] FRED macro indicators...")
         results["macro"] = collect_macro_snapshots()
 
-        # 6. Google Trends (batched — subset each night)
-        print("[WATCH]   [6/7] Google Trends (batch)...")
+        # 6. Google Trends (market-wide sentiment terms)
+        print("[WATCH]   [6/12] Google Trends (sentiment)...")
         results["trends"] = collect_google_trends(universe, batch_size=20)
 
         # 7. Earnings calendar
-        print("[WATCH]   [7/7] Earnings calendar...")
+        print("[WATCH]   [7/12] Earnings calendar...")
         try:
             from scripts.fetch_earnings_calendar import fetch_earnings_dates
             results["earnings"] = fetch_earnings_dates(universe)
@@ -1070,6 +1071,54 @@ class WatchLoop:
         except Exception as e:
             logger.debug("[WATCH] Earnings fetch failed: %s", e)
             results["earnings"] = {"error": str(e)}
+
+        # 8. SEC EDGAR filings (new filings only)
+        print("[WATCH]   [8/12] SEC EDGAR filings...")
+        try:
+            from src.data_collection.edgar_collector import collect_new_filings
+            results["edgar"] = collect_new_filings(universe)
+        except Exception as e:
+            logger.warning("[WATCH] EDGAR collection failed: %s", e)
+            results["edgar"] = {"error": str(e)}
+
+        # 9. Insider transactions
+        print("[WATCH]   [9/12] Insider transactions...")
+        try:
+            from src.data_collection.insider_collector import collect_insider_transactions
+            results["insider"] = collect_insider_transactions(universe)
+        except Exception as e:
+            logger.warning("[WATCH] Insider collection failed: %s", e)
+            results["insider"] = {"error": str(e)}
+
+        # 10. FINRA short interest (biweekly — around settlement dates)
+        if now.day in (1, 2, 15, 16):
+            print("[WATCH]   [10/12] Short interest...")
+            try:
+                from src.data_collection.short_interest_collector import collect_short_interest
+                results["short_interest"] = collect_short_interest(universe)
+            except Exception as e:
+                logger.warning("[WATCH] Short interest collection failed: %s", e)
+                results["short_interest"] = {"error": str(e)}
+        else:
+            results["short_interest"] = "skipped (not settlement date)"
+
+        # 11. Fed communications
+        print("[WATCH]   [11/12] Fed communications...")
+        try:
+            from src.data_collection.fed_collector import collect_fed_communications
+            results["fed"] = collect_fed_communications()
+        except Exception as e:
+            logger.warning("[WATCH] Fed collection failed: %s", e)
+            results["fed"] = {"error": str(e)}
+
+        # 12. Analyst estimates (batch 20/night to stay under FMP limit)
+        print("[WATCH]   [12/12] Analyst estimates (batch)...")
+        try:
+            from src.data_collection.analyst_collector import collect_analyst_estimates
+            results["analyst"] = collect_analyst_estimates(universe, batch_size=20)
+        except Exception as e:
+            logger.warning("[WATCH] Analyst collection failed: %s", e)
+            results["analyst"] = {"error": str(e)}
 
         summary = {k: str(v) for k, v in results.items()}
         print(f"[WATCH] Data collection complete: {summary}")

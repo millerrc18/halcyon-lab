@@ -82,6 +82,32 @@ SYNC_TABLES: dict[str, dict] = {
         "time_col": None,  # synced via session_id FK lookup
         "pk": "vote_id",
     },
+    # New data collection tables
+    "insider_transactions": {
+        "mode": "incremental",
+        "time_col": "collected_at",
+        "pk": "id",
+    },
+    "short_interest": {
+        "mode": "incremental",
+        "time_col": "collected_at",
+        "pk": "id",
+    },
+    "analyst_estimates": {
+        "mode": "incremental",
+        "time_col": "collected_at",
+        "pk": "id",
+    },
+    "fed_communications": {
+        "mode": "incremental",
+        "time_col": "collected_at",
+        "pk": "id",
+    },
+    "edgar_filings": {
+        "mode": "incremental",
+        "time_col": "collected_at",
+        "pk": "id",
+    },
 }
 
 # ── Sync state table (local SQLite) ─────────────────────────────────
