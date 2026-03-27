@@ -383,3 +383,78 @@
 | S-Corp election | $60K+ net income | Form 2553 by March 15 of effective year | LLC research |
 | Scale $1K→$5K→$10K | 250-350 total trades | PSR >90% Sharpe >0.2, DSR improves | Walk-forward research |
 | Fund formation | $3M+ AUM viable | 2+ year track record, audit complete | Fund roadmap |
+
+---
+
+## Revenue Projections (3 Scenarios)
+
+> **Assumptions grounded in research.** Pullback Sharpe: 0.3-0.7 post-2015 (decaying from 0.7-1.2 pre-2015). Breakout Sharpe: 1.0-1.5 (BB squeeze + volume). Combined diversification: ~35-41% improvement (Balvers & Wu 2005, -0.3 correlation). Portfolio volatility: ~15% (S&P 100). Max drawdown haircut: 20% (Thorp graduated reduction). Capital scaling gated by PSR/DSR, not calendar.
+
+### Conservative (Pullback Sharpe 0.35, Breakout 0.80)
+Strategy has a marginal edge. Costs exceed returns at low capital. Breakout adds modest improvement.
+
+| Phase | Period | Capital | Sharpe | Ann. Return | Period P&L | Cumulative | Costs |
+|-------|--------|---------|--------|-------------|-----------|------------|-------|
+| Phase 1 | M1-3 | $100 | 0.35 | 4.2% | -$191 | -$191 | $192 |
+| Phase 2 | M4-6 | $1K | 0.35 | 4.2% | -$352 | -$543 | $375 |
+| Phase 2b | M7-9 | $1K | 0.35 | 4.2% | -$410 | -$953 | $420 |
+| Phase 3 | M10-12 | $5K | 0.53 | 6.3% | -$270 | -$1,223 | $465 |
+| Phase 4 | M13-18 | $25K | 0.53 | 6.3% | -$370 | -$1,593 | $1,320 |
+| Phase 4b | M19-24 | $100K | 0.53 | 6.3% | +$2,150 | +$557 | $1,800 |
+| Phase 5 | M25-36 | $500K | 0.53 | 6.3% | +$12,900 | +$13,457 | $6,000 |
+| Phase 5b | M37-48 | $1.5M | 0.53 | 6.3% | +$39,500 | +$52,957 | $24,000 |
+| Phase 6 | M49-60 | $3M | 0.53 | 6.3% | +$82,100 | +$135,057 | $60,000 |
+
+**5-year: ~$135K cumulative, $3.1M AUM.** Break-even on costs at Month ~22. Marginal but viable.
+
+### Base Case (Pullback Sharpe 0.60, Breakout 1.20)
+Strategy has a real edge. Returns exceed costs from Phase 3 onward. Breakout diversification is the inflection point.
+
+| Phase | Period | Capital | Sharpe | Ann. Return | Period P&L | Cumulative | Costs |
+|-------|--------|---------|--------|-------------|-----------|------------|-------|
+| Phase 1 | M1-3 | $100 | 0.60 | 7.2% | -$190 | -$190 | $192 |
+| Phase 2 | M4-6 | $1K | 0.60 | 7.2% | -$336 | -$526 | $375 |
+| Phase 2b | M7-9 | $1K | 0.60 | 7.2% | -$402 | -$928 | $420 |
+| Phase 3 | M10-12 | $5K | 0.97 | 11.7% | -$114 | -$1,042 | $465 |
+| Phase 4 | M13-18 | $25K | 0.97 | 11.7% | +$430 | -$612 | $1,320 |
+| Phase 4b | M19-24 | $100K | 0.97 | 11.7% | +$5,490 | +$4,878 | $1,800 |
+| Phase 5 | M25-36 | $500K | 0.97 | 11.7% | +$29,100 | +$33,978 | $6,000 |
+| Phase 5b | M37-48 | $1.5M | 0.97 | 11.7% | +$93,200 | +$127,178 | $24,000 |
+| Phase 6 | M49-60 | $3M | 0.97 | 11.7% | +$204,500 | +$331,678 | $60,000 |
+
+**5-year: ~$332K cumulative, $3.3M AUM.** Viable fund economics at Phase 5+. The breakout addition at M10 is the inflection point where Sharpe jumps from 0.60 to 0.97.
+
+### Optimistic (Pullback Sharpe 0.90, Breakout 1.50)
+Both strategies at top of research ranges. Data asset and model quality compound.
+
+| Phase | Period | Capital | Sharpe | Ann. Return | Period P&L | Cumulative | Costs |
+|-------|--------|---------|--------|-------------|-----------|------------|-------|
+| Phase 1 | M1-3 | $100 | 0.90 | 10.8% | -$189 | -$189 | $192 |
+| Phase 2 | M4-6 | $1K | 0.90 | 10.8% | -$316 | -$505 | $375 |
+| Phase 2b | M7-9 | $1K | 0.90 | 10.8% | -$393 | -$898 | $420 |
+| Phase 3 | M10-12 | $5K | 1.74 | 20.9% | +$160 | -$738 | $465 |
+| Phase 4 | M13-18 | $25K | 1.74 | 20.9% | +$1,830 | +$1,092 | $1,320 |
+| Phase 4b | M19-24 | $100K | 1.74 | 20.9% | +$11,300 | +$12,392 | $1,800 |
+| Phase 5 | M25-36 | $500K | 1.74 | 20.9% | +$56,700 | +$69,092 | $6,000 |
+| Phase 5b | M37-48 | $1.5M | 1.74 | 20.9% | +$186,800 | +$255,892 | $24,000 |
+| Phase 6 | M49-60 | $3M | 1.74 | 20.9% | +$409,500 | +$665,392 | $60,000 |
+
+**5-year: ~$665K cumulative, $3.7M AUM.** Strong fund economics. Management + performance fees at $3M AUM = $45K-90K/yr on base scenario, $100K-200K/yr on optimistic.
+
+### Critical Insight: The Early Phases Don't Matter Economically
+
+In ALL three scenarios, Phases 1-3 ($100-$5,000 capital) are net negative or barely positive. The total infrastructure cost for the first 12 months (~$1,500) exceeds trading returns at these capital levels. This is expected and correct — you're investing in building the machine, not running it for profit.
+
+The economic inflection happens at Phase 4+ ($25K+ capital) in all scenarios. This means the Phase 1-3 decision is not "is this profitable?" but "is the edge real enough to justify scaling capital?" That's what the walk-forward validation framework answers.
+
+### Live Performance Model
+
+The revenue projections above are static assumptions. The dashboard includes a **live projection model** that:
+- Reads actual closed-trade Sharpe, win rate, profit factor, and drawdown from the database
+- When trades < 20, uses the slider assumption as a Bayesian prior
+- When trades >= 20, locks Sharpe to the computed live value
+- Dynamically re-projects the entire 5-year path based on real performance
+- Shows gate status (green/yellow/red) for current phase metrics
+- Updates after every trade close
+
+This means the revenue projection becomes more accurate with every trade, automatically. The model tells you "at your current performance level, here's what the next 5 years look like" — not a static spreadsheet, but a living forecast.
