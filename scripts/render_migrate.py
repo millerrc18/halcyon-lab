@@ -37,6 +37,21 @@ MIGRATIONS = [
     # shadow_trades — new columns added via ALTER TABLE in store.py
     ("shadow_trades", "order_type", "ALTER TABLE shadow_trades ADD COLUMN order_type TEXT"),
 
+    # Slippage tracking columns
+    ("shadow_trades", "signal_entry_price", "ALTER TABLE shadow_trades ADD COLUMN signal_entry_price REAL"),
+    ("shadow_trades", "fill_entry_price", "ALTER TABLE shadow_trades ADD COLUMN fill_entry_price REAL"),
+    ("shadow_trades", "entry_slippage_bps", "ALTER TABLE shadow_trades ADD COLUMN entry_slippage_bps REAL"),
+    ("shadow_trades", "signal_exit_price", "ALTER TABLE shadow_trades ADD COLUMN signal_exit_price REAL"),
+    ("shadow_trades", "fill_exit_price", "ALTER TABLE shadow_trades ADD COLUMN fill_exit_price REAL"),
+    ("shadow_trades", "exit_slippage_bps", "ALTER TABLE shadow_trades ADD COLUMN exit_slippage_bps REAL"),
+
+    # NLP columns on edgar_filings
+    ("edgar_filings", "sentiment_polarity", "ALTER TABLE edgar_filings ADD COLUMN sentiment_polarity REAL"),
+    ("edgar_filings", "sentiment_negative_count", "ALTER TABLE edgar_filings ADD COLUMN sentiment_negative_count INTEGER"),
+    ("edgar_filings", "sentiment_uncertainty_count", "ALTER TABLE edgar_filings ADD COLUMN sentiment_uncertainty_count INTEGER"),
+    ("edgar_filings", "cautionary_phrases", "ALTER TABLE edgar_filings ADD COLUMN cautionary_phrases TEXT"),
+    ("edgar_filings", "sentiment_delta_polarity", "ALTER TABLE edgar_filings ADD COLUMN sentiment_delta_polarity REAL"),
+
     # New tables
     ("schedule_metrics", None, """CREATE TABLE IF NOT EXISTS schedule_metrics (
         id SERIAL PRIMARY KEY,

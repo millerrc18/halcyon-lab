@@ -545,12 +545,54 @@ class WatchLoop:
         except Exception as exc:
             logger.warning("[WATCH] Table creation error: %s", exc)
 
+    @staticmethod
+    def _configure_database():
+        """Configure SQLite for production use."""
+        import sqlite3
+        try:
+            conn = sqlite3.connect("ai_research_desk.sqlite3")
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA synchronous=NORMAL")
+            conn.execute("PRAGMA busy_timeout=5000")
+            conn.close()
+            logger.info("[DB] SQLite configured: WAL mode, synchronous=NORMAL, busy_timeout=5000ms")
+        except Exception as exc:
+            logger.warning("[DB] SQLite configuration failed: %s", exc)
+
+    def _backup_database(self):
+        """Create a daily backup of the SQLite database using the Online Backup API."""
+        import sqlite3
+        from pathlib import Path
+
+        backup_dir = Path("backups")
+        backup_dir.mkdir(exist_ok=True)
+
+        backup_path = backup_dir / f"halcyon_{datetime.now(ET).strftime('%Y%m%d')}.sqlite3"
+        try:
+            src = sqlite3.connect("ai_research_desk.sqlite3")
+            dst = sqlite3.connect(str(backup_path))
+            src.backup(dst)
+            dst.close()
+            src.close()
+
+            # Prune old backups (keep last 7)
+            backups = sorted(backup_dir.glob("halcyon_*.sqlite3"))
+            for old in backups[:-7]:
+                old.unlink()
+
+            logger.info("[DB] Backup created: %s", backup_path.name)
+        except Exception as exc:
+            logger.warning("[DB] Backup failed: %s", exc)
+
     def run(self):
         """Main watch loop. Checks every 60 seconds."""
         self._print_banner()
 
         # Ensure all expected tables exist
         self._ensure_all_tables()
+
+        # Configure SQLite for production use (WAL mode)
+        self._configure_database()
 
         # Validate starting capital
         capital = self.config.get("risk", {}).get("starting_capital", 0)

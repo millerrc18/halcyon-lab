@@ -29,6 +29,48 @@ def _is_halted() -> bool:
     return Path(_HALT_FILE).exists()
 
 
+def drawdown_adjusted_risk(base_risk_pct: float, current_dd_pct: float,
+                           max_dd_pct: float = 20.0) -> float:
+    """Thorp-style graduated drawdown reduction.
+
+    At 0% DD:  100% of base risk
+    At 5% DD:   75% of base risk
+    At 10% DD:  50% of base risk
+    At 15% DD:  25% of base risk
+    At 20% DD:   0% — stop trading entirely
+    """
+    if current_dd_pct <= 0:
+        return base_risk_pct
+    scale = max(0.0, 1.0 - (current_dd_pct / max_dd_pct))
+    return base_risk_pct * scale
+
+
+def compute_current_drawdown(db_path: str = "ai_research_desk.sqlite3",
+                              starting_capital: float = 100000) -> float:
+    """Compute current drawdown percentage from peak equity."""
+    import sqlite3
+    try:
+        with sqlite3.connect(db_path) as conn:
+            rows = conn.execute(
+                "SELECT pnl_dollars FROM shadow_trades WHERE status = 'closed' "
+                "AND pnl_dollars IS NOT NULL ORDER BY actual_exit_time ASC"
+            ).fetchall()
+        if not rows:
+            return 0.0
+        cumulative = 0.0
+        peak = starting_capital
+        for (pnl,) in rows:
+            cumulative += (pnl or 0)
+            current = starting_capital + cumulative
+            peak = max(peak, current)
+        current_equity = starting_capital + cumulative
+        if peak <= 0:
+            return 0.0
+        return max(0.0, (peak - current_equity) / peak * 100)
+    except Exception:
+        return 0.0
+
+
 class RiskGovernor:
     """Hard risk limits enforced before every trade."""
 
@@ -37,7 +79,7 @@ class RiskGovernor:
         self.max_daily_loss_pct = risk_cfg.get("max_daily_loss_pct", 0.03)
         self.max_position_pct = risk_cfg.get("max_position_pct", 0.10)
         self.max_open_positions = risk_cfg.get("max_open_positions", 10)
-        self.max_sector_concentration_pct = risk_cfg.get("max_sector_pct", 0.30)
+        self.max_sector_concentration_pct = risk_cfg.get("max_sector_pct", 0.22)
         self.max_correlated_positions = risk_cfg.get("max_correlated", 3)
         self.volatility_halt_threshold = risk_cfg.get("vol_halt_pct", 35.0)
         self.enabled = risk_cfg.get("enabled", True)
@@ -117,20 +159,25 @@ class RiskGovernor:
         if not positions_ok:
             return self._reject(checks, f"Position count: {open_count} open positions at limit of {effective_limit}")
 
-        # 5. Sector concentration
+        # 5. Sector concentration (VIX-adaptive)
         from src.universe.sectors import SECTOR_MAP
         ticker_sector = features.get("sector") or SECTOR_MAP.get(ticker, "Unknown")
         sector_exposure = portfolio.get("sector_exposure", {})
         current_sector_pct = sector_exposure.get(ticker_sector, 0)
         new_sector_pct = current_sector_pct + (allocation_dollars / equity if equity > 0 else 0)
-        sector_ok = new_sector_pct <= self.max_sector_concentration_pct
+        max_sector = self.max_sector_concentration_pct
+        vix = features.get("vix_proxy", 0) or 0
+        if vix > 25:
+            max_sector = min(max_sector, 0.15)
+            logger.info("[RISK] High VIX (%.1f) — sector cap tightened to 15%%", vix)
+        sector_ok = new_sector_pct <= max_sector
         checks.append({
             "name": "sector_concentration",
             "passed": sector_ok,
-            "detail": f"{ticker_sector}: {current_sector_pct:.0%} + this trade = {new_sector_pct:.0%} (limit: {self.max_sector_concentration_pct:.0%})",
+            "detail": f"{ticker_sector}: {current_sector_pct:.0%} + this trade = {new_sector_pct:.0%} (limit: {max_sector:.0%})",
         })
         if not sector_ok:
-            return self._reject(checks, f"Sector concentration: {ticker_sector} would be {new_sector_pct:.0%}, exceeds {self.max_sector_concentration_pct:.0%} limit")
+            return self._reject(checks, f"Sector concentration: {ticker_sector} would be {new_sector_pct:.0%}, exceeds {max_sector:.0%} limit")
 
         # 6. Correlation check (same-sector count)
         open_positions = portfolio.get("open_positions", [])
