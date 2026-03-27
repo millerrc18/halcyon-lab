@@ -346,15 +346,45 @@
 
 ---
 
-## Hardware Upgrade Path
+## Hardware Roadmap
 
-| Upgrade | When | Cost | Unlocks |
-|---------|------|------|---------|
-| UPS (CyberPower CP1500PFCLCD) | Phase 2 | ~$200 | Power failure protection |
-| Cellular failover (USB 4G/5G) | Phase 2 | ~$400-600/yr | Internet redundancy |
-| RTX 3090 24GB | Phase 3 | ~$700-900 used | 14B model, GRPO, faster training |
-| Raspberry Pi (dead man's switch) | Phase 2 | ~$80 | Independent watchdog |
-| Second monitor | Phase 2 | ~$200 | Dashboard always visible |
+### Phase 2: Dedicated Halcyon Machine (~$1,500-2,000)
+Purpose: 24/7 uninterrupted operation, separate from personal desktop. Unlocks 14B model + GRPO training.
+
+| Component | Spec | Cost |
+|-----------|------|------|
+| GPU | RTX 3090 24GB (used) | $700-900 |
+| CPU | Ryzen 5 5600 or i5-12400 (6-core) | $100-150 |
+| RAM | 32GB DDR4 | $60-80 |
+| Storage | 1TB NVMe | $80-100 |
+| Motherboard | B550 or B660 | $80-100 |
+| PSU | 750W 80+ Gold | $80-100 |
+| Case | Mid-tower (airflow focus) | $60-80 |
+| UPS | CyberPower CP1500PFCLCD (pure sine wave) | $150-200 |
+| Cellular failover | USB 4G/5G modem | $100 + $30/mo |
+| **Total** | | **$1,410-1,710** |
+
+### Phase 4+: Performance Machine (~$4,000-6,000)
+Purpose: Multi-model inference, parallel training, multi-desk operation.
+
+| Component | Spec | Cost |
+|-----------|------|------|
+| GPU | RTX 4090 48GB or 2x RTX 3090 | $2,000-3,500 |
+| CPU | Ryzen 9 7900X or i7-13700K (12+ cores) | $300-400 |
+| RAM | 64GB DDR5 | $150-200 |
+| Storage | 2TB NVMe + 4TB HDD (hot + cold) | $200-300 |
+| Network | 2.5GbE + cellular failover (redundant) | $100-200 |
+| UPS | CyberPower 2000VA (higher capacity) | $250-350 |
+| Raspberry Pi | Dead man's switch (independent watchdog) | $80 |
+| **Total** | | **$3,080-5,030** |
+
+### Upgrade Triggers (performance-gated, not calendar)
+| Trigger | Action | Cost |
+|---------|--------|------|
+| Phase 1 gate passed (50 trades) | Build Phase 2 machine | ~$1,500 |
+| Revenue exceeds $500/mo | Add cellular failover | $30/mo |
+| 200+ trades, breakout strategy ready | Consider Phase 4 GPU upgrade | ~$2,000 |
+| Fund formation ($3M AUM) | Full Phase 4 build | ~$5,000 |
 
 ---
 
