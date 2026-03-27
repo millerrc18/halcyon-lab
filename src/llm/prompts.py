@@ -44,6 +44,8 @@ Direction: LONG
 Time Horizon: [e.g., "5-10 trading days"]
 Key Risk: [one sentence naming the specific thesis-killer]
 </metadata>
+
+REMINDER: Your response must contain EXACTLY three XML tags: <why_now>, <analysis>, and <metadata>. Do NOT wrap them in markdown code fences. Do NOT add any text outside these tags.
 """
 
 POSTMORTEM_SYSTEM_PROMPT = """You are a senior equity research analyst conducting a post-trade review. You are honest, self-critical, and focused on learning.

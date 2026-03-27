@@ -2,6 +2,7 @@
 
 import pytest
 from pathlib import Path
+from unittest.mock import patch
 
 
 @pytest.fixture
@@ -61,7 +62,8 @@ class TestPositionSizeLimit:
 
 
 class TestMaxPositions:
-    def test_at_limit_rejected(self, governor, base_portfolio):
+    @patch("src.config.load_config", return_value={"bootcamp": {"enabled": False}})
+    def test_at_limit_rejected(self, mock_cfg, governor, base_portfolio):
         base_portfolio["open_count"] = 10
         result = governor.check_trade("AAPL", 256, {}, base_portfolio)
         assert result["approved"] is False
@@ -69,6 +71,12 @@ class TestMaxPositions:
 
     def test_below_limit_approved(self, governor, base_portfolio):
         base_portfolio["open_count"] = 4
+        result = governor.check_trade("AAPL", 256, {}, base_portfolio)
+        assert result["approved"] is True
+
+    @patch("src.config.load_config", return_value={"bootcamp": {"enabled": True, "max_positions": 50}})
+    def test_bootcamp_override_allows_more_positions(self, mock_cfg, governor, base_portfolio):
+        base_portfolio["open_count"] = 20
         result = governor.check_trade("AAPL", 256, {}, base_portfolio)
         assert result["approved"] is True
 

@@ -393,13 +393,29 @@ def check_and_manage_open_trades(
                 ticker, exit_reason, pnl_dollars, pnl_pct, days_open,
             )
 
-            # Telegram notification
-            try:
-                from src.notifications.telegram import notify_trade_closed, is_telegram_enabled
-                if is_telegram_enabled():
-                    notify_trade_closed(ticker, pnl_dollars, pnl_pct, exit_reason, days_open)
-            except Exception:
-                pass
+            # Close corresponding live position if this was a live trade
+            if trade.get("source") == "live":
+                try:
+                    from src.shadow_trading.alpaca_adapter import place_live_exit
+                    live_result = place_live_exit(ticker)
+                    logger.info("[LIVE] Closed live position for %s: %s", ticker, live_result)
+                    try:
+                        from src.notifications.telegram import notify_trade_closed, is_telegram_enabled
+                        if is_telegram_enabled():
+                            notify_trade_closed(ticker, pnl_dollars, pnl_pct, exit_reason, days_open, source="live")
+                    except Exception:
+                        pass
+                except Exception as e:
+                    logger.warning("[LIVE] Failed to close live position for %s: %s", ticker, e)
+
+            # Telegram notification (paper trades)
+            if trade.get("source") != "live":
+                try:
+                    from src.notifications.telegram import notify_trade_closed, is_telegram_enabled
+                    if is_telegram_enabled():
+                        notify_trade_closed(ticker, pnl_dollars, pnl_pct, exit_reason, days_open)
+                except Exception:
+                    pass
 
             # 1F. Check for trade close milestones
             _check_close_milestones(db_path)

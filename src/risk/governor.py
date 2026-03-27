@@ -97,16 +97,25 @@ class RiskGovernor:
         if not size_ok:
             return self._reject(checks, f"Position size: ${allocation_dollars:.0f} is {position_pct:.1%} of equity, exceeds {self.max_position_pct:.0%} limit")
 
-        # 4. Maximum positions
+        # 4. Maximum positions (use bootcamp limit if enabled)
         open_count = portfolio.get("open_count", 0)
-        positions_ok = open_count < self.max_open_positions
+        effective_limit = self.max_open_positions
+        try:
+            from src.config import load_config
+            full_cfg = load_config()
+            bootcamp = full_cfg.get("bootcamp", {})
+            if bootcamp.get("enabled", False):
+                effective_limit = bootcamp.get("max_positions", 50)
+        except Exception:
+            pass
+        positions_ok = open_count < effective_limit
         checks.append({
             "name": "max_positions",
             "passed": positions_ok,
-            "detail": f"{open_count} of {self.max_open_positions} positions open",
+            "detail": f"{open_count} of {effective_limit} positions open",
         })
         if not positions_ok:
-            return self._reject(checks, f"Position count: {open_count} open positions at limit of {self.max_open_positions}")
+            return self._reject(checks, f"Position count: {open_count} open positions at limit of {effective_limit}")
 
         # 5. Sector concentration
         from src.universe.sectors import SECTOR_MAP

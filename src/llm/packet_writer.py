@@ -150,10 +150,15 @@ def _parse_llm_response(response: str) -> tuple[int | None, str | None, str | No
     why_now = None
     deeper_analysis = None
 
-    # Try XML parsing first
-    wn_match = re.search(r'<why_now>(.*?)</why_now>', response, re.DOTALL)
-    an_match = re.search(r'<analysis>(.*?)</analysis>', response, re.DOTALL)
-    md_match = re.search(r'<metadata>(.*?)</metadata>', response, re.DOTALL)
+    # Strip markdown code fences if present (```xml ... ```)
+    cleaned = re.sub(r'^```(?:xml)?\s*\n?', '', response.strip(), flags=re.MULTILINE)
+    cleaned = re.sub(r'\n?```\s*$', '', cleaned.strip(), flags=re.MULTILINE)
+    response = cleaned
+
+    # Try XML parsing first (case-insensitive)
+    wn_match = re.search(r'<why_now>(.*?)</why_now>', response, re.DOTALL | re.IGNORECASE)
+    an_match = re.search(r'<analysis>(.*?)</analysis>', response, re.DOTALL | re.IGNORECASE)
+    md_match = re.search(r'<metadata>(.*?)</metadata>', response, re.DOTALL | re.IGNORECASE)
 
     if wn_match:
         why_now = wn_match.group(1).strip()
@@ -188,7 +193,16 @@ def _parse_llm_response(response: str) -> tuple[int | None, str | None, str | No
             conviction = int(conv_match.group(1))
             conviction = max(1, min(10, conviction))
 
+    # Fallback: if response has substantial prose but no tags, use first paragraph as why_now
+    if not why_now and not deeper_analysis and len(response) > 200:
+        paragraphs = [p.strip() for p in response.split('\n\n') if p.strip()]
+        if len(paragraphs) >= 2:
+            why_now = paragraphs[0]
+            deeper_analysis = '\n\n'.join(paragraphs[1:])
+            logger.debug("[LLM] Used prose fallback parsing (no XML tags found)")
+
     if not why_now or not deeper_analysis:
+        logger.debug("[LLM] Raw response (parse failure): %s", response[:500])
         return conviction, None, None
 
     return conviction, why_now, deeper_analysis
@@ -216,7 +230,6 @@ def enhance_packet_with_llm(packet: TradePacket, features: dict,
 
     if not is_llm_available():
         logger.warning("[LLM] Ollama not reachable — fallback to template for %s", packet.ticker)
-        logger.info("  [LLM] Fallback to template for %s", packet.ticker)
         return packet
 
     prompt = _build_feature_prompt(packet, features)
@@ -231,14 +244,12 @@ def enhance_packet_with_llm(packet: TradePacket, features: dict,
 
     if response is None:
         logger.warning("[LLM] Generation failed — fallback to template for %s", packet.ticker)
-        logger.info("  [LLM] Fallback to template for %s", packet.ticker)
         return packet
 
     conviction, why_now, deeper_analysis = _parse_llm_response(response)
 
     if why_now is None or deeper_analysis is None:
         logger.warning("[LLM] Failed to parse response — fallback to template for %s", packet.ticker)
-        logger.info("  [LLM] Fallback to template for %s", packet.ticker)
         return packet
 
     # Only update prose fields — never touch deterministic fields
@@ -248,5 +259,4 @@ def enhance_packet_with_llm(packet: TradePacket, features: dict,
         packet.llm_conviction = conviction
     logger.info("[LLM] Enhanced packet for %s (conviction: %s)", packet.ticker,
                 conviction if conviction else "n/a")
-    logger.info("  [LLM] Enhanced packet for %s (conviction: %s)", packet.ticker, conviction or 'n/a')
     return packet

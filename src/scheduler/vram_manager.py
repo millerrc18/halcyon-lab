@@ -176,8 +176,22 @@ class VRAMManager:
             self._unload_ollama()
             time.sleep(3)
             if not self._wait_for_vram_clear(threshold_mb=500, timeout_seconds=30):
-                logger.error("[VRAM] Handoff to training FAILED — VRAM not clear")
-                return False
+                # Kill Ollama process entirely to free VRAM
+                logger.warning("[VRAM] Killing Ollama process to reclaim VRAM...")
+                try:
+                    import platform
+                    if platform.system() == "Windows":
+                        subprocess.run(["taskkill", "/f", "/im", "ollama.exe"],
+                                       capture_output=True, timeout=10)
+                    else:
+                        subprocess.run(["pkill", "-f", "ollama"],
+                                       capture_output=True, timeout=10)
+                    time.sleep(5)
+                except Exception as kill_err:
+                    logger.warning("[VRAM] Failed to kill Ollama: %s", kill_err)
+                if not self._wait_for_vram_clear(threshold_mb=500, timeout_seconds=15):
+                    logger.error("[VRAM] Handoff to training FAILED — VRAM not clear even after killing Ollama")
+                    return False
 
         used_after = self.get_vram_used_mb()
         logger.info("[VRAM] Handoff to training: Ollama unloaded, VRAM at %dMB "
@@ -210,7 +224,17 @@ class VRAMManager:
             logger.warning("[VRAM] VRAM not clear after killing training process")
             # Continue anyway — Ollama may still be able to load
 
-        # Step 3: Reload Ollama
+        # Step 3: Ensure Ollama process is running, then reload model
+        try:
+            import platform
+            if platform.system() == "Windows":
+                subprocess.Popen(["ollama", "serve"], creationflags=subprocess.CREATE_NO_WINDOW)
+            else:
+                subprocess.Popen(["ollama", "serve"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            time.sleep(3)
+        except Exception:
+            pass  # May already be running
+
         if not self._reload_ollama():
             logger.error("[VRAM] Handoff to inference FAILED — Ollama reload failed")
             return False

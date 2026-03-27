@@ -398,8 +398,8 @@ class TestSyncTablesConfig:
     def test_google_trends_not_synced(self):
         assert "google_trends" not in SYNC_TABLES
 
-    def test_training_examples_not_synced(self):
-        assert "training_examples" not in SYNC_TABLES
+    def test_training_examples_synced(self):
+        assert "training_examples" in SYNC_TABLES
 
     def test_expected_tables_present(self):
         expected = [
@@ -407,6 +407,7 @@ class TestSyncTablesConfig:
             "metric_snapshots", "audit_reports", "schedule_metrics",
             "earnings_calendar", "options_metrics", "vix_term_structure",
             "macro_snapshots", "council_sessions", "council_votes",
+            "api_costs", "training_examples",
         ]
         for table in expected:
             assert table in SYNC_TABLES, f"Missing table: {table}"

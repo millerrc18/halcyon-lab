@@ -423,21 +423,9 @@ class WatchLoop:
             from src.shadow_trading.executor import check_and_manage_open_trades
             actions = check_and_manage_open_trades()
             for action in actions:
-                print(f"  -> Trade action: {action['ticker']} — {action['action']} "
+                action_type = action.get("type", action.get("action", "unknown"))
+                print(f"  -> Trade action: {action.get('ticker', '?')} — {action_type} "
                       f"(P&L: ${action.get('pnl_dollars', 0):+.2f})")
-                # Telegram close notification
-                try:
-                    from src.notifications.telegram import notify_trade_closed, is_telegram_enabled
-                    if is_telegram_enabled() and action.get("action") == "closed":
-                        notify_trade_closed(
-                            action["ticker"],
-                            action.get("pnl_dollars", 0),
-                            action.get("pnl_pct", 0),
-                            action.get("exit_reason", "unknown"),
-                            action.get("days_held", 0),
-                        )
-                except Exception:
-                    pass
         except Exception as e:
             logger.warning("[WATCH] Trade management failed: %s", e)
 
@@ -491,6 +479,12 @@ class WatchLoop:
     def run(self):
         """Main watch loop. Checks every 60 seconds."""
         self._print_banner()
+
+        # Validate starting capital
+        capital = self.config.get("risk", {}).get("starting_capital", 0)
+        if capital < 10000:
+            logger.warning("[WATCH] ⚠️ starting_capital is $%d — this seems low for paper trading. Expected $100,000.", capital)
+            print(f" ⚠️ WARNING: starting_capital is ${capital:,} — expected $100,000 for paper trading")
 
         # Start Render cloud sync background thread
         try:
@@ -878,10 +872,22 @@ class WatchLoop:
                 except Exception as e:
                     logger.warning("[OVERNIGHT] MFE/MAE update failed for %s: %s", ticker, e)
 
-        # Log daily regime from SPY close
+        # Log daily regime from SPY close (with retry and fallback)
         spy = fetch_spy_benchmark()
-        if not spy.empty:
-            logger.info("[OVERNIGHT] SPY close: %.2f", spy.iloc[-1].get("close", 0))
+        spy_close = spy.iloc[-1].get("close", 0) if not spy.empty else 0
+        if spy_close == 0:
+            import time as _time
+            logger.info("[OVERNIGHT] SPY close returned $0, retrying in 5 minutes...")
+            _time.sleep(300)
+            spy = fetch_spy_benchmark()
+            spy_close = spy.iloc[-1].get("close", 0) if not spy.empty else 0
+        if spy_close == 0 and "SPY" in ohlcv and not ohlcv["SPY"].empty:
+            spy_close = float(ohlcv["SPY"].iloc[-1].get("close", 0))
+            logger.info("[OVERNIGHT] SPY close from OHLCV fallback: %.2f", spy_close)
+        if spy_close > 0:
+            logger.info("[OVERNIGHT] SPY close: %.2f", spy_close)
+        else:
+            logger.warning("[OVERNIGHT] SPY close unavailable")
 
         print(f"[WATCH] Post-close capture complete: {count} tickers, {updated} MFE/MAE updates")
 
