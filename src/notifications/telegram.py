@@ -653,6 +653,11 @@ def handle_command(command: str, args: str) -> str:
                 "/council — Run AI council session\n"
                 "/health — GPU & system health\n"
                 "/log — Recent activity log\n"
+                "/pull — Git pull latest code\n"
+                "/logs — Last 20 lines of halcyon.log\n"
+                "/gpu — GPU details (nvidia-smi)\n"
+                "/disk — Disk usage\n"
+                "/uptime — Watch loop uptime\n"
                 "/help — This message"
             )
 
@@ -676,6 +681,16 @@ def handle_command(command: str, args: str) -> str:
             return _cmd_health()
         elif command == "/log":
             return _cmd_log()
+        elif command == "/pull":
+            return _cmd_pull()
+        elif command == "/logs":
+            return _cmd_logs()
+        elif command == "/gpu":
+            return _cmd_gpu()
+        elif command == "/disk":
+            return _cmd_disk()
+        elif command == "/uptime":
+            return _cmd_uptime()
         else:
             return f"Unknown command: {command}\nSend /help for available commands."
 
@@ -1029,3 +1044,106 @@ def _cmd_log() -> str:
         return "\n".join(lines)
     except Exception as e:
         return f"📋 Activity log unavailable: {e}"
+
+
+def _cmd_pull() -> str:
+    """Git pull latest code."""
+    import subprocess
+    try:
+        result = subprocess.run(
+            ["git", "pull"], capture_output=True, text=True, timeout=30
+        )
+        output = result.stdout.strip() or result.stderr.strip()
+        return f"📥 <b>GIT PULL</b>\n<pre>{output[:500]}</pre>"
+    except Exception as e:
+        return f"❌ Git pull failed: {e}"
+
+
+def _cmd_logs() -> str:
+    """Last 20 lines of halcyon.log."""
+    import os
+    log_path = os.path.join("logs", "halcyon.log")
+    try:
+        with open(log_path, "r") as f:
+            lines = f.readlines()
+        last_20 = lines[-20:] if len(lines) >= 20 else lines
+        text = "".join(last_20).strip()
+        return f"📜 <b>LAST 20 LOG LINES</b>\n<pre>{text[:3500]}</pre>"
+    except FileNotFoundError:
+        return "📜 Log file not found"
+    except Exception as e:
+        return f"📜 Log read failed: {e}"
+
+
+def _cmd_gpu() -> str:
+    """GPU details via nvidia-smi."""
+    import subprocess
+    try:
+        result = subprocess.run(
+            ["nvidia-smi", "--query-gpu=name,temperature.gpu,utilization.gpu,memory.used,memory.total,power.draw",
+             "--format=csv,noheader"],
+            capture_output=True, text=True, timeout=10
+        )
+        return f"🖥️ <b>GPU</b>\n<pre>{result.stdout.strip()[:1000]}</pre>"
+    except Exception:
+        return "🖥️ nvidia-smi not available"
+
+
+def _cmd_disk() -> str:
+    """Disk usage for key directories."""
+    import os
+    import shutil
+
+    dirs = {
+        "DB": "ai_research_desk.sqlite3",
+        "Logs": "logs",
+        "Models": "models",
+    }
+    lines = ["💾 <b>DISK USAGE</b>"]
+
+    total, used, free = shutil.disk_usage(".")
+    lines.append(f"Disk: {used // (1024**3)}GB / {total // (1024**3)}GB ({free // (1024**3)}GB free)")
+
+    for label, path in dirs.items():
+        if os.path.isfile(path):
+            size = os.path.getsize(path) / (1024 * 1024)
+            lines.append(f"  {label}: {size:.1f} MB")
+        elif os.path.isdir(path):
+            total_size = sum(
+                os.path.getsize(os.path.join(dp, f))
+                for dp, _, fns in os.walk(path) for f in fns
+            ) / (1024 * 1024)
+            lines.append(f"  {label}: {total_size:.1f} MB")
+        else:
+            lines.append(f"  {label}: not found")
+
+    return "\n".join(lines)
+
+
+def _cmd_uptime() -> str:
+    """Watch loop uptime and next event."""
+    now = datetime.now(ET)
+    hour = now.hour
+
+    # Determine next scheduled event
+    if hour < 8:
+        next_event = "Pre-market features at 8:00 ET"
+    elif hour < 9:
+        next_event = "Market open scan at 9:30 ET"
+    elif 9 <= hour < 16:
+        next_event = "Next scan in ~30 min"
+    elif hour < 17:
+        next_event = "Post-close capture at 17:30 ET"
+    elif hour < 18:
+        next_event = "Training collection at 18:00 ET"
+    elif hour < 19:
+        next_event = "Overnight training at 19:00 ET"
+    else:
+        next_event = "Data collection pipeline"
+
+    return (
+        f"⏱️ <b>UPTIME</b>\n"
+        f"Time: {now.strftime('%Y-%m-%d %H:%M ET')}\n"
+        f"Day: {now.strftime('%A')}\n"
+        f"Next: {next_event}"
+    )

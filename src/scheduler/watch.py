@@ -476,9 +476,62 @@ class WatchLoop:
         send_email(subject, body)
         print("[WATCH] EOD recap email sent.")
 
+    @staticmethod
+    def _ensure_all_tables():
+        """Create all expected SQLite tables on startup to prevent missing-table errors."""
+        import sqlite3
+        db_path = "ai_research_desk.sqlite3"
+        tables = [
+            """CREATE TABLE IF NOT EXISTS council_sessions (
+                session_id TEXT PRIMARY KEY, session_type TEXT NOT NULL,
+                trigger_reason TEXT, created_at TEXT NOT NULL, consensus TEXT,
+                confidence_weighted_score REAL, is_contested INTEGER DEFAULT 0,
+                total_cost REAL, rounds_completed INTEGER DEFAULT 0)""",
+            """CREATE TABLE IF NOT EXISTS council_votes (
+                vote_id TEXT PRIMARY KEY, session_id TEXT NOT NULL, agent_name TEXT NOT NULL,
+                round INTEGER NOT NULL, position TEXT, confidence INTEGER,
+                recommendation TEXT, key_data_points TEXT, risk_flags TEXT,
+                vote TEXT, is_devils_advocate INTEGER DEFAULT 0)""",
+            """CREATE TABLE IF NOT EXISTS schedule_metrics (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, metric_date TEXT,
+                metric_name TEXT, metric_value REAL, details TEXT)""",
+            """CREATE TABLE IF NOT EXISTS setup_signals (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, ticker TEXT, scan_date TEXT,
+                setup_type TEXT, confidence REAL, features_json TEXT, created_at TEXT)""",
+            """CREATE TABLE IF NOT EXISTS canary_evaluations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, model_version TEXT,
+                perplexity REAL, distinct_2 REAL, verdict TEXT, details TEXT, created_at TEXT)""",
+            """CREATE TABLE IF NOT EXISTS quality_drift_metrics (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, metric_date TEXT,
+                avg_score REAL, score_std REAL, pass_rate REAL,
+                template_fallback_rate REAL, created_at TEXT)""",
+            """CREATE TABLE IF NOT EXISTS activity_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, event_type TEXT,
+                detail TEXT, created_at TEXT)""",
+            """CREATE TABLE IF NOT EXISTS api_costs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, model TEXT, purpose TEXT,
+                input_tokens INTEGER, output_tokens INTEGER,
+                estimated_cost REAL, created_at TEXT)""",
+            """CREATE TABLE IF NOT EXISTS training_examples (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, example_id TEXT UNIQUE,
+                ticker TEXT, trade_date TEXT, input_text TEXT, output_text TEXT,
+                quality_score REAL, curriculum_stage TEXT, outcome TEXT,
+                source TEXT, model_version TEXT, created_at TEXT)""",
+        ]
+        try:
+            with sqlite3.connect(db_path) as conn:
+                for ddl in tables:
+                    conn.execute(ddl)
+            logger.info("[WATCH] All SQLite tables verified/created")
+        except Exception as exc:
+            logger.warning("[WATCH] Table creation error: %s", exc)
+
     def run(self):
         """Main watch loop. Checks every 60 seconds."""
         self._print_banner()
+
+        # Ensure all expected tables exist
+        self._ensure_all_tables()
 
         # Validate starting capital
         capital = self.config.get("risk", {}).get("starting_capital", 0)

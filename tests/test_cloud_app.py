@@ -367,6 +367,10 @@ CLOUD_POST_STUBS = [
     "/api/actions/council",
     "/api/halt-trading",
     "/api/resume-trading",
+    "/api/training/train",
+    "/api/training/bootstrap",
+    "/api/training/rollback",
+    "/api/shadow/close/AAPL",
 ]
 
 class TestPostStubs:

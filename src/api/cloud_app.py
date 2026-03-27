@@ -733,3 +733,101 @@ def halt_trading():
 @app.post("/api/resume-trading", dependencies=[Depends(verify_auth)])
 def resume_trading():
     return CLOUD_ACTION_MSG
+
+
+@app.post("/api/training/train", dependencies=[Depends(verify_auth)])
+def action_train():
+    return CLOUD_ACTION_MSG
+
+
+@app.post("/api/training/bootstrap", dependencies=[Depends(verify_auth)])
+def action_bootstrap():
+    return CLOUD_ACTION_MSG
+
+
+@app.post("/api/training/rollback", dependencies=[Depends(verify_auth)])
+def action_rollback():
+    return CLOUD_ACTION_MSG
+
+
+@app.post("/api/shadow/close/{ticker}", dependencies=[Depends(verify_auth)])
+def action_close_trade(ticker: str):
+    return CLOUD_ACTION_MSG
+
+
+# ── Additional GET endpoints ─────────────────────────────────────
+
+
+@app.get("/api/market/overview", dependencies=[Depends(verify_auth)])
+def market_overview():
+    """Market overview — VIX, regime, macro summary."""
+    try:
+        vix = _query_one("SELECT * FROM vix_term_structure ORDER BY collected_date DESC LIMIT 1")
+        macro = _query(
+            "SELECT series_id, series_name, value, change_pct FROM macro_snapshots "
+            "WHERE collected_date = (SELECT MAX(collected_date) FROM macro_snapshots)"
+        )
+        return {"vix": vix, "macro": macro}
+    except Exception:
+        return {"vix": None, "macro": []}
+
+
+@app.get("/api/data-asset/growth", dependencies=[Depends(verify_auth)])
+def data_asset_growth():
+    """Data asset growth over time."""
+    try:
+        rows = _query(
+            "SELECT DATE(created_at) as date, COUNT(*) as count "
+            "FROM training_examples GROUP BY DATE(created_at) ORDER BY date"
+        )
+        return {"daily_counts": rows}
+    except Exception:
+        return {"daily_counts": []}
+
+
+@app.get("/api/journal", dependencies=[Depends(verify_auth)])
+def trade_journal(days: int = 90):
+    """Trade journal — closed trades with recommendation context."""
+    try:
+        cutoff = (datetime.now(ET) - timedelta(days=days)).isoformat()
+        rows = _query(
+            "SELECT st.*, r.thesis_text, r.setup_type "
+            "FROM shadow_trades st LEFT JOIN recommendations r "
+            "ON st.recommendation_id = r.recommendation_id "
+            "WHERE st.status = 'closed' AND st.actual_exit_time >= %s "
+            "ORDER BY st.actual_exit_time DESC",
+            (cutoff,),
+        )
+        return {"trades": rows, "count": len(rows)}
+    except Exception as exc:
+        return {"trades": [], "count": 0, "error": str(exc)}
+
+
+@app.get("/api/signal-zoo", dependencies=[Depends(verify_auth)])
+def signal_zoo(days: int = 7):
+    """Signal zoo — setup signals with optional filters."""
+    try:
+        cutoff = (datetime.now(ET) - timedelta(days=days)).isoformat()
+        rows = _query(
+            "SELECT * FROM setup_signals WHERE created_at >= %s ORDER BY created_at DESC",
+            (cutoff,),
+        )
+        for r in rows:
+            _parse_json_fields(r, ["features_json"])
+        return {"signals": rows, "count": len(rows)}
+    except Exception:
+        return {"signals": [], "count": 0}
+
+
+@app.get("/api/macro/dashboard", dependencies=[Depends(verify_auth)])
+def macro_dashboard():
+    """Macro dashboard — latest values for each FRED series."""
+    try:
+        rows = _query(
+            "SELECT DISTINCT ON (series_id) series_id, series_name, value, "
+            "previous_value, change_pct, collected_date "
+            "FROM macro_snapshots ORDER BY series_id, collected_date DESC"
+        )
+        return {"series": rows}
+    except Exception:
+        return {"series": []}

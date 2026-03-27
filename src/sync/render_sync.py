@@ -118,6 +118,26 @@ SYNC_TABLES: dict[str, dict] = {
         "time_col": "created_at",
         "pk": "id",
     },
+    "activity_log": {
+        "mode": "incremental",
+        "time_col": "created_at",
+        "pk": "id",
+    },
+    "setup_signals": {
+        "mode": "incremental",
+        "time_col": "created_at",
+        "pk": "id",
+    },
+    "quality_drift_metrics": {
+        "mode": "incremental",
+        "time_col": "created_at",
+        "pk": "id",
+    },
+    "canary_evaluations": {
+        "mode": "incremental",
+        "time_col": "created_at",
+        "pk": "id",
+    },
 }
 
 # ── Sync state table (local SQLite) ─────────────────────────────────
