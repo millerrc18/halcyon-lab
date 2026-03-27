@@ -573,6 +573,9 @@ class WatchLoop:
                 metric TEXT, period TEXT, estimate REAL, actual REAL,
                 surprise REAL, surprise_pct REAL, num_analysts INTEGER,
                 source TEXT, collected_at TEXT NOT NULL)""",
+            """CREATE TABLE IF NOT EXISTS research_docs (
+                id TEXT PRIMARY KEY, filename TEXT, title TEXT, category TEXT,
+                content TEXT, size_kb REAL, updated_at TEXT)""",
         ]
         # Slippage columns on shadow_trades
         slippage_cols = [
@@ -601,6 +604,14 @@ class WatchLoop:
                     except Exception:
                         pass  # Column already exists
             logger.info("[WATCH] All SQLite tables verified/created")
+
+            # Populate research docs from markdown files
+            try:
+                from src.data_collection.docs_collector import populate_research_docs
+                result = populate_research_docs()
+                logger.info("[WATCH] Research docs: %s", result)
+            except Exception as e:
+                logger.debug("[WATCH] Docs population failed: %s", e)
         except Exception as exc:
             logger.warning("[WATCH] Table creation error: %s", exc)
 

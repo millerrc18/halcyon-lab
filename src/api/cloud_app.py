@@ -951,27 +951,63 @@ def cto_report(days: int = 7):
         win_rate = len(wins) / len(pnls) if pnls else 0
         total_pnl = sum(t.get("pnl_dollars", 0) or 0 for t in closed_recent)
 
+        # Compute Sharpe from trade returns
+        import statistics
+        sharpe = 0
+        if len(pnls) >= 2:
+            avg_r = statistics.mean(pnls)
+            std_r = statistics.stdev(pnls)
+            sharpe = round(avg_r / std_r, 3) if std_r > 0 else 0
+
+        # Profit factor
+        gross_wins = sum(wins) if wins else 0
+        gross_losses = abs(sum(losses)) if losses else 0
+        profit_factor = round(gross_wins / gross_losses, 2) if gross_losses > 0 else (999 if gross_wins > 0 else 0)
+
+        # Max drawdown from cumulative P&L
+        max_dd = 0
+        if pnls:
+            cumulative = 0
+            peak = 0
+            for p in pnls:
+                cumulative += p
+                peak = max(peak, cumulative)
+                dd = peak - cumulative
+                max_dd = max(max_dd, dd)
+
+        # Expectancy per trade
+        expectancy = round(total_pnl / len(closed_recent), 2) if closed_recent else 0
+
         return {
             "report_period": {
                 "start": cutoff[:10],
                 "end": datetime.now(ET).strftime("%Y-%m-%d"),
             },
             "headline_kpis": {
-                "sharpe_ratio": 0,
+                "sharpe_ratio": sharpe,
                 "win_rate": win_rate,
-                "max_drawdown_pct": 0,
+                "max_drawdown_pct": round(max_dd, 2),
                 "confidence_calibration": 0,
                 "avg_rubric_score": None,
             },
             "trade_summary": {
                 "trades_closed": len(closed_recent),
                 "trades_open": open_count["c"] if open_count else 0,
-                "profit_factor": "n/a",
-                "expectancy_dollars": round(total_pnl / len(closed_recent), 2) if closed_recent else None,
+                "win_rate": win_rate,
+                "sharpe_ratio": sharpe,
+                "profit_factor": profit_factor,
+                "expectancy_dollars": expectancy,
+                "max_drawdown_pct": round(max_dd, 2),
                 "total_pnl": round(total_pnl, 2),
                 "avg_winner_pct": round(sum(wins) / len(wins), 1) if wins else None,
                 "avg_loser_pct": round(sum(losses) / len(losses), 1) if losses else None,
                 "max_consecutive_losses": 0,
+            },
+            "fund_metrics": {
+                "psr": None,
+                "calmar_ratio": None,
+                "dsr": None,
+                "information_ratio": None,
             },
             "system_status": {
                 "model_version": "cloud",

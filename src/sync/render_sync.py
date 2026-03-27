@@ -278,7 +278,7 @@ def _fetch_council_votes_for_new_sessions(
                 cursor = conn.execute(
                     "SELECT v.* FROM council_votes v "
                     "JOIN council_sessions s ON v.session_id = s.session_id "
-                    "WHERE s.created_at > ? ORDER BY s.created_at",
+                    "WHERE s.created_at >= ? ORDER BY s.created_at",
                     (since,),
                 )
             else:

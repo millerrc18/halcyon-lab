@@ -144,7 +144,9 @@ function ExpandableSessionRow({ session, isLatest }) {
             </span>
           )}
           <span className="text-xs" style={{ color: 'var(--slate-400)' }}>
-            {session.agent_count || session.agents?.length || 0} agents
+            {(session.agent_count || session.agents?.length || 0) > 0
+              ? `${session.agent_count || session.agents?.length} agents`
+              : <span style={{ color: 'var(--amber-400)' }}>Session failed</span>}
           </span>
           <VoteBadge vote={consensus} />
         </div>

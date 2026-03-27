@@ -318,6 +318,16 @@ MIGRATIONS = [
         duration_seconds REAL,
         created_at TEXT
     )"""),
+
+    ("research_docs", None, """CREATE TABLE IF NOT EXISTS research_docs (
+        id TEXT PRIMARY KEY,
+        filename TEXT,
+        title TEXT,
+        category TEXT,
+        content TEXT,
+        size_kb REAL,
+        updated_at TEXT
+    )"""),
 ]
 
 
