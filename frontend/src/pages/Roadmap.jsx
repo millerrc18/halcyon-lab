@@ -12,6 +12,7 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { CheckCircle2, Circle, Loader2, ChevronDown, ChevronRight, Lock, ArrowRight } from 'lucide-react'
+import RevenueProjection from '../components/RevenueProjection'
 
 // ═══════════════════════════════════════════════════════════════
 // ROADMAP DATA — Update this object when the roadmap changes.
@@ -58,10 +59,16 @@ const ROADMAP_DATA = {
         { label: 'API cost tracking', status: 'done' },
         { label: 'Database indexes + codebase audit', status: 'done' },
         { label: 'Leakage detector (balanced accuracy)', status: 'done' },
-        { label: '24/7 overnight schedule (Phase A)', status: 'pending' },
-        { label: 'Unified train-pipeline command', status: 'pending' },
-        { label: 'Dashboard action buttons', status: 'pending' },
-        { label: 'Live activity feed', status: 'pending' },
+        { label: '24/7 overnight schedule (Phase A)', status: 'done' },
+        { label: 'Dashboard action buttons', status: 'done' },
+        { label: 'Live activity feed', status: 'done' },
+        { label: 'Statistical validation framework (PSR, bootstrap)', status: 'done' },
+        { label: '50-trade gate evaluation script', status: 'done' },
+        { label: 'SEC EDGAR NLP features (L-M + cautionary phrases)', status: 'done' },
+        { label: 'Thorp-style graduated drawdown reduction', status: 'done' },
+        { label: 'Research intelligence collector (#13)', status: 'done' },
+        { label: 'Cloud dashboard (40+ API endpoints)', status: 'done' },
+        { label: 'Revenue projection model', status: 'done' },
       ],
     },
     {
@@ -420,6 +427,11 @@ export default function Roadmap() {
         {data.phases.map(phase => (
           <PhaseCard key={phase.id} phase={phase} kpis={kpis} />
         ))}
+      </div>
+
+      {/* Revenue Projection Model */}
+      <div className="rounded-lg p-4" style={{ background: 'var(--slate-800)', border: '1px solid var(--slate-600)' }}>
+        <RevenueProjection />
       </div>
 
       <div>

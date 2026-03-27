@@ -86,4 +86,6 @@ export const api = {
   triggerTrainPipeline: () => fetchApi('/actions/train-pipeline', { method: 'POST' }),
   triggerScore: () => fetchApi('/actions/score', { method: 'POST' }),
   triggerCouncil: () => fetchApi('/actions/council', { method: 'POST' }),
+  // Projections
+  getProjectionsLive: () => fetchApi('/projections/live'),
 }

@@ -896,3 +896,52 @@ def scan_metrics_latest():
         return row or {}
     except Exception:
         return {}
+
+
+@app.get("/api/projections/live", dependencies=[Depends(verify_auth)])
+def projections_live():
+    """Live performance metrics for the revenue projection model."""
+    try:
+        closed = _query(
+            "SELECT pnl_dollars, pnl_pct FROM shadow_trades "
+            "WHERE status = 'closed' AND pnl_pct IS NOT NULL "
+            "ORDER BY actual_exit_time ASC"
+        )
+        if not closed:
+            return {"trades": 0}
+
+        pnl_pcts = [float(r.get("pnl_pct", 0) or 0) for r in closed]
+        pnl_dollars = [float(r.get("pnl_dollars", 0) or 0) for r in closed]
+        wins = [p for p in pnl_dollars if p > 0]
+        losses = [p for p in pnl_dollars if p <= 0]
+
+        import statistics
+        avg_return = statistics.mean(pnl_pcts) if pnl_pcts else 0
+        std_return = statistics.stdev(pnl_pcts) if len(pnl_pcts) > 1 else 1
+        sharpe = avg_return / std_return if std_return > 0 else 0
+
+        # Max drawdown from equity curve
+        equity = []
+        cumulative = 100000
+        peak = cumulative
+        max_dd = 0
+        for pnl in pnl_dollars:
+            cumulative += pnl
+            equity.append(cumulative)
+            peak = max(peak, cumulative)
+            dd = (peak - cumulative) / peak * 100 if peak > 0 else 0
+            max_dd = max(max_dd, dd)
+
+        pf = abs(sum(wins) / sum(losses)) if losses and sum(losses) != 0 else 0
+
+        return {
+            "trades": len(closed),
+            "winRate": round(len(wins) / len(closed), 3) if closed else 0,
+            "sharpe": round(sharpe, 3),
+            "profitFactor": round(pf, 2),
+            "maxDD": round(max_dd, 1),
+            "netPnl": round(sum(pnl_dollars), 2),
+            "avgReturn": round(avg_return, 3),
+        }
+    except Exception as exc:
+        return {"trades": 0, "error": str(exc)}

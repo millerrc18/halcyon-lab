@@ -49,6 +49,18 @@ def open_shadow_trade(
         logger.info("Shadow trading disabled, skipping")
         return None
 
+    # LLM output validation (catches hallucinated tickers, nonsensical prices, etc.)
+    try:
+        from src.llm.validator import validate_llm_output
+        is_valid, reason = validate_llm_output(packet, features, config)
+        if not is_valid:
+            logger.warning("[VALIDATE] Trade rejected for %s: %s", packet.ticker, reason)
+            return None
+    except ImportError:
+        pass
+    except Exception as e:
+        logger.debug("[VALIDATE] Validation check failed: %s — continuing", e)
+
     # Risk governor check
     try:
         from src.risk.governor import RiskGovernor, get_portfolio_state

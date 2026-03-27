@@ -537,10 +537,21 @@ class WatchLoop:
                 llm_total INTEGER, llm_fallback INTEGER, avg_conviction REAL,
                 duration_seconds REAL, created_at TEXT)""",
         ]
+        # Slippage columns on shadow_trades
+        slippage_cols = [
+            ("signal_entry_price", "REAL"), ("fill_entry_price", "REAL"),
+            ("entry_slippage_bps", "REAL"), ("signal_exit_price", "REAL"),
+            ("fill_exit_price", "REAL"), ("exit_slippage_bps", "REAL"),
+        ]
         try:
             with sqlite3.connect(db_path) as conn:
                 for ddl in tables:
                     conn.execute(ddl)
+                for col, typ in slippage_cols:
+                    try:
+                        conn.execute(f"ALTER TABLE shadow_trades ADD COLUMN {col} {typ}")
+                    except Exception:
+                        pass  # Column already exists
             logger.info("[WATCH] All SQLite tables verified/created")
         except Exception as exc:
             logger.warning("[WATCH] Table creation error: %s", exc)
