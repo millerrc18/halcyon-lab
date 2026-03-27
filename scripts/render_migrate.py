@@ -328,6 +328,19 @@ MIGRATIONS = [
         size_kb REAL,
         updated_at TEXT
     )"""),
+
+    ("model_versions", None, """CREATE TABLE IF NOT EXISTS model_versions (
+        id SERIAL PRIMARY KEY,
+        version_name TEXT,
+        base_model TEXT,
+        dataset_size INTEGER,
+        training_loss REAL,
+        eval_loss REAL,
+        status TEXT DEFAULT 'candidate',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        promoted_at TIMESTAMP,
+        notes TEXT
+    )"""),
 ]
 
 

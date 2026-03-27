@@ -653,9 +653,9 @@ def health_score():
             "SELECT llm_success, llm_total FROM scan_metrics ORDER BY created_at DESC LIMIT 1"
         )
 
-        # Regime coverage (distinct setup types)
+        # Regime coverage (distinct regime labels)
         regime_row = _query_one(
-            "SELECT COUNT(DISTINCT setup_type) as cnt FROM training_examples WHERE setup_type IS NOT NULL"
+            "SELECT COUNT(DISTINCT regime_label) as cnt FROM training_examples WHERE regime_label IS NOT NULL"
         )
 
         # Ticker coverage
