@@ -457,7 +457,33 @@ def cmd_backfill_training(args):
 
 def cmd_train(args):
     from src.training.trainer import run_fine_tune, export_training_data, should_train
-    from src.training.versioning import rollback_model
+    from src.training.versioning import rollback_model, register_model_version, \
+        get_active_model_version, get_next_semver, update_config_model
+    if getattr(args, "register", False):
+        # Register the current halcyonlatest as v1.0.0 (or next version)
+        active = get_active_model_version()
+        if active:
+            print(f"Active model already registered: {active['version_name']}")
+            return
+        version_name = "halcyon-v1.0.0"
+        vid = register_model_version(
+            version_name=version_name,
+            examples_count=969,
+            synthetic_count=0,
+            outcome_count=0,
+            model_file_path="halcyonlatest",
+        )
+        # Create Ollama tag
+        import subprocess
+        try:
+            subprocess.run(["ollama", "cp", "halcyonlatest", version_name],
+                          capture_output=True, text=True, timeout=60)
+            print(f"Created Ollama tag: {version_name}")
+        except Exception as e:
+            print(f"Ollama tag failed (do manually: ollama cp halcyonlatest {version_name}): {e}")
+        update_config_model(version_name)
+        print(f"Registered {version_name} (id={vid}), config updated.")
+        return
     if getattr(args, "rollback", False):
         restored = rollback_model()
         print(f"Rolled back to {restored['version_name']}" if restored else "Rollback failed.")
@@ -846,6 +872,7 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_parser("live-status", help="Show live account balance and open positions").set_defaults(func=cmd_live_status)
     _p = sp.add_parser("live-history", help="Show live trade history"); _p.add_argument("--days", type=int, default=30); _p.set_defaults(func=cmd_live_history)
     _p = sp.add_parser("live-close", help="Close a live position"); _p.add_argument("ticker"); _p.add_argument("--reason", default="manual"); _p.set_defaults(func=cmd_live_close)
+    _p = sp.add_parser("reconcile-live", help="Reconcile Alpaca live positions with shadow_trades DB"); _p.add_argument("--dry-run", action="store_true", help="Report discrepancies without modifying DB"); _p.set_defaults(func=cmd_reconcile_live)
 
     # Review
     _p = sp.add_parser("reconcile-live", help="Reconcile Alpaca live positions with shadow_trades DB"); _p.add_argument("--dry-run", action="store_true", help="Report discrepancies without modifying DB"); _p.set_defaults(func=cmd_reconcile_live)
@@ -864,7 +891,7 @@ def build_parser() -> argparse.ArgumentParser:
     _p = sp.add_parser("training-report"); _p.add_argument("--email", action="store_true"); _p.set_defaults(func=cmd_training_report)
     _p = sp.add_parser("bootstrap-training"); _p.add_argument("--count", type=int, default=500); _p.add_argument("--yes", action="store_true"); _p.set_defaults(func=cmd_bootstrap_training)
     _p = sp.add_parser("backfill-training"); _p.add_argument("--months", type=int, default=12); _p.add_argument("--max-examples", type=int, default=2000); _p.add_argument("--min-score", type=float, default=70); _p.add_argument("--include-messy", action="store_true"); _p.add_argument("--yes", action="store_true"); _p.set_defaults(func=cmd_backfill_training)
-    _p = sp.add_parser("train"); _p.add_argument("--force", action="store_true"); _p.add_argument("--rollback", action="store_true"); _p.add_argument("--export", action="store_true"); _p.set_defaults(func=cmd_train)
+    _p = sp.add_parser("train"); _p.add_argument("--force", action="store_true"); _p.add_argument("--rollback", action="store_true"); _p.add_argument("--export", action="store_true"); _p.add_argument("--register", action="store_true", help="Register current halcyonlatest as halcyon-v1.0.0"); _p.set_defaults(func=cmd_train)
     _p = sp.add_parser("train-pipeline", help="Run complete training pipeline (score → leakage → classify → train)"); _p.add_argument("--force", action="store_true", help="Continue even if leakage detected"); _p.set_defaults(func=cmd_train_pipeline)
 
     # Training — quality

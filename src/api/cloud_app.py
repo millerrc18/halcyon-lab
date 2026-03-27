@@ -119,6 +119,34 @@ def healthz():
     """Unauthenticated health check for Render."""
     return {"status": "ok"}
 
+@app.get("/api/diagnostics", dependencies=[Depends(verify_auth)])
+def diagnostics():
+    """Test every DB table the dashboard needs. Returns pass/fail per table."""
+    tables = [
+        "shadow_trades", "recommendations", "options_metrics", "vix_term_structure",
+        "macro_snapshots", "api_costs", "training_examples", "setup_signals",
+        "council_sessions", "council_votes", "scan_metrics", "canary_evaluations",
+        "quality_drift_metrics", "activity_log", "research_docs", "model_versions",
+        "edgar_filings", "insider_transactions", "short_interest", "analyst_estimates",
+        "research_papers", "research_digests", "schedule_metrics",
+    ]
+    results = {}
+    for table in tables:
+        try:
+            row = _query_one(f"SELECT COUNT(*) as c FROM {table}")  # noqa: S608 — table names are hardcoded
+            results[table] = {"status": "ok", "rows": row["c"] if row else 0}
+        except Exception as e:
+            results[table] = {"status": "error", "error": str(e)}
+
+    failed = [t for t, r in results.items() if r["status"] == "error"]
+    return {
+        "status": "healthy" if not failed else "degraded",
+        "tables": results,
+        "failed_count": len(failed),
+        "failed_tables": failed,
+    }
+
+
 @app.get("/api/auth", dependencies=[Depends(verify_auth)])
 def auth_check():
     """Verify auth token without touching the database.
@@ -153,7 +181,8 @@ def status():
         try:
             te = _query_one("SELECT COUNT(*) as c FROM training_examples")
             example_count = te["c"] if te else 0
-        except Exception:
+        except Exception as exc:
+            logger.warning("[API] training_examples count failed: %s", exc)
             example_count = 0
 
         return {
@@ -620,8 +649,9 @@ def costs(days: int = 30):
         )
         total = sum(r.get("total_cost", 0) or 0 for r in rows)
         return {"days": days, "total_cost": round(total, 4), "breakdown": rows}
-    except Exception:
-        return {"days": days, "total_cost": 0, "breakdown": []}
+    except Exception as exc:
+        logger.error("[API] costs failed: %s", exc, exc_info=True)
+        return {"days": days, "total_cost": 0, "breakdown": [], "error": str(exc)}
 
 
 @app.get("/api/health/score", dependencies=[Depends(verify_auth)])
@@ -815,6 +845,7 @@ def health_score():
             "history": [],
         }
     except Exception as exc:
+        logger.error("[API] health_score failed: %s", exc, exc_info=True)
         return {"score": {"overall": 0, "dimensions": {}, "weights": {}, "phase": "early"}, "history": [], "error": str(exc)}
 
 
@@ -896,6 +927,12 @@ def update_settings():
     return {"error": "cloud_mode", "message": "Settings can only be changed on the local machine."}
 
 
+@app.post("/api/live/reconcile", dependencies=[Depends(verify_auth)])
+def live_reconcile():
+    """Trigger live trade reconciliation. Must be run locally."""
+    return {"error": "cloud_mode", "message": "Reconciliation must be run locally via CLI: python -m src.main reconcile-live"}
+
+
 @app.get("/api/shadow/account", dependencies=[Depends(verify_auth)])
 def shadow_account():
     """Shadow trading account summary."""
@@ -926,6 +963,7 @@ def shadow_account():
             "losses": len(losses),
         }
     except Exception as exc:
+        logger.error("[API] shadow_account failed: %s", exc, exc_info=True)
         return {"starting_capital": 100000, "equity": 100000, "error": str(exc)}
 
 
@@ -1019,6 +1057,7 @@ def cto_report(days: int = 7):
             "generated_at": datetime.now(ET).isoformat(),
         }
     except Exception as exc:
+        logger.error("[API] cto_report failed: %s", exc, exc_info=True)
         return {"error": str(exc)}
 
 
@@ -1030,8 +1069,9 @@ def scan_latest():
             "SELECT * FROM recommendations ORDER BY created_at DESC LIMIT 10"
         )
         return {"recommendations": latest, "count": len(latest)}
-    except Exception:
-        return {"recommendations": [], "count": 0}
+    except Exception as exc:
+        logger.error("[API] scan_latest failed: %s", exc, exc_info=True)
+        return {"recommendations": [], "count": 0, "error": str(exc)}
 
 
 @app.get("/api/review/pending", dependencies=[Depends(verify_auth)])
@@ -1043,7 +1083,8 @@ def review_pending():
             "AND (exit_reason IS NOT NULL) ORDER BY actual_exit_time DESC LIMIT 20"
         )
         return rows
-    except Exception:
+    except Exception as exc:
+        logger.error("[API] review_pending failed: %s", exc, exc_info=True)
         return []
 
 
@@ -1069,7 +1110,8 @@ def audit_history(days: int = 30):
             (cutoff,),
         )
         return rows
-    except Exception:
+    except Exception as exc:
+        logger.error("[API] audit_history failed: %s", exc, exc_info=True)
         return []
 
 
@@ -1086,8 +1128,9 @@ def training_report():
             "unscored": (total["c"] if total else 0) - (scored["c"] if scored else 0),
             "avg_quality_score": round(avg_score["avg"], 2) if avg_score and avg_score["avg"] else None,
         }
-    except Exception:
-        return {"total_examples": 0, "scored": 0, "unscored": 0}
+    except Exception as exc:
+        logger.error("[API] training_report failed: %s", exc, exc_info=True)
+        return {"total_examples": 0, "scored": 0, "unscored": 0, "error": str(exc)}
 
 
 @app.get("/api/metric-history", dependencies=[Depends(verify_auth)])
@@ -1174,8 +1217,9 @@ def market_overview():
             "WHERE collected_date = (SELECT MAX(collected_date) FROM macro_snapshots)"
         )
         return {"vix": vix, "macro": macro}
-    except Exception:
-        return {"vix": None, "macro": []}
+    except Exception as exc:
+        logger.error("[API] market_overview failed: %s", exc, exc_info=True)
+        return {"vix": None, "macro": [], "error": str(exc)}
 
 
 @app.get("/api/data-asset/growth", dependencies=[Depends(verify_auth)])
@@ -1187,8 +1231,9 @@ def data_asset_growth():
             "FROM training_examples GROUP BY DATE(created_at) ORDER BY date"
         )
         return {"daily_counts": rows}
-    except Exception:
-        return {"daily_counts": []}
+    except Exception as exc:
+        logger.error("[API] data_asset_growth failed: %s", exc, exc_info=True)
+        return {"daily_counts": [], "error": str(exc)}
 
 
 @app.get("/api/journal", dependencies=[Depends(verify_auth)])
@@ -1221,8 +1266,9 @@ def signal_zoo(days: int = 7):
         for r in rows:
             _parse_json_fields(r, ["features_json"])
         return {"signals": rows, "count": len(rows)}
-    except Exception:
-        return {"signals": [], "count": 0}
+    except Exception as exc:
+        logger.error("[API] signal_zoo failed: %s", exc, exc_info=True)
+        return {"signals": [], "count": 0, "error": str(exc)}
 
 
 @app.get("/api/macro/dashboard", dependencies=[Depends(verify_auth)])
@@ -1235,8 +1281,9 @@ def macro_dashboard():
             "FROM macro_snapshots ORDER BY series_id, collected_date DESC"
         )
         return {"series": rows}
-    except Exception:
-        return {"series": []}
+    except Exception as exc:
+        logger.error("[API] macro_dashboard failed: %s", exc, exc_info=True)
+        return {"series": [], "error": str(exc)}
 
 
 @app.get("/api/research/papers", dependencies=[Depends(verify_auth)])
@@ -1252,8 +1299,9 @@ def research_papers(days: int = 7, min_score: float = 0.4):
             (cutoff, min_score),
         )
         return {"papers": rows, "count": len(rows)}
-    except Exception:
-        return {"papers": [], "count": 0}
+    except Exception as exc:
+        logger.error("[API] research_papers failed: %s", exc, exc_info=True)
+        return {"papers": [], "count": 0, "error": str(exc)}
 
 
 @app.get("/api/research/digest", dependencies=[Depends(verify_auth)])
@@ -1264,8 +1312,9 @@ def research_digest():
             "SELECT * FROM research_digests ORDER BY created_at DESC LIMIT 1"
         )
         return row or {"digest": None}
-    except Exception:
-        return {"digest": None}
+    except Exception as exc:
+        logger.error("[API] research_digest failed: %s", exc, exc_info=True)
+        return {"digest": None, "error": str(exc)}
 
 
 @app.get("/api/training/quality", dependencies=[Depends(verify_auth)])
@@ -1288,8 +1337,9 @@ def training_quality():
             "by_stage": by_stage,
             "by_outcome": by_outcome,
         }
-    except Exception:
-        return {"total": 0, "by_source": [], "by_stage": [], "by_outcome": []}
+    except Exception as exc:
+        logger.error("[API] training_quality failed: %s", exc, exc_info=True)
+        return {"total": 0, "by_source": [], "by_stage": [], "by_outcome": [], "error": str(exc)}
 
 
 @app.get("/api/scan/metrics", dependencies=[Depends(verify_auth)])
@@ -1300,8 +1350,9 @@ def scan_metrics_latest():
             "SELECT * FROM scan_metrics ORDER BY created_at DESC LIMIT 1"
         )
         return row or {}
-    except Exception:
-        return {}
+    except Exception as exc:
+        logger.error("[API] scan_metrics_latest failed: %s", exc, exc_info=True)
+        return {"error": str(exc)}
 
 
 @app.get("/api/projections/live", dependencies=[Depends(verify_auth)])

@@ -1,4 +1,4 @@
-<!-- Counts verified 2026-03-27: 127 Python files, 24,200+ LOC, 51 test files, 652+ tests, 49 CLI commands, 70 API routes, 31 DB tables, 35+ research docs. -->
+<!-- Counts verified 2026-03-27: 129 Python files, 24,800+ LOC, 60 test files, 853+ tests, 50 CLI commands, 72 API routes, 31 DB tables, 35+ research docs. -->
 
 # AGENTS.md — Halcyon Lab Governance Document
 
@@ -122,7 +122,7 @@ Universe (S&P 100 → expanding to ~325 stocks)
 - **Roadmap** — 5-phase plan with live gate metrics
 - **Docs** — 29 research documents + 7 core docs (34 total)
 
-## CLI Commands (49)
+## CLI Commands (50)
 
 See docs/cli-reference.md for full documentation with options and descriptions.
 
@@ -134,9 +134,9 @@ See docs/cli-reference.md for full documentation with options and descriptions.
 
 `shadow-status`, `shadow-history`, `shadow-close`, `shadow-account`
 
-### Live Trading (3)
+### Live Trading (4)
 
-`live-status`, `live-history`, `live-close`
+`live-status`, `live-history`, `live-close`, `reconcile-live`
 
 ### Review & Analysis (6)
 

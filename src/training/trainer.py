@@ -11,6 +11,8 @@ from zoneinfo import ZoneInfo
 from src.config import load_config
 from src.training.versioning import (
     get_active_model_version,
+    get_next_semver,
+    update_config_model,
     get_model_history,
     get_new_examples_since,
     get_performance_by_version,
@@ -553,14 +555,20 @@ def run_fine_tune(db_path: str = "ai_research_desk.sqlite3") -> dict | None:
     with open(modelfile_path, "w") as f:
         f.write(f"FROM ./{gguf_path}\n")
 
-    # Create model in Ollama
+    # Create model in Ollama with versioned name
+    version_name = get_next_semver(db_path)
     try:
         subprocess.run(
-            ["ollama", "create", "halcyon-latest", "-f", str(modelfile_path)],
+            ["ollama", "create", version_name, "-f", str(modelfile_path)],
             capture_output=True,
             text=True,
             timeout=300,
             check=True,
+        )
+        # Also keep halcyonlatest as alias for backward compatibility
+        subprocess.run(
+            ["ollama", "cp", version_name, "halcyonlatest"],
+            capture_output=True, text=True, timeout=60,
         )
     except (subprocess.CalledProcessError, FileNotFoundError) as e:
         print(f"[TRAINING] ERROR: Failed to register model in Ollama: {e}")
@@ -574,7 +582,7 @@ def run_fine_tune(db_path: str = "ai_research_desk.sqlite3") -> dict | None:
     if holdout_path.exists() and holdout_path.stat().st_size > 0:
         try:
             print("[TRAINING] Running holdout evaluation...")
-            holdout_eval = evaluate_on_holdout(model_name="halcyon-latest", db_path=db_path)
+            holdout_eval = evaluate_on_holdout(model_name=version_name, db_path=db_path)
             holdout_score = holdout_eval.get("avg_quality_score")
             holdout_json = json.dumps(holdout_eval)
 
@@ -586,9 +594,6 @@ def run_fine_tune(db_path: str = "ai_research_desk.sqlite3") -> dict | None:
                     print(f"[TRAINING] WARNING: Holdout score {holdout_score:.2f} < previous {prev_score:.2f} - 0.3. "
                           f"Possible overfitting. Registering as evaluation (not active).")
                     # Register as evaluation instead of active
-                    history = get_model_history(db_path)
-                    version_num = len(history) + 1
-                    version_name = f"halcyon-v{version_num}"
                     version_id = register_model_version(
                         version_name=version_name,
                         examples_count=example_count,
@@ -610,11 +615,7 @@ def run_fine_tune(db_path: str = "ai_research_desk.sqlite3") -> dict | None:
             logger.warning("[TRAINING] Holdout evaluation failed: %s", e)
             print(f"[TRAINING] Holdout evaluation failed: {e} — continuing without")
 
-    # Step 6: Determine version name and register
-    history = get_model_history(db_path)
-    version_num = len(history) + 1
-    version_name = f"halcyon-v{version_num}"
-
+    # Step 6: Register version and update config
     counts = get_training_example_counts(db_path)
 
     version_id = register_model_version(
@@ -627,6 +628,9 @@ def run_fine_tune(db_path: str = "ai_research_desk.sqlite3") -> dict | None:
         holdout_score=holdout_score,
         holdout_details=holdout_json,
     )
+
+    # Update local config to point to new version
+    update_config_model(version_name)
 
     # Step 7: DPO refinement (if enough preference pairs exist)
     try:

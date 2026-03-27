@@ -102,6 +102,12 @@ class WatchLoop:
         self._research_synthesis_done = False
         self._daily_metric_snapshot_done = False
 
+        # Email digest flags
+        self._digest_premarket_done = False
+        self._digest_midday_done = False
+        self._digest_eod_done = False
+        self._digest_evening_done = False
+
         # Collector failure tracking: {collector_name: consecutive_failure_count}
         self._collector_failures: dict[str, int] = {}
 
@@ -144,6 +150,11 @@ class WatchLoop:
         # Research + metrics
         self._research_synthesis_done = False
         self._daily_metric_snapshot_done = False
+        # Email digest flags
+        self._digest_premarket_done = False
+        self._digest_midday_done = False
+        self._digest_eod_done = False
+        self._digest_evening_done = False
 
     def _is_market_open(self, now: datetime) -> bool:
         """Check if market is currently open (weekday, between open and close)."""
@@ -154,6 +165,72 @@ class WatchLoop:
         market_close = now.replace(hour=self.market_close_hour,
                                    minute=0, second=0)
         return market_open <= now < market_close
+
+    def _check_digest_schedule(self):
+        """Send scheduled email digests at configured times (digest mode only)."""
+        if self.email_mode != "digest":
+            return
+
+        now = datetime.now(ET)
+        # Only send digests on weekdays
+        if now.weekday() >= 5:
+            return
+
+        h, m = now.hour, now.minute
+
+        digest_cfg = self.config.get("email", {}).get("digest_times", {})
+        premarket = digest_cfg.get("premarket", "07:30")
+        midday = digest_cfg.get("midday", "12:00")
+        eod = digest_cfg.get("eod", "16:15")
+        evening = digest_cfg.get("evening", "20:00")
+
+        from src.email.digest_builder import (
+            build_premarket_digest,
+            build_midday_digest,
+            build_eod_digest,
+            build_evening_digest,
+        )
+        from src.email.notifier import send_email
+
+        def _should_send(target_time: str, flag_name: str) -> bool:
+            th, tm = map(int, target_time.split(":"))
+            if h == th and tm <= m < tm + 5:
+                if not getattr(self, flag_name, False):
+                    setattr(self, flag_name, True)
+                    return True
+            return False
+
+        if _should_send(premarket, "_digest_premarket_done"):
+            try:
+                subject, body = build_premarket_digest()
+                send_email(subject, body)
+                logger.info("[DIGEST] Sent pre-market digest")
+            except Exception as e:
+                logger.error("[DIGEST] Pre-market digest failed: %s", e)
+
+        if _should_send(midday, "_digest_midday_done"):
+            try:
+                subject, body = build_midday_digest()
+                send_email(subject, body)
+                logger.info("[DIGEST] Sent midday digest")
+            except Exception as e:
+                logger.error("[DIGEST] Midday digest failed: %s", e)
+
+        if _should_send(eod, "_digest_eod_done"):
+            try:
+                subject, body = build_eod_digest()
+                send_email(subject, body)
+                logger.info("[DIGEST] Sent EOD digest")
+            except Exception as e:
+                logger.error("[DIGEST] EOD digest failed: %s", e)
+
+        if _should_send(evening, "_digest_evening_done"):
+            try:
+                subject, body = build_evening_digest()
+                send_email(subject, body)
+                logger.info("[DIGEST] Sent evening digest")
+            except Exception as e:
+                logger.error("[DIGEST] Evening digest failed: %s", e)
 
     def _should_scan(self, now: datetime) -> bool:
         """Check if enough time has passed since last scan."""
@@ -282,6 +359,8 @@ class WatchLoop:
             subject = f"[TRADE DESK] Morning Watchlist - {date_str}"
             send_email(subject, body)
             print("[WATCH] Morning watchlist email sent.")
+        elif self.email_mode == "digest":
+            pass  # Handled by scheduled pre-market digest
 
         # Telegram watchlist notification — send packet-worthy (high-conviction) names
         try:
@@ -424,6 +503,8 @@ class WatchLoop:
                 print(f"  -> Email sent for {ticker}")
             elif self.email_mode == "daily_summary":
                 self._daily_packets.append(rendered)
+            elif self.email_mode == "digest":
+                pass  # Handled by scheduled midday/EOD digest
 
         # Manage existing open trades (stop/target/timeout exits)
         try:
@@ -479,9 +560,12 @@ class WatchLoop:
 
         print(body)
 
-        subject = f"[TRADE DESK] EOD Recap - {date_str}"
-        send_email(subject, body)
-        print("[WATCH] EOD recap email sent.")
+        if self.email_mode != "digest":
+            subject = f"[TRADE DESK] EOD Recap - {date_str}"
+            send_email(subject, body)
+            print("[WATCH] EOD recap email sent.")
+        else:
+            print("[WATCH] EOD recap computed (digest mode — email sent via scheduled digest).")
 
     @staticmethod
     def _ensure_all_tables():
@@ -917,6 +1001,9 @@ class WatchLoop:
                             send_telegram(response)
                 except Exception:
                     pass
+
+                # Email digest schedule (sends 4 daily digests in digest mode)
+                self._check_digest_schedule()
 
                 time.sleep(60)
 

@@ -330,6 +330,63 @@ def get_model_history(db_path: str = "ai_research_desk.sqlite3") -> list[dict]:
     return [dict(row) for row in rows]
 
 
+def get_next_semver(db_path: str = "ai_research_desk.sqlite3") -> str:
+    """Compute the next semver version name from model history.
+
+    Convention: halcyon-v{major}.{minor}.{patch}
+      major: new base model or new strategy LoRA
+      minor: retrain cycle with new data (auto-incremented)
+      patch: hyperparameter tweak, same data
+
+    Returns e.g. 'halcyon-v1.1.0' if current active is 'halcyon-v1.0.0'.
+    Returns 'halcyon-v1.0.0' if no versions exist.
+    """
+    import re
+    active = get_active_model_version(db_path)
+    if not active:
+        return "halcyon-v1.0.0"
+    name = active.get("version_name", "")
+    match = re.match(r"halcyon-v(\d+)\.(\d+)\.(\d+)", name)
+    if match:
+        major, minor, patch = int(match.group(1)), int(match.group(2)), int(match.group(3))
+        return f"halcyon-v{major}.{minor + 1}.0"
+    # Fallback: old-style halcyon-v{N}
+    match = re.match(r"halcyon-v(\d+)$", name)
+    if match:
+        return f"halcyon-v1.{int(match.group(1))}.0"
+    return "halcyon-v1.0.0"
+
+
+def update_config_model(version_name: str, config_path: str = "config/settings.local.yaml") -> bool:
+    """Update the llm.model field in settings.local.yaml to the new version.
+
+    Also keeps 'halcyonlatest' as a fallback by ensuring Ollama has both tags.
+    """
+    from pathlib import Path
+    import re
+
+    path = Path(config_path)
+    if not path.exists():
+        logger.warning("[VERSION] Config file not found: %s", config_path)
+        return False
+
+    content = path.read_text()
+    # Match:  model: halcyon-v1.0.0  or  model: halcyonlatest  or  model: "halcyon-v1.0.0"
+    updated = re.sub(
+        r'(model:\s*)["\']?halcyon[^"\'\s]*["\']?',
+        rf'\g<1>{version_name}',
+        content,
+    )
+    if updated == content:
+        # No match found — append to llm section
+        logger.info("[VERSION] No model field found in config, skipping update")
+        return False
+
+    path.write_text(updated)
+    logger.info("[VERSION] Updated config %s → model: %s", config_path, version_name)
+    return True
+
+
 def get_active_model_name(db_path: str = "ai_research_desk.sqlite3") -> str:
     """Return active model version name, or 'base' if none exists."""
     version = get_active_model_version(db_path)

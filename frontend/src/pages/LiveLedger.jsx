@@ -1,10 +1,11 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../api'
 import MetricCard from '../components/MetricCard'
+import Tooltip from '../components/Tooltip'
 import DataTable from '../components/DataTable'
 import LoadingSpinner from '../components/LoadingSpinner'
 import EmptyState from '../components/EmptyState'
-import { XAxis, YAxis, Tooltip, ResponsiveContainer, Area, AreaChart, ReferenceLine } from 'recharts'
+import { XAxis, YAxis, Tooltip as ChartTooltip, ResponsiveContainer, Area, AreaChart, ReferenceLine } from 'recharts'
 
 export default function LiveLedger() {
   const { data: summary, isLoading: sumLoading } = useQuery({
@@ -65,7 +66,14 @@ export default function LiveLedger() {
 
   return (
     <div className="space-y-6">
-      <h2 className="text-xl font-medium" style={{ color: 'var(--slate-100)' }}>Live Ledger</h2>
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-medium" style={{ color: 'var(--slate-100)' }}>Live Ledger</h2>
+        <Tooltip content="Syncs Alpaca live positions with the local database. Run locally: python -m src.main reconcile-live">
+          <button disabled className="px-3 py-1.5 text-xs rounded opacity-50 cursor-not-allowed" style={{ background: 'var(--slate-600)', color: 'var(--slate-400)' }}>
+            Reconcile (CLI only)
+          </button>
+        </Tooltip>
+      </div>
 
       {/* Header metrics */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -84,7 +92,7 @@ export default function LiveLedger() {
             <AreaChart data={equityCurve}>
               <XAxis dataKey="date" tick={{ fontSize: 11, fill: 'var(--slate-400)' }} />
               <YAxis tick={{ fontSize: 11, fill: 'var(--slate-400)' }} domain={['dataMin - 5', 'dataMax + 5']} />
-              <Tooltip contentStyle={{ background: 'var(--slate-700)', border: '1px solid var(--slate-600)', borderRadius: 8, fontSize: 12 }} />
+              <ChartTooltip contentStyle={{ background: 'var(--slate-700)', border: '1px solid var(--slate-600)', borderRadius: 8, fontSize: 12 }} />
               <ReferenceLine y={startingCapital} stroke="var(--slate-500)" strokeDasharray="3 3" label={{ value: `$${startingCapital}`, position: 'right', fill: 'var(--slate-400)', fontSize: 10 }} />
               <Area type="monotone" dataKey="equity" stroke="var(--teal-400)" fill="var(--teal-400)" fillOpacity={0.1} />
             </AreaChart>
