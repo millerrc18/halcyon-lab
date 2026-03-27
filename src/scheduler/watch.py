@@ -517,6 +517,25 @@ class WatchLoop:
                 ticker TEXT, trade_date TEXT, input_text TEXT, output_text TEXT,
                 quality_score REAL, curriculum_stage TEXT, outcome TEXT,
                 source TEXT, model_version TEXT, created_at TEXT)""",
+            """CREATE TABLE IF NOT EXISTS research_papers (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, source TEXT NOT NULL,
+                external_id TEXT UNIQUE, title TEXT NOT NULL, authors TEXT,
+                abstract TEXT, url TEXT NOT NULL, published_date TEXT,
+                categories TEXT, relevance_score REAL, relevance_reason TEXT,
+                full_text TEXT, actionable INTEGER DEFAULT 0,
+                action_taken TEXT, collected_at TEXT NOT NULL)""",
+            """CREATE TABLE IF NOT EXISTS research_digests (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, week_start TEXT NOT NULL,
+                week_end TEXT NOT NULL, papers_reviewed INTEGER,
+                actionable_count INTEGER, digest_text TEXT, threats TEXT,
+                opportunities TEXT, created_at TEXT NOT NULL)""",
+            """CREATE TABLE IF NOT EXISTS scan_metrics (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, scan_number INTEGER,
+                scan_time TEXT, universe_count INTEGER, features_count INTEGER,
+                scored_count INTEGER, packet_worthy INTEGER, risk_passed INTEGER,
+                paper_traded INTEGER, live_traded INTEGER, llm_success INTEGER,
+                llm_total INTEGER, llm_fallback INTEGER, avg_conviction REAL,
+                duration_seconds REAL, created_at TEXT)""",
         ]
         try:
             with sqlite3.connect(db_path) as conn:
@@ -1179,8 +1198,27 @@ class WatchLoop:
             logger.warning("[WATCH] Analyst collection failed: %s", e)
             results["analyst"] = {"error": str(e)}
 
+        # 13. Research papers
+        print("[WATCH]   [13/13] Research papers...")
+        try:
+            from src.data_collection.research_collector import collect_research_papers
+            research_results = collect_research_papers()
+            results["research"] = research_results
+            print(f"[WATCH]   [13/13] Research: {research_results.get('total_new', 0)} new papers "
+                  f"(crawled {research_results.get('total_crawled', 0)})")
+        except Exception as e:
+            logger.warning("[COLLECTORS] Research collection failed: %s", e)
+            results["research"] = {"error": str(e)}
+
         summary = {k: str(v) for k, v in results.items()}
         print(f"[WATCH] Data collection complete: {summary}")
+
+        # Log collection results to activity log
+        try:
+            from src.utils.activity_logger import log_activity, DATA_COLLECTION
+            log_activity(DATA_COLLECTION, f"Overnight collection: {len(results)} collectors", results)
+        except Exception:
+            pass
 
         # 1J. Track collector failures and alert at 3+ consecutive
         try:

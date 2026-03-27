@@ -408,6 +408,67 @@ CREATE INDEX IF NOT EXISTS idx_training_examples_created ON training_examples(cr
 CREATE INDEX IF NOT EXISTS idx_training_examples_ticker ON training_examples(ticker);
 
 
+-- ── Research intelligence ────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS research_papers (
+    id SERIAL PRIMARY KEY,
+    source TEXT NOT NULL,
+    external_id TEXT UNIQUE,
+    title TEXT NOT NULL,
+    authors TEXT,
+    abstract TEXT,
+    url TEXT NOT NULL,
+    published_date TEXT,
+    categories TEXT,
+    relevance_score REAL,
+    relevance_reason TEXT,
+    full_text TEXT,
+    actionable INTEGER DEFAULT 0,
+    action_taken TEXT,
+    collected_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_research_papers_source ON research_papers(source, published_date);
+CREATE INDEX IF NOT EXISTS idx_research_papers_score ON research_papers(relevance_score);
+
+
+CREATE TABLE IF NOT EXISTS research_digests (
+    id SERIAL PRIMARY KEY,
+    week_start TEXT NOT NULL,
+    week_end TEXT NOT NULL,
+    papers_reviewed INTEGER,
+    actionable_count INTEGER,
+    digest_text TEXT,
+    threats TEXT,
+    opportunities TEXT,
+    created_at TEXT NOT NULL
+);
+
+
+-- ── Scan metrics ────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS scan_metrics (
+    id SERIAL PRIMARY KEY,
+    scan_number INTEGER,
+    scan_time TEXT,
+    universe_count INTEGER,
+    features_count INTEGER,
+    scored_count INTEGER,
+    packet_worthy INTEGER,
+    risk_passed INTEGER,
+    paper_traded INTEGER,
+    live_traded INTEGER,
+    llm_success INTEGER,
+    llm_total INTEGER,
+    llm_fallback INTEGER,
+    avg_conviction REAL,
+    duration_seconds REAL,
+    created_at TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_scan_metrics_time ON scan_metrics(scan_time);
+
+
 -- ── Sync state (for tracking what has been synced) ──────────────────
 
 CREATE TABLE IF NOT EXISTS sync_state (

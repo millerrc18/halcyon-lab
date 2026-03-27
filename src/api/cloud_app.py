@@ -831,3 +831,68 @@ def macro_dashboard():
         return {"series": rows}
     except Exception:
         return {"series": []}
+
+
+@app.get("/api/research/papers", dependencies=[Depends(verify_auth)])
+def research_papers(days: int = 7, min_score: float = 0.4):
+    """Recent research papers."""
+    try:
+        cutoff = (datetime.now(ET) - timedelta(days=days)).isoformat()
+        rows = _query(
+            "SELECT id, source, title, authors, abstract, url, published_date, "
+            "relevance_score, relevance_reason, actionable, collected_at "
+            "FROM research_papers WHERE collected_at >= %s AND relevance_score >= %s "
+            "ORDER BY relevance_score DESC",
+            (cutoff, min_score),
+        )
+        return {"papers": rows, "count": len(rows)}
+    except Exception:
+        return {"papers": [], "count": 0}
+
+
+@app.get("/api/research/digest", dependencies=[Depends(verify_auth)])
+def research_digest():
+    """Latest weekly research digest."""
+    try:
+        row = _query_one(
+            "SELECT * FROM research_digests ORDER BY created_at DESC LIMIT 1"
+        )
+        return row or {"digest": None}
+    except Exception:
+        return {"digest": None}
+
+
+@app.get("/api/training/quality", dependencies=[Depends(verify_auth)])
+def training_quality():
+    """Training data quality stats."""
+    try:
+        total = _query_one("SELECT COUNT(*) as c FROM training_examples")
+        by_source = _query(
+            "SELECT source, COUNT(*) as count FROM training_examples GROUP BY source"
+        )
+        by_stage = _query(
+            "SELECT curriculum_stage, COUNT(*) as count FROM training_examples GROUP BY curriculum_stage"
+        )
+        by_outcome = _query(
+            "SELECT outcome, COUNT(*) as count FROM training_examples GROUP BY outcome"
+        )
+        return {
+            "total": total["c"] if total else 0,
+            "by_source": by_source,
+            "by_stage": by_stage,
+            "by_outcome": by_outcome,
+        }
+    except Exception:
+        return {"total": 0, "by_source": [], "by_stage": [], "by_outcome": []}
+
+
+@app.get("/api/scan/metrics", dependencies=[Depends(verify_auth)])
+def scan_metrics_latest():
+    """Latest scan pipeline metrics."""
+    try:
+        row = _query_one(
+            "SELECT * FROM scan_metrics ORDER BY created_at DESC LIMIT 1"
+        )
+        return row or {}
+    except Exception:
+        return {}

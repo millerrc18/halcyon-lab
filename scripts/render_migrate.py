@@ -218,6 +218,56 @@ MIGRATIONS = [
         collected_at TEXT NOT NULL,
         UNIQUE(ticker, date, source)
     )"""),
+
+    # Research intelligence tables
+    ("research_papers", None, """CREATE TABLE IF NOT EXISTS research_papers (
+        id SERIAL PRIMARY KEY,
+        source TEXT NOT NULL,
+        external_id TEXT UNIQUE,
+        title TEXT NOT NULL,
+        authors TEXT,
+        abstract TEXT,
+        url TEXT NOT NULL,
+        published_date TEXT,
+        categories TEXT,
+        relevance_score REAL,
+        relevance_reason TEXT,
+        full_text TEXT,
+        actionable INTEGER DEFAULT 0,
+        action_taken TEXT,
+        collected_at TEXT NOT NULL
+    )"""),
+
+    ("research_digests", None, """CREATE TABLE IF NOT EXISTS research_digests (
+        id SERIAL PRIMARY KEY,
+        week_start TEXT NOT NULL,
+        week_end TEXT NOT NULL,
+        papers_reviewed INTEGER,
+        actionable_count INTEGER,
+        digest_text TEXT,
+        threats TEXT,
+        opportunities TEXT,
+        created_at TEXT NOT NULL
+    )"""),
+
+    ("scan_metrics", None, """CREATE TABLE IF NOT EXISTS scan_metrics (
+        id SERIAL PRIMARY KEY,
+        scan_number INTEGER,
+        scan_time TEXT,
+        universe_count INTEGER,
+        features_count INTEGER,
+        scored_count INTEGER,
+        packet_worthy INTEGER,
+        risk_passed INTEGER,
+        paper_traded INTEGER,
+        live_traded INTEGER,
+        llm_success INTEGER,
+        llm_total INTEGER,
+        llm_fallback INTEGER,
+        avg_conviction REAL,
+        duration_seconds REAL,
+        created_at TEXT
+    )"""),
 ]
 
 

@@ -138,6 +138,21 @@ SYNC_TABLES: dict[str, dict] = {
         "time_col": "created_at",
         "pk": "id",
     },
+    "research_papers": {
+        "mode": "incremental",
+        "time_col": "collected_at",
+        "pk": "id",
+    },
+    "research_digests": {
+        "mode": "incremental",
+        "time_col": "created_at",
+        "pk": "id",
+    },
+    "scan_metrics": {
+        "mode": "incremental",
+        "time_col": "created_at",
+        "pk": "id",
+    },
 }
 
 # ── Sync state table (local SQLite) ─────────────────────────────────

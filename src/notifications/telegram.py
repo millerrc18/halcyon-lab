@@ -520,6 +520,29 @@ def notify_retrain_report(model_name: str,
     return send_telegram(msg)
 
 
+def notify_research_papers(total_new: int, top_paper: str, top_score: float) -> bool:
+    """Notify about new research papers discovered."""
+    if total_new == 0:
+        return True
+    msg = (
+        f"📄 {total_new} new research papers\n"
+        f"Top: {top_paper[:60]} (relevance: {top_score:.1f})"
+    )
+    return send_telegram(msg)
+
+
+def notify_research_digest(papers_count: int, actionable_count: int,
+                           digest_summary: str) -> bool:
+    """Send weekly research intelligence digest."""
+    msg = (
+        f"📚 <b>WEEKLY RESEARCH DIGEST</b>\n\n"
+        f"Papers reviewed: {papers_count}\n"
+        f"Actionable findings: {actionable_count}\n\n"
+        f"{digest_summary[:800]}"
+    )
+    return send_telegram(msg)
+
+
 def notify_collection_failure(collector_name: str, consecutive_failures: int,
                               last_error: str, last_success_ago: str,
                               other_collectors: dict[str, bool]) -> bool:
