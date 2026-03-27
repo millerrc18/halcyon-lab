@@ -1,34 +1,46 @@
 import { useEffect, useRef } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { IS_CLOUD } from '../config'
+import { api } from '../api'
 import useWebSocket from '../hooks/useWebSocket'
+import { TrendingUp, TrendingDown, CheckCircle, XCircle, Brain, AlertTriangle, Shield, Database, Settings } from 'lucide-react'
 
-const EVENT_COLORS = {
-  trade_opened: 'bg-[var(--success)]',
-  trade_closed: 'bg-[var(--success)]',
-  training_complete: 'bg-[var(--success)]',
-  action_complete: 'bg-[var(--success)]',
-  scan_complete: 'bg-[var(--info)]',
-  scan_started: 'bg-[var(--info)]',
-  overnight_task: 'bg-[var(--info)]',
-  pre_market_refresh: 'bg-[var(--info)]',
-  training_started: 'bg-[var(--warning)]',
-  training_collection: 'bg-[var(--warning)]',
-  action_started: 'bg-[var(--warning)]',
-  order_submitted: 'bg-[var(--warning)]',
-  order_filled: 'bg-[var(--warning)]',
-  action_error: 'bg-[var(--danger)]',
-  error: 'bg-[var(--danger)]',
+const EVENT_STYLE = {
+  trade_opened: { icon: TrendingUp, color: 'var(--teal-400)' },
+  trade_closed_win: { icon: CheckCircle, color: 'var(--success)' },
+  trade_closed_loss: { icon: XCircle, color: 'var(--danger)' },
+  trade_closed: { icon: CheckCircle, color: 'var(--success)' },
+  training_complete: { icon: Brain, color: 'var(--success)' },
+  action_complete: { icon: CheckCircle, color: 'var(--success)' },
+  scan_complete: { icon: Database, color: 'var(--info)' },
+  scan_started: { icon: Database, color: 'var(--info)' },
+  overnight_task: { icon: Database, color: 'var(--info)' },
+  pre_market_refresh: { icon: Database, color: 'var(--info)' },
+  training_started: { icon: Brain, color: 'var(--amber-400)' },
+  training_collection: { icon: Brain, color: 'var(--amber-400)' },
+  action_started: { icon: Settings, color: 'var(--amber-400)' },
+  order_submitted: { icon: TrendingUp, color: 'var(--amber-400)' },
+  order_filled: { icon: TrendingUp, color: 'var(--amber-400)' },
+  action_error: { icon: AlertTriangle, color: 'var(--danger)' },
+  error: { icon: AlertTriangle, color: 'var(--danger)' },
+  risk_alert: { icon: Shield, color: 'var(--danger)' },
+  llm_generation: { icon: Brain, color: 'var(--info)' },
+  data_collection: { icon: Database, color: 'var(--slate-400)' },
+  system: { icon: Settings, color: 'var(--info)' },
 }
 
-function getEventColor(evt) {
+function getEventStyle(evt) {
   if (evt.type === 'trade_closed') {
-    return (evt.data?.pnl_dollars || 0) >= 0 ? 'bg-[var(--success)]' : 'bg-[var(--danger)]'
+    return (evt.data?.pnl_dollars || 0) >= 0
+      ? EVENT_STYLE.trade_closed_win
+      : EVENT_STYLE.trade_closed_loss
   }
-  return EVENT_COLORS[evt.type] || 'bg-[var(--slate-400)]'
+  return EVENT_STYLE[evt.type] || EVENT_STYLE[evt.category] || { icon: Settings, color: 'var(--slate-400)' }
 }
 
 function formatEvent(evt) {
   const d = evt.data || {}
-  switch (evt.type) {
+  switch (evt.type || evt.event) {
     case 'scan_started':
       return 'Market scan started'
     case 'scan_complete':
@@ -58,16 +70,43 @@ function formatEvent(evt) {
       return `Order submitted: ${d.ticker || '?'} ${d.order_type || ''}`
     case 'order_filled':
       return `Order filled: ${d.ticker || '?'}${d.price ? ` @ $${d.price}` : ''}`
-    default:
-      return `${evt.type}: ${JSON.stringify(d).slice(0, 80)}`
+    default: {
+      // For cloud mode activity_log entries
+      const detail = evt.detail || d.detail || ''
+      if (detail) return detail.slice(0, 120)
+      return `${evt.type || evt.event || 'event'}: ${JSON.stringify(d).slice(0, 80)}`
+    }
+  }
+}
+
+function normalizeActivityLogEntry(entry) {
+  return {
+    type: entry.event || entry.category || 'system',
+    category: entry.category || 'system',
+    timestamp: entry.created_at || entry.timestamp || new Date().toISOString(),
+    data: typeof entry.metadata === 'string' ? JSON.parse(entry.metadata || '{}') : (entry.metadata || {}),
+    detail: entry.detail || '',
+    event: entry.event,
   }
 }
 
 export default function ActivityFeed() {
-  const { events, connected, clearEvents } = useWebSocket()
+  const { events: wsEvents, connected, clearEvents } = useWebSocket()
   const scrollRef = useRef(null)
 
-  // Auto-scroll to newest (top of list since events are newest-first)
+  // Cloud mode: poll activity_log API
+  const { data: polledEvents } = useQuery({
+    queryKey: ['activity-feed'],
+    queryFn: () => api.getActivityFeed(30),
+    refetchInterval: 60000,
+    enabled: IS_CLOUD,
+  })
+
+  // Merge: prefer WebSocket events (local), fall back to polled (cloud)
+  const events = wsEvents.length > 0
+    ? wsEvents
+    : (polledEvents || []).map(normalizeActivityLogEntry)
+
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = 0
@@ -79,7 +118,7 @@ export default function ActivityFeed() {
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-sm uppercase tracking-wide" style={{ color: 'var(--slate-400)' }}>Live Activity</h3>
         <div className="flex items-center gap-3">
-          {events.length > 0 && (
+          {wsEvents.length > 0 && (
             <button
               onClick={clearEvents}
               className="text-xs hover:opacity-80"
@@ -89,8 +128,10 @@ export default function ActivityFeed() {
             </button>
           )}
           <div className="flex items-center gap-1.5">
-            <div className={`w-2 h-2 rounded-full`} style={{ background: connected ? 'var(--success)' : 'var(--danger)' }} />
-            <span className="text-xs" style={{ color: 'var(--slate-400)' }}>{connected ? 'Connected' : 'Disconnected'}</span>
+            <div className="w-2 h-2 rounded-full" style={{ background: connected ? 'var(--success)' : IS_CLOUD ? 'var(--info)' : 'var(--danger)' }} />
+            <span className="text-xs" style={{ color: 'var(--slate-400)' }}>
+              {connected ? 'Live' : IS_CLOUD ? 'Polling' : 'Disconnected'}
+            </span>
           </div>
         </div>
       </div>
@@ -98,15 +139,19 @@ export default function ActivityFeed() {
         {events.length === 0 && (
           <p className="text-xs" style={{ color: 'var(--slate-400)' }}>Waiting for events...</p>
         )}
-        {events.map((evt, i) => (
-          <div key={i} className="flex gap-2 items-start">
-            <span className="text-xs shrink-0 pt-0.5" style={{ color: 'var(--slate-400)' }}>
-              {new Date(evt.timestamp).toLocaleTimeString()}
-            </span>
-            <span className={`w-2 h-2 rounded-full shrink-0 mt-1.5 ${getEventColor(evt)}`} />
-            <span style={{ color: 'var(--slate-300)' }}>{formatEvent(evt)}</span>
-          </div>
-        ))}
+        {events.map((evt, i) => {
+          const style = getEventStyle(evt)
+          const Icon = style.icon
+          return (
+            <div key={i} className="flex gap-2 items-start">
+              <span className="text-xs shrink-0 pt-0.5" style={{ color: 'var(--slate-400)' }}>
+                {new Date(evt.timestamp || evt.created_at).toLocaleTimeString()}
+              </span>
+              <Icon size={12} className="shrink-0 mt-1" style={{ color: style.color }} />
+              <span style={{ color: 'var(--slate-300)' }}>{formatEvent(evt)}</span>
+            </div>
+          )
+        })}
       </div>
     </div>
   )

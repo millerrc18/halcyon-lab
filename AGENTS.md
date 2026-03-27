@@ -1,4 +1,4 @@
-<!-- Counts verified 2026-03-26: 126 Python files, 23,800+ LOC, 51 test files, 630+ tests, 49 CLI commands, 62 API routes, 30 DB tables, 29 research docs. -->
+<!-- Counts verified 2026-03-27: 127 Python files, 24,200+ LOC, 51 test files, 652+ tests, 49 CLI commands, 70 API routes, 31 DB tables, 35+ research docs. -->
 
 # AGENTS.md — Halcyon Lab Governance Document
 
@@ -14,7 +14,7 @@ Halcyon Lab is an autonomous AI trading system that scans, analyzes, and execute
 
 ## Current System State
 
-The system is live in **bootcamp mode** — shadow paper trading on Alpaca with halcyon-v1 (fine-tuned Qwen3 8B). Full data enrichment, bracket orders, risk governor, daily/weekly auditor, validation holdout, A/B model evaluation, learned confidence, walk-forward backtesting, 24/7 compute scheduler (73% GPU target), comprehensive data collection pipeline, Telegram push notifications, and a 9-page web dashboard.
+The system is live in **bootcamp mode** — shadow paper trading on Alpaca with halcyon-v1 (fine-tuned Qwen3 8B). Full data enrichment, bracket orders, risk governor, daily/weekly auditor, validation holdout, A/B model evaluation, learned confidence, walk-forward backtesting, 24/7 compute scheduler (73% GPU target), comprehensive data collection pipeline, Telegram push notifications, and a 11-page web dashboard (including Live Ledger).
 
 **Active Model:** halcyon-v1 (Qwen3 8B fine-tuned on 790 examples via QLoRA)
 **Training Data:** 976 self-blinded examples, scored with process-first rubric

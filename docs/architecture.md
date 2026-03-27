@@ -74,7 +74,7 @@
 - **council_sessions** — Council deliberation session metadata and consensus
 - **council_votes** — Individual agent votes per round per session
 
-## API Routes (48)
+## API Routes (56+)
 
 ### System & Status
 | Route | Method | Description |
@@ -143,8 +143,14 @@
 ### Documentation
 | Route | Method | Description |
 |-------|--------|-------------|
-| `/api/docs` | GET | Documentation list (34 docs) |
-| `/api/docs/{id}` | GET | Document content |
+| `/api/docs` | GET | Documentation list (35+ docs from research_docs table) |
+| `/api/docs/{id}` | GET | Document content from research_docs |
+| `/api/council/session/{id}` | GET | Full council session detail with agent votes |
+| `/api/activity/feed` | GET | Recent activity log entries (limit, event_type) |
+| `/api/live/trades` | GET | Live trades (source='live' in shadow_trades) |
+| `/api/live/summary` | GET | Live account summary metrics |
+| `/api/settings` | GET | Current safe config values |
+| `/api/settings` | POST | Update config (local only) |
 
 ### Background Actions
 | Route | Method | Description |

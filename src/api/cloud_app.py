@@ -438,25 +438,55 @@ def audit_latest():
 
 @app.get("/api/docs", dependencies=[Depends(verify_auth)])
 def docs_list():
-    """Documentation listing. Returns array matching local API format."""
-    return [
-        {"id": "agents", "title": "AGENTS.md — System Blueprint", "available": True},
-        {"id": "architecture", "title": "Architecture Overview", "available": True},
-        {"id": "roadmap", "title": "Development Roadmap", "available": True},
-        {"id": "deployment", "title": "Cloud Deployment Guide", "available": True},
-        {"id": "cli-reference", "title": "CLI Command Reference", "available": True},
-        {"id": "telegram-commands", "title": "Telegram Commands", "available": True},
-    ]
+    """Documentation listing from research_docs table."""
+    try:
+        rows = _query(
+            "SELECT id, filename, title, category, size_kb, updated_at "
+            "FROM research_docs ORDER BY category, title"
+        )
+        return [
+            {
+                "id": r["id"],
+                "filename": r.get("filename", ""),
+                "title": r["title"],
+                "category": r.get("category", "Uncategorized"),
+                "size_kb": r.get("size_kb", 0),
+                "available": True,
+            }
+            for r in rows
+        ]
+    except Exception as exc:
+        logger.error("Docs list error: %s", exc)
+        return []
 
 
 @app.get("/api/docs/{doc_id}", dependencies=[Depends(verify_auth)])
 def get_doc(doc_id: str):
-    """Individual doc. Cloud mode: return placeholder directing to local."""
-    return {
-        "id": doc_id,
-        "title": doc_id,
-        "content": f"# {doc_id}\n\nFull document content is available on the local dashboard.\n\nConnect to your local machine to view the complete document.",
-    }
+    """Individual doc content from research_docs table."""
+    try:
+        row = _query_one(
+            "SELECT id, title, category, content FROM research_docs WHERE id = %s",
+            (doc_id,),
+        )
+        if row:
+            return {
+                "id": row["id"],
+                "title": row["title"],
+                "category": row.get("category", ""),
+                "content": row["content"],
+            }
+        return {
+            "id": doc_id,
+            "title": doc_id,
+            "content": f"# {doc_id}\n\nDocument not found. It may not have been synced yet.",
+        }
+    except Exception as exc:
+        logger.error("Docs read error: %s", exc)
+        return {
+            "id": doc_id,
+            "title": doc_id,
+            "content": f"# Error\n\nFailed to load document: {exc}",
+        }
 
 
 @app.get("/api/council/latest", dependencies=[Depends(verify_auth)])
@@ -500,6 +530,55 @@ def council_history(days: int = 30):
         raise
     except Exception as exc:
         logger.error("Council history error: %s", exc)
+        return []
+
+
+@app.get("/api/council/session/{session_id}", dependencies=[Depends(verify_auth)])
+def council_session_detail(session_id: str):
+    """Get full council session details including all agent votes."""
+    try:
+        session = _query_one(
+            "SELECT * FROM council_sessions WHERE session_id = %s",
+            (session_id,),
+        )
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        votes = _query(
+            "SELECT * FROM council_votes WHERE session_id = %s ORDER BY round, agent_name",
+            (session_id,),
+        )
+        for v in votes:
+            _parse_json_fields(v, ["key_data_points", "risk_flags"])
+
+        return {"session": session, "votes": votes}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("Council session detail error: %s", exc)
+        return {"session": None, "votes": [], "error": str(exc)}
+
+
+@app.get("/api/activity/feed", dependencies=[Depends(verify_auth)])
+def activity_feed(limit: int = 50, event_type: str = None):
+    """Get recent activity log entries."""
+    try:
+        if event_type:
+            rows = _query(
+                "SELECT * FROM activity_log WHERE category = %s "
+                "ORDER BY created_at DESC LIMIT %s",
+                (event_type, limit),
+            )
+        else:
+            rows = _query(
+                "SELECT * FROM activity_log ORDER BY created_at DESC LIMIT %s",
+                (limit,),
+            )
+        return rows
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("Activity feed error: %s", exc)
         return []
 
 
@@ -547,38 +626,186 @@ def costs(days: int = 30):
 
 @app.get("/api/health/score", dependencies=[Depends(verify_auth)])
 def health_score():
-    """HSHS health score. Computed from available cloud data."""
+    """HSHS health score. All 5 dimensions computed from cloud data."""
     try:
-        closed = _query_one("SELECT COUNT(*) as count FROM shadow_trades WHERE status = 'closed'")
-        closed_count = closed["count"] if closed else 0
+        # ── Data queries ──
+        closed_trades = _query(
+            "SELECT pnl_dollars, pnl_pct FROM shadow_trades WHERE status = 'closed'"
+        )
+        closed_count = len(closed_trades)
+        open_count_row = _query_one("SELECT COUNT(*) as c FROM shadow_trades WHERE status = 'open'")
+        open_count = open_count_row["c"] if open_count_row else 0
 
         examples = _query_one("SELECT COUNT(*) as count FROM training_examples")
         example_count = examples["count"] if examples else 0
 
         model = _query_one("SELECT version_name, status FROM model_versions ORDER BY created_at DESC LIMIT 1")
-        canary = _query_one("SELECT verdict FROM canary_evaluations ORDER BY created_at DESC LIMIT 1")
+        canary = _query_one("SELECT verdict, perplexity, distinct_2 FROM canary_evaluations ORDER BY created_at DESC LIMIT 1")
 
+        # Source diversity
+        source_counts = _query(
+            "SELECT source, COUNT(*) as cnt FROM training_examples GROUP BY source"
+        )
+        source_map = {r["source"]: r["cnt"] for r in source_counts}
+
+        # Scan metrics for template fallback rate
+        scan = _query_one(
+            "SELECT llm_success, llm_total FROM scan_metrics ORDER BY created_at DESC LIMIT 1"
+        )
+
+        # Regime coverage (distinct setup types)
+        regime_row = _query_one(
+            "SELECT COUNT(DISTINCT setup_type) as cnt FROM training_examples WHERE setup_type IS NOT NULL"
+        )
+
+        # Ticker coverage
+        ticker_row = _query_one(
+            "SELECT COUNT(DISTINCT ticker) as cnt FROM training_examples WHERE ticker IS NOT NULL"
+        )
+
+        # ── Performance dimension (weight: 0.10) ──
+        perf_metrics = {}
+        if closed_count >= 2:
+            pnls = [t.get("pnl_pct", 0) or 0 for t in closed_trades]
+            pnl_dollars = [t.get("pnl_dollars", 0) or 0 for t in closed_trades]
+            wins = [p for p in pnls if p > 0]
+            losses = [p for p in pnls if p <= 0]
+            win_rate = len(wins) / closed_count
+            avg_win = sum(wins) / len(wins) if wins else 0
+            avg_loss = abs(sum(losses) / len(losses)) if losses else 0.01
+            profit_factor = (sum(wins) / abs(sum(losses))) if losses and sum(losses) != 0 else 99
+            mean_pnl = sum(pnls) / len(pnls)
+            std_pnl = max((sum((p - mean_pnl) ** 2 for p in pnls) / len(pnls)) ** 0.5, 0.001)
+            sharpe = mean_pnl / std_pnl
+            # Max drawdown from running peak
+            running = 0
+            peak = 0
+            max_dd = 0
+            for p in pnl_dollars:
+                running += p
+                if running > peak:
+                    peak = running
+                dd = peak - running
+                if dd > max_dd:
+                    max_dd = dd
+            max_dd_pct = (max_dd / 100000) * 100 if max_dd > 0 else 0
+            net_pnl = sum(pnl_dollars)
+
+            perf_metrics = {
+                "win_rate": round(win_rate, 3),
+                "sharpe": round(sharpe, 2),
+                "profit_factor": round(min(profit_factor, 99), 2),
+                "max_drawdown_pct": round(max_dd_pct, 2),
+                "net_pnl": round(net_pnl, 2),
+                "trade_count": closed_count,
+            }
+            # Score: weighted avg of normalized metrics
+            wr_score = min(100, win_rate * 200)  # 50% = 100
+            sharpe_score = min(100, max(0, sharpe * 50))  # 2.0 = 100
+            dd_score = max(0, 100 - max_dd_pct * 5)  # 20% DD = 0
+            perf_score = round(wr_score * 0.35 + sharpe_score * 0.35 + dd_score * 0.30, 1)
+        else:
+            perf_score = 0
+            perf_metrics = {"status": "Insufficient data", "trade_count": closed_count, "target": 50}
+
+        # ── Model Quality dimension (weight: 0.25) ──
+        mq_metrics = {}
+        # Template fallback rate
+        fallback_rate = 0
+        if scan and scan.get("llm_total") and scan["llm_total"] > 0:
+            success = scan.get("llm_success", 0) or 0
+            total = scan["llm_total"]
+            fallback_rate = round(1 - success / total, 3)
+        mq_metrics["template_fallback_rate"] = fallback_rate
+
+        # Canary eval
+        if canary:
+            mq_metrics["canary_verdict"] = canary.get("verdict", "unknown")
+            if canary.get("perplexity"):
+                mq_metrics["perplexity"] = round(canary["perplexity"], 2)
+            if canary.get("distinct_2"):
+                mq_metrics["distinct_2"] = round(canary["distinct_2"], 4)
+        else:
+            mq_metrics["status"] = "Awaiting first retrain"
+
+        # Score
+        fallback_score = max(0, 100 - fallback_rate * 200)  # 0% = 100, 50% = 0
+        canary_score = 80 if (canary and canary.get("verdict") == "pass") else 40 if canary else 0
+        mq_score = round(fallback_score * 0.5 + canary_score * 0.5, 1)
+
+        # ── Data Asset dimension (weight: 0.35) ──
         data_asset_score = min(100, (example_count / 2800) * 100) if example_count else 0
+        da_metrics = {
+            "example_count": example_count,
+            "target": 2800,
+            "progress_pct": round(data_asset_score, 1),
+        }
+
+        # ── Flywheel Velocity dimension (weight: 0.20) ──
         flywheel_score = min(100, (closed_count / 50) * 100) if closed_count else 0
-        overall = round(data_asset_score * 0.35 + flywheel_score * 0.20, 1)
+        fw_metrics = {
+            "closed_trades": closed_count,
+            "target": 50,
+            "open_trades": open_count,
+        }
+
+        # ── Defensibility dimension (weight: 0.10) ──
+        regime_count = regime_row["cnt"] if regime_row else 0
+        ticker_count = ticker_row["cnt"] if ticker_row else 0
+        source_diversity = len(source_map)
+
+        def_score_parts = [
+            min(100, (example_count / 2800) * 100) * 0.30,
+            min(100, source_diversity * 25) * 0.20,  # 4 sources = 100
+            min(100, (regime_count / 33) * 100) * 0.25,
+            min(100, (ticker_count / 50) * 100) * 0.25,
+        ]
+        def_score = round(sum(def_score_parts), 1)
+        def_metrics = {
+            "example_count": example_count,
+            "source_diversity": source_map,
+            "regime_coverage": regime_count,
+            "regime_target": 33,
+            "ticker_coverage": ticker_count,
+        }
+        if example_count < 100:
+            def_metrics["status"] = "Building data asset"
+
+        # ── Overall ──
+        weights = {
+            "performance": 0.10,
+            "model_quality": 0.25,
+            "data_asset": 0.35,
+            "flywheel_velocity": 0.20,
+            "defensibility": 0.10,
+        }
+        overall = round(
+            perf_score * weights["performance"]
+            + mq_score * weights["model_quality"]
+            + data_asset_score * weights["data_asset"]
+            + flywheel_score * weights["flywheel_velocity"]
+            + def_score * weights["defensibility"],
+            1,
+        )
 
         return {
             "score": {
                 "overall": overall,
                 "dimensions": {
-                    "performance": 0,
-                    "model_quality": 0,
+                    "performance": round(perf_score, 1),
+                    "model_quality": round(mq_score, 1),
                     "data_asset": round(data_asset_score, 1),
                     "flywheel_velocity": round(flywheel_score, 1),
-                    "defensibility": 0,
+                    "defensibility": round(def_score, 1),
                 },
-                "weights": {
-                    "performance": 0.10,
-                    "model_quality": 0.25,
-                    "data_asset": 0.35,
-                    "flywheel_velocity": 0.20,
-                    "defensibility": 0.10,
+                "dimension_metrics": {
+                    "performance": perf_metrics,
+                    "model_quality": mq_metrics,
+                    "data_asset": da_metrics,
+                    "flywheel_velocity": fw_metrics,
+                    "defensibility": def_metrics,
                 },
+                "weights": weights,
                 "phase": "early",
             },
             "closed_trades": closed_count,
@@ -589,6 +816,84 @@ def health_score():
         }
     except Exception as exc:
         return {"score": {"overall": 0, "dimensions": {}, "weights": {}, "phase": "early"}, "history": [], "error": str(exc)}
+
+
+@app.get("/api/live/trades", dependencies=[Depends(verify_auth)])
+def live_trades():
+    """Get all live trades (source='live' in shadow_trades)."""
+    try:
+        open_trades = _query(
+            "SELECT * FROM shadow_trades WHERE source = 'live' AND status = 'open' ORDER BY created_at DESC"
+        )
+        closed_trades = _query(
+            "SELECT * FROM shadow_trades WHERE source = 'live' AND status = 'closed' ORDER BY actual_exit_time DESC"
+        )
+        return {"open": open_trades, "closed": closed_trades}
+    except Exception as exc:
+        logger.error("Live trades error: %s", exc)
+        return {"open": [], "closed": [], "error": str(exc)}
+
+
+@app.get("/api/live/summary", dependencies=[Depends(verify_auth)])
+def live_summary():
+    """Live account summary metrics."""
+    try:
+        closed = _query(
+            "SELECT pnl_dollars, pnl_pct FROM shadow_trades WHERE source = 'live' AND status = 'closed'"
+        )
+        open_count = _query_one(
+            "SELECT COUNT(*) as c FROM shadow_trades WHERE source = 'live' AND status = 'open'"
+        )
+        starting_capital = 100  # Live account starts at $100
+        closed_pnl = sum(t.get("pnl_dollars", 0) or 0 for t in closed)
+        wins = [t for t in closed if (t.get("pnl_dollars", 0) or 0) > 0]
+
+        return {
+            "starting_capital": starting_capital,
+            "current_equity": round(starting_capital + closed_pnl, 2),
+            "total_pnl": round(closed_pnl, 2),
+            "total_pnl_pct": round((closed_pnl / starting_capital) * 100, 2) if starting_capital else 0,
+            "open_positions": open_count["c"] if open_count else 0,
+            "closed_trades": len(closed),
+            "win_rate": round(len(wins) / len(closed), 3) if closed else None,
+        }
+    except Exception as exc:
+        logger.error("Live summary error: %s", exc)
+        return {"starting_capital": 100, "current_equity": 100, "error": str(exc)}
+
+
+@app.get("/api/settings", dependencies=[Depends(verify_auth)])
+def get_settings():
+    """Return current config values (safe subset only)."""
+    return {
+        "risk": {
+            "max_position_pct": 0.25,
+            "max_open_positions": 50,
+            "max_sector_pct": 0.22,
+        },
+        "bootcamp": {
+            "max_packets_per_scan": 20,
+            "min_score": 40,
+        },
+        "trading": {
+            "email_mode": "daily_summary",
+        },
+        "schedule": {
+            "between_scan_scoring": True,
+            "overnight_schedule": True,
+        },
+        "system": {
+            "model_version": "halcyonlatest",
+            "python_version": "3.12",
+            "environment": "cloud",
+        },
+    }
+
+
+@app.post("/api/settings", dependencies=[Depends(verify_auth)])
+def update_settings():
+    """Update config values. Cloud mode: not available."""
+    return {"error": "cloud_mode", "message": "Settings can only be changed on the local machine."}
 
 
 @app.get("/api/shadow/account", dependencies=[Depends(verify_auth)])
