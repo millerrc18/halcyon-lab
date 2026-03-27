@@ -236,7 +236,7 @@ def get_position(ticker: str) -> dict | None:
         pos = client.get_open_position(ticker)
         return {
             "symbol": str(pos.symbol),
-            "qty": int(pos.qty),
+            "qty": float(pos.qty),
             "avg_entry_price": float(pos.avg_entry_price),
             "current_price": float(pos.current_price),
             "market_value": float(pos.market_value),
@@ -254,7 +254,7 @@ def get_all_positions() -> list[dict]:
     return [
         {
             "symbol": str(pos.symbol),
-            "qty": int(pos.qty),
+            "qty": float(pos.qty),
             "avg_entry_price": float(pos.avg_entry_price),
             "current_price": float(pos.current_price),
             "market_value": float(pos.market_value),
@@ -468,7 +468,7 @@ def get_live_positions() -> list[dict]:
     return [
         {
             "symbol": str(pos.symbol),
-            "qty": int(pos.qty),
+            "qty": float(pos.qty),
             "avg_entry_price": float(pos.avg_entry_price),
             "current_price": float(pos.current_price),
             "market_value": float(pos.market_value),

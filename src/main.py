@@ -311,6 +311,28 @@ def cmd_live_close(args):
     print(f"Closed LIVE {ticker}: {reason} | P&L=${pnl_dollars:+.2f} ({pnl_pct:+.1f}%)")
 
 
+def cmd_reconcile_live(args):
+    """Reconcile Alpaca live positions with shadow_trades DB."""
+    from src.shadow_trading.reconcile import reconcile_live_trades
+
+    dry_run = getattr(args, "dry_run", False)
+    result = reconcile_live_trades(dry_run=dry_run)
+    print(f"\nAlpaca positions: {result['alpaca_positions']}")
+    print(f"Tracked in DB:    {result['tracked_positions']}")
+    if result["orphaned"]:
+        print(f"\nOrphaned (on Alpaca, not in DB): {result['orphaned']}")
+        if not dry_run:
+            print(f"  → Backfilled: {result['backfilled']}")
+    if result["stale"]:
+        print(f"\nStale (in DB, not on Alpaca): {result['stale']}")
+        if not dry_run:
+            print(f"  → Marked closed: {result['marked_closed']}")
+    if not result["orphaned"] and not result["stale"]:
+        print("\n✅ All positions reconciled — no discrepancies.")
+    if dry_run:
+        print("\n(dry run — no changes made)")
+
+
 # ── Review & Evaluation ──────────────────────────────────────────────
 
 def cmd_review(args):
@@ -822,6 +844,7 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_parser("live-status", help="Show live account balance and open positions").set_defaults(func=cmd_live_status)
     _p = sp.add_parser("live-history", help="Show live trade history"); _p.add_argument("--days", type=int, default=30); _p.set_defaults(func=cmd_live_history)
     _p = sp.add_parser("live-close", help="Close a live position"); _p.add_argument("ticker"); _p.add_argument("--reason", default="manual"); _p.set_defaults(func=cmd_live_close)
+    _p = sp.add_parser("reconcile-live", help="Reconcile Alpaca live positions with shadow_trades DB"); _p.add_argument("--dry-run", action="store_true", help="Report discrepancies without modifying DB"); _p.set_defaults(func=cmd_reconcile_live)
 
     # Review
     _p = sp.add_parser("review"); _p.add_argument("review_sub", nargs="?", default="list"); _p.set_defaults(func=cmd_review)

@@ -1,5 +1,23 @@
 # Changelog
 
+## 2026-03-27 — Live Trade Reconciliation
+
+### New Features
+- **`reconcile-live` CLI Command** — Detects orphaned Alpaca positions (on broker but not in DB) and stale DB records (in DB but not on broker); backfills or marks closed with `--dry-run` option
+- **Live Ledger Reconcile Button** — Disabled button with tooltip showing CLI command for local execution
+
+### Fixes
+- **Fractional Shares** — `get_live_positions()`, `get_all_positions()`, `get_position()` in alpaca_adapter now use `float(qty)` instead of `int(qty)` to support fractional share positions
+
+### Backend
+- New `POST /api/live/reconcile` endpoint (returns cloud_mode error — local CLI only)
+- New `src/shadow_trading/reconcile.py` module with `reconcile_live_trades()` function
+
+### Tests
+- 5 new tests: dry-run safety, orphan backfill, stale marking, no-discrepancy, paper-trade isolation
+
+---
+
 ## 2026-03-27 — Dashboard Polish Sprint
 
 ### New Features

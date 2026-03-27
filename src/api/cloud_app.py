@@ -896,6 +896,12 @@ def update_settings():
     return {"error": "cloud_mode", "message": "Settings can only be changed on the local machine."}
 
 
+@app.post("/api/live/reconcile", dependencies=[Depends(verify_auth)])
+def live_reconcile():
+    """Trigger live trade reconciliation. Must be run locally."""
+    return {"error": "cloud_mode", "message": "Reconciliation must be run locally via CLI: python -m src.main reconcile-live"}
+
+
 @app.get("/api/shadow/account", dependencies=[Depends(verify_auth)])
 def shadow_account():
     """Shadow trading account summary."""
