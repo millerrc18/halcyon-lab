@@ -38,33 +38,47 @@ def main():
 
     # Check current state
     active = get_active_model_version(db_path)
-    if active:
-        print(f"Active model already registered: {active['version_name']}")
+    if active and active["version_name"].startswith("halcyon-v1."):
+        print(f"Active model already registered with semver: {active['version_name']}")
         print(f"  Created: {active['created_at']}")
         print(f"  Examples: {active.get('training_examples_count', 'unknown')}")
-        print(f"\nTo force a new version, use: python -m src.main train --force")
         return
 
     version_name = args.version or "halcyon-v1.0.0"
+
+    if active:
+        # Rename existing registration (e.g. "halcyonlatest" → "halcyon-v1.0.0")
+        print(f"Current active model: {active['version_name']} (will rename to {version_name})")
+    else:
+        print(f"Current active model: None (will register as {version_name})")
+
     next_ver = get_next_semver(db_path)
-    print(f"Current active model: None (using config default)")
-    print(f"Will register as: {version_name}")
-    print(f"Next retrain will be: {next_ver if version_name == 'halcyon-v1.0.0' else get_next_semver(db_path)}")
+    print(f"Next retrain will be: halcyon-v1.1.0")
 
     if args.dry_run:
         print("\n(dry run — no changes made)")
         return
 
-    # Register in DB
-    vid = register_model_version(
-        version_name=version_name,
-        examples_count=969,
-        synthetic_count=0,
-        outcome_count=0,
-        model_file_path="halcyonlatest",
-        db_path=db_path,
-    )
-    print(f"\n✅ Registered {version_name} in model_versions (id={vid})")
+    if active:
+        # Rename in DB
+        import sqlite3
+        with sqlite3.connect(db_path) as conn:
+            conn.execute(
+                "UPDATE model_versions SET version_name = ? WHERE version_id = ?",
+                (version_name, active["version_id"]),
+            )
+        print(f"\n✅ Renamed {active['version_name']} → {version_name} in model_versions")
+    else:
+        # Register new
+        vid = register_model_version(
+            version_name=version_name,
+            examples_count=969,
+            synthetic_count=0,
+            outcome_count=0,
+            model_file_path="halcyonlatest",
+            db_path=db_path,
+        )
+        print(f"\n✅ Registered {version_name} in model_versions (id={vid})")
 
     # Create Ollama tag
     try:

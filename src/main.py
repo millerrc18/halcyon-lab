@@ -462,17 +462,28 @@ def cmd_train(args):
     if getattr(args, "register", False):
         # Register the current halcyonlatest as v1.0.0 (or next version)
         active = get_active_model_version()
-        if active:
+        if active and active["version_name"].startswith("halcyon-v1."):
             print(f"Active model already registered: {active['version_name']}")
             return
         version_name = "halcyon-v1.0.0"
-        vid = register_model_version(
-            version_name=version_name,
-            examples_count=969,
-            synthetic_count=0,
-            outcome_count=0,
-            model_file_path="halcyonlatest",
-        )
+        if active:
+            # Rename existing registration (e.g. "halcyonlatest" → "halcyon-v1.0.0")
+            import sqlite3
+            with sqlite3.connect("ai_research_desk.sqlite3") as conn:
+                conn.execute(
+                    "UPDATE model_versions SET version_name = ? WHERE version_id = ?",
+                    (version_name, active["version_id"]),
+                )
+            print(f"Renamed {active['version_name']} → {version_name}")
+        else:
+            vid = register_model_version(
+                version_name=version_name,
+                examples_count=969,
+                synthetic_count=0,
+                outcome_count=0,
+                model_file_path="halcyonlatest",
+            )
+            print(f"Registered {version_name} (id={vid})")
         # Create Ollama tag
         import subprocess
         try:
@@ -482,7 +493,7 @@ def cmd_train(args):
         except Exception as e:
             print(f"Ollama tag failed (do manually: ollama cp halcyonlatest {version_name}): {e}")
         update_config_model(version_name)
-        print(f"Registered {version_name} (id={vid}), config updated.")
+        print(f"Config updated. Dashboard will show {version_name} after restart.")
         return
     if getattr(args, "rollback", False):
         restored = rollback_model()
@@ -872,9 +883,6 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_parser("live-status", help="Show live account balance and open positions").set_defaults(func=cmd_live_status)
     _p = sp.add_parser("live-history", help="Show live trade history"); _p.add_argument("--days", type=int, default=30); _p.set_defaults(func=cmd_live_history)
     _p = sp.add_parser("live-close", help="Close a live position"); _p.add_argument("ticker"); _p.add_argument("--reason", default="manual"); _p.set_defaults(func=cmd_live_close)
-    _p = sp.add_parser("reconcile-live", help="Reconcile Alpaca live positions with shadow_trades DB"); _p.add_argument("--dry-run", action="store_true", help="Report discrepancies without modifying DB"); _p.set_defaults(func=cmd_reconcile_live)
-
-    # Review
     _p = sp.add_parser("reconcile-live", help="Reconcile Alpaca live positions with shadow_trades DB"); _p.add_argument("--dry-run", action="store_true", help="Report discrepancies without modifying DB"); _p.set_defaults(func=cmd_reconcile_live)
 
     # Review
