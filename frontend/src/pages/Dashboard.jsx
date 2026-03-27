@@ -8,7 +8,29 @@ import LoadingSpinner from '../components/LoadingSpinner'
 import PnlText from '../components/PnlText'
 import StatusBadge from '../components/StatusBadge'
 import ActivityFeed from '../components/ActivityFeed'
-import { XAxis, YAxis, Tooltip, ResponsiveContainer, Area, AreaChart } from 'recharts'
+import Tooltip from '../components/Tooltip'
+import { XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, Area, AreaChart } from 'recharts'
+
+function parseAuditSummary(raw) {
+  if (!raw) return null
+  let text = raw
+  // Strip code fences and JSON wrapper
+  text = text.replace(/```json\s*/gi, '').replace(/```\s*/g, '')
+  // Try to parse as JSON to extract summary
+  try {
+    const parsed = JSON.parse(text)
+    return parsed.summary || parsed.overall_summary || text
+  } catch {
+    // Not JSON — try to extract summary from structured text
+    const match = text.match(/"summary"\s*:\s*"([^"]+)"/i)
+    if (match) return match[1]
+    // Strip leading JSON keys
+    text = text.replace(/^\s*\{\s*"overall_assessment"\s*:\s*"[^"]*"\s*,?\s*/i, '')
+    text = text.replace(/^\s*"summary"\s*:\s*"?/i, '')
+    text = text.replace(/"?\s*,?\s*"[^"]*"\s*:\s*[\[{].*$/s, '')
+    return text.trim().replace(/^"|"$/g, '') || raw.slice(0, 200)
+  }
+}
 
 export default function Dashboard() {
   const queryClient = useQueryClient()
@@ -21,6 +43,7 @@ export default function Dashboard() {
   const { data: auditData } = useQuery({ queryKey: ['audit-latest'], queryFn: api.getLatestAudit, refetchInterval: 60000 })
   const { data: ctoData } = useQuery({ queryKey: ['cto-report'], queryFn: () => api.getCtoReport(7), refetchInterval: 60000 })
   const { data: configData } = useQuery({ queryKey: ['config'], queryFn: api.getConfig, refetchInterval: 300000 })
+  const { data: accountData } = useQuery({ queryKey: ['shadow-account'], queryFn: api.getAccount, refetchInterval: 60000 })
 
   const [toast, setToast] = useState(null)
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(null), 3000) }
@@ -46,20 +69,24 @@ export default function Dashboard() {
   const collectMutation = useMutation(handleCloudAction(api.triggerCollectTraining, 'Training data collection started...', 'Collection failed'))
 
   const isHalted = haltData?.halted || false
+
+  // D1: Parse audit data properly
   const auditAssessment = auditData?.overall_assessment || auditData?.audit?.overall_assessment
-  const auditSummary = auditData?.summary || auditData?.audit?.summary
+  const rawSummary = auditData?.summary || auditData?.audit?.summary
+  const auditSummary = parseAuditSummary(rawSummary)
 
   if (statusLoading) return <LoadingSpinner />
 
+  // D2: Fix shadow equity — use account endpoint which correctly computes starting_capital + closed_pnl
   const startingCapital = configData?.risk?.starting_capital || 100000
-  const equity = status?.alpaca_equity || openTrades?.account_equity || startingCapital
+  const equity = accountData?.equity || (startingCapital + (accountData?.closed_pnl || 0))
   const equityDelta = equity - startingCapital
 
   // Build cumulative P&L chart data
   const chartData = (closedData?.trades || [])
     .filter(t => t.pnl_dollars != null)
     .reverse()
-    .reduce((acc, t, i) => {
+    .reduce((acc, t) => {
       const prev = acc.length > 0 ? acc[acc.length - 1].cumPnl : 0
       acc.push({ date: (t.created_at || '').slice(5, 10), cumPnl: prev + (t.pnl_dollars || 0) })
       return acc
@@ -75,21 +102,29 @@ export default function Dashboard() {
     { key: 'target_1', label: 'Target', type: 'currency' },
   ]
 
+  // D2: Compute metrics with lower thresholds
+  const kpis = ctoData?.headline_kpis || {}
+  const ts = ctoData?.trade_summary || {}
+  const closedCount = ts.trades_closed || accountData?.total_closed || 0
+  const hasTrades = closedCount >= 2  // Show with >= 2 trades (was 5)
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-medium" style={{ color: 'var(--slate-100)' }}>Dashboard</h2>
-        <button
-          onClick={() => {
-            if (isHalted || confirm('Are you sure? This stops all new trades.')) {
-              haltMutation.mutate()
-            }
-          }}
-          className="px-4 py-2 rounded-lg font-medium text-sm text-white transition-colors"
-          style={{ background: isHalted ? 'var(--success)' : 'var(--danger)' }}
-        >
-          {isHalted ? 'RESUME TRADING' : 'HALT TRADING'}
-        </button>
+        <Tooltip content="EMERGENCY: Immediately stops all new trade entries. Open positions are NOT closed — they continue to be managed by bracket orders. Use only in emergencies. Resume with the 'resume-trading' CLI command.">
+          <button
+            onClick={() => {
+              if (isHalted || confirm('Are you sure? This stops all new trades.')) {
+                haltMutation.mutate()
+              }
+            }}
+            className="px-4 py-2 rounded-lg font-medium text-sm text-white transition-colors"
+            style={{ background: isHalted ? 'var(--success)' : 'var(--danger)' }}
+          >
+            {isHalted ? 'RESUME TRADING' : 'HALT TRADING'}
+          </button>
+        </Tooltip>
       </div>
 
       {/* Halt warning banner */}
@@ -99,7 +134,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Audit warning banner */}
+      {/* D1: Audit warning banner — cleaned up */}
       {auditAssessment && auditAssessment !== 'green' && (
         <div className="rounded-lg p-3 text-sm" style={{
           background: auditAssessment === 'red' ? 'rgba(239, 68, 68, 0.15)' : 'rgba(245, 158, 11, 0.15)',
@@ -107,7 +142,7 @@ export default function Dashboard() {
           color: auditAssessment === 'red' ? '#fca5a5' : 'var(--amber-300)',
         }}>
           <span className="font-medium uppercase">Audit: {auditAssessment}</span>
-          {auditSummary && <span className="ml-2">{'\u2014'} {auditSummary.slice(0, 200)}</span>}
+          {auditSummary && <span className="ml-2">{'\u2014'} {auditSummary.slice(0, 300)}</span>}
         </div>
       )}
 
@@ -118,72 +153,75 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Actions */}
+      {/* D3: Actions with tooltips */}
       <div className="flex items-center gap-2 flex-wrap">
         <span className="text-xs uppercase tracking-wide mr-2" style={{ color: 'var(--slate-400)' }}>Actions</span>
-        <button onClick={() => scanMutation.mutate()} disabled={scanMutation.isPending}
-          className="px-3 py-1.5 text-xs rounded-md disabled:opacity-50 transition-colors"
-          style={{ background: 'var(--slate-700)', border: '1px solid var(--slate-600)' }}>
-          {scanMutation.isPending ? 'Scanning...' : 'Run Scan'}
-        </button>
-        <button onClick={() => ctoMutation.mutate()} disabled={ctoMutation.isPending}
-          className="px-3 py-1.5 text-xs rounded-md disabled:opacity-50 transition-colors"
-          style={{ background: 'var(--slate-700)', border: '1px solid var(--slate-600)' }}>
-          {ctoMutation.isPending ? 'Generating...' : 'Generate CTO Report'}
-        </button>
-        <button onClick={() => collectMutation.mutate()} disabled={collectMutation.isPending}
-          className="px-3 py-1.5 text-xs rounded-md disabled:opacity-50 transition-colors"
-          style={{ background: 'var(--slate-700)', border: '1px solid var(--slate-600)' }}>
-          {collectMutation.isPending ? 'Collecting...' : 'Collect Training Data'}
-        </button>
+        <Tooltip content="Triggers an immediate market scan outside the normal 30-min schedule. Use when you want to check for new setups between scheduled scans.">
+          <button onClick={() => scanMutation.mutate()} disabled={scanMutation.isPending}
+            className="px-3 py-1.5 text-xs rounded-md disabled:opacity-50 transition-colors"
+            style={{ background: 'var(--slate-700)', border: '1px solid var(--slate-600)' }}>
+            {scanMutation.isPending ? 'Scanning...' : 'Run Scan'}
+          </button>
+        </Tooltip>
+        <Tooltip content="Generates a CTO Performance Report covering the last 7 days. Includes Sharpe, win rate, P&L, and strategy assessment. Normally runs automatically on Saturdays.">
+          <button onClick={() => ctoMutation.mutate()} disabled={ctoMutation.isPending}
+            className="px-3 py-1.5 text-xs rounded-md disabled:opacity-50 transition-colors"
+            style={{ background: 'var(--slate-700)', border: '1px solid var(--slate-600)' }}>
+            {ctoMutation.isPending ? 'Generating...' : 'Generate CTO Report'}
+          </button>
+        </Tooltip>
+        <Tooltip content="Collects training examples from recently closed trades. Normally runs automatically at 4:30 PM ET and 6:00 PM ET.">
+          <button onClick={() => collectMutation.mutate()} disabled={collectMutation.isPending}
+            className="px-3 py-1.5 text-xs rounded-md disabled:opacity-50 transition-colors"
+            style={{ background: 'var(--slate-700)', border: '1px solid var(--slate-600)' }}>
+            {collectMutation.isPending ? 'Collecting...' : 'Collect Training Data'}
+          </button>
+        </Tooltip>
       </div>
 
-      {/* Headline KPIs */}
-      {(() => {
-        const kpis = ctoData?.headline_kpis || {}
-        const ts = ctoData?.trade_summary || {}
-        const hasTrades = (ts.trades_closed || 0) >= 5
-        return (
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-            <div className="rounded-lg p-3" style={{ background: 'var(--slate-700)', border: '1px solid var(--slate-600)' }}>
-              <div className="text-xs" style={{ color: 'var(--slate-400)' }}>Sharpe ratio</div>
-              <div className="text-xl font-medium" style={{ fontFamily: 'var(--font-mono)', color: hasTrades ? ((kpis.sharpe_ratio || 0) > 0.5 ? 'var(--teal-400)' : (kpis.sharpe_ratio || 0) < 0 ? 'var(--danger)' : 'var(--slate-100)') : 'var(--slate-100)' }}>
-                {hasTrades ? (kpis.sharpe_ratio || 0).toFixed(2) : '--'}
-              </div>
-            </div>
-            <div className="rounded-lg p-3" style={{ background: 'var(--slate-700)', border: '1px solid var(--slate-600)' }}>
-              <div className="text-xs" style={{ color: 'var(--slate-400)' }}>Win rate</div>
-              <div className="text-xl font-medium" style={{ fontFamily: 'var(--font-mono)', color: hasTrades ? ((kpis.win_rate || 0) > 0.45 ? 'var(--teal-400)' : 'var(--danger)') : 'var(--slate-100)' }}>
-                {hasTrades ? `${((kpis.win_rate || 0) * 100).toFixed(1)}%` : '--'}
-              </div>
-            </div>
-            <div className="rounded-lg p-3" style={{ background: 'var(--slate-700)', border: '1px solid var(--slate-600)' }}>
-              <div className="text-xs" style={{ color: 'var(--slate-400)' }}>Max drawdown</div>
-              <div className="text-xl font-medium" style={{ fontFamily: 'var(--font-mono)', color: hasTrades ? ((kpis.max_drawdown_pct || 0) < 15 ? 'var(--teal-400)' : 'var(--danger)') : 'var(--slate-100)' }}>
-                {hasTrades ? `${(kpis.max_drawdown_pct || 0).toFixed(1)}%` : '--'}
-              </div>
-            </div>
-            <div className="rounded-lg p-3" style={{ background: 'var(--slate-700)', border: '1px solid var(--slate-600)' }}>
-              <div className="text-xs" style={{ color: 'var(--slate-400)' }}>Confidence cal.</div>
-              <div className="text-xl font-medium" style={{ fontFamily: 'var(--font-mono)', color: 'var(--slate-100)' }}>
-                {(ts.trades_closed || 0) >= 10 ? (kpis.confidence_calibration || 0).toFixed(3) : '--'}
-              </div>
-            </div>
-            <div className="rounded-lg p-3" style={{ background: 'var(--slate-700)', border: '1px solid var(--slate-600)' }}>
-              <div className="text-xs" style={{ color: 'var(--slate-400)' }}>Rubric score</div>
-              <div className="text-xl font-medium" style={{ fontFamily: 'var(--font-mono)', color: 'var(--slate-100)' }}>
-                {kpis.avg_rubric_score != null ? `${kpis.avg_rubric_score.toFixed(1)}/5` : 'n/a'}
-              </div>
+      {/* D2: Headline KPIs — fixed thresholds */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <div className="rounded-lg p-3" style={{ background: 'var(--slate-700)', border: '1px solid var(--slate-600)' }}>
+          <div className="text-xs" style={{ color: 'var(--slate-400)' }}>Sharpe ratio</div>
+          <div className="text-xl font-medium" style={{ fontFamily: 'var(--font-mono)', color: hasTrades ? ((kpis.sharpe_ratio || 0) > 0.5 ? 'var(--teal-400)' : (kpis.sharpe_ratio || 0) < 0 ? 'var(--danger)' : 'var(--slate-100)') : 'var(--slate-100)' }}>
+            {hasTrades ? (kpis.sharpe_ratio || 0).toFixed(2) : '--'}
+          </div>
+        </div>
+        <div className="rounded-lg p-3" style={{ background: 'var(--slate-700)', border: '1px solid var(--slate-600)' }}>
+          <div className="text-xs" style={{ color: 'var(--slate-400)' }}>Win rate</div>
+          <div className="text-xl font-medium" style={{ fontFamily: 'var(--font-mono)', color: hasTrades ? ((kpis.win_rate || 0) > 0.45 ? 'var(--teal-400)' : 'var(--danger)') : 'var(--slate-100)' }}>
+            {hasTrades ? `${((kpis.win_rate || 0) * 100).toFixed(1)}%` : '--'}
+          </div>
+        </div>
+        <div className="rounded-lg p-3" style={{ background: 'var(--slate-700)', border: '1px solid var(--slate-600)' }}>
+          <div className="text-xs" style={{ color: 'var(--slate-400)' }}>Max drawdown</div>
+          <div className="text-xl font-medium" style={{ fontFamily: 'var(--font-mono)', color: hasTrades ? ((kpis.max_drawdown_pct || 0) < 15 ? 'var(--teal-400)' : 'var(--danger)') : 'var(--slate-100)' }}>
+            {hasTrades ? `${(kpis.max_drawdown_pct || 0).toFixed(1)}%` : '--'}
+          </div>
+        </div>
+        <Tooltip content="Measures how well the model's confidence predictions match actual outcomes. Requires 50+ closed trades for statistical significance.">
+          <div className="rounded-lg p-3" style={{ background: 'var(--slate-700)', border: '1px solid var(--slate-600)' }}>
+            <div className="text-xs" style={{ color: 'var(--slate-400)' }}>Confidence cal.</div>
+            <div className="text-xl font-medium" style={{ fontFamily: 'var(--font-mono)', color: 'var(--slate-100)' }}>
+              {closedCount >= 50 ? (kpis.confidence_calibration || 0).toFixed(3) : `< ${closedCount}/50 trades`}
             </div>
           </div>
-        )
-      })()}
+        </Tooltip>
+        <Tooltip content="Average quality score from Claude-graded rubric evaluation of trade reasoning. Requires running the scoring pipeline ($5-8 API cost).">
+          <div className="rounded-lg p-3" style={{ background: 'var(--slate-700)', border: '1px solid var(--slate-600)' }}>
+            <div className="text-xs" style={{ color: 'var(--slate-400)' }}>Rubric score</div>
+            <div className="text-xl font-medium" style={{ fontFamily: 'var(--font-mono)', color: 'var(--slate-100)' }}>
+              {kpis.avg_rubric_score != null ? `${kpis.avg_rubric_score.toFixed(1)}/5` : 'Not scored yet'}
+            </div>
+          </div>
+        </Tooltip>
+      </div>
 
-      {/* System status cards */}
+      {/* D2: System status cards — fixed equity */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <MetricCard label="Shadow Equity" value={equity.toLocaleString(undefined, { minimumFractionDigits: 0 })} prefix="$" delta={equityDelta} />
-        <MetricCard label="Open Trades" value={openTrades?.open_count || 0} />
-        <MetricCard label="Win Rate" value={closedData?.metrics?.win_rate != null ? `${closedData.metrics.win_rate.toFixed(1)}%` : '--'} />
+        <MetricCard label="Open Trades" value={openTrades?.open_count || accountData?.open_positions || 0} />
+        <MetricCard label="Win Rate" value={closedData?.metrics?.win_rate != null ? `${closedData.metrics.win_rate.toFixed(1)}%` : accountData?.win_rate != null ? `${(accountData.win_rate * 100).toFixed(1)}%` : '--'} />
         <MetricCard label="Model Version" value={status?.model_version || 'base'} delta={training ? `${training.dataset_total} examples` : null} />
       </div>
 
@@ -196,7 +234,7 @@ export default function Dashboard() {
               <AreaChart data={chartData}>
                 <XAxis dataKey="date" tick={{ fontSize: 11, fill: 'var(--slate-400)' }} />
                 <YAxis tick={{ fontSize: 11, fill: 'var(--slate-400)' }} />
-                <Tooltip contentStyle={{ background: 'var(--slate-700)', border: '1px solid var(--slate-600)', borderRadius: 8, fontSize: 12 }} />
+                <RechartsTooltip contentStyle={{ background: 'var(--slate-700)', border: '1px solid var(--slate-600)', borderRadius: 8, fontSize: 12 }} />
                 <Area type="monotone" dataKey="cumPnl" stroke="var(--teal-400)" fill="var(--teal-400)" fillOpacity={0.1} />
               </AreaChart>
             </ResponsiveContainer>

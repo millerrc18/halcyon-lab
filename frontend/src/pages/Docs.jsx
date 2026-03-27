@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../api'
 import LoadingSpinner from '../components/LoadingSpinner'
+import { Search } from 'lucide-react'
 
 function renderMarkdown(md) {
   if (!md) return ''
@@ -83,64 +84,116 @@ function inline(text) {
     .replace(/\[(.+?)\]\((.+?)\)/g, '<a href="$2" style="color:var(--teal-400)" class="hover:underline" target="_blank" rel="noopener">$1</a>')
 }
 
+const CATEGORY_ORDER = [
+  'Core',
+  'Strategy & Markets',
+  'Training & Model',
+  'Infrastructure',
+  'Business & Legal',
+  'Deep Research',
+  'Uncategorized',
+]
+
 export default function Docs() {
-  const [activeDoc, setActiveDoc] = useState('agents')
-  const { data: docList } = useQuery({
+  const [activeDoc, setActiveDoc] = useState(null)
+  const [search, setSearch] = useState('')
+  const { data: docList, isLoading: listLoading } = useQuery({
     queryKey: ['docs-list'],
     queryFn: api.getDocsList,
   })
-  const { data: doc, isLoading } = useQuery({
+  const { data: doc, isLoading: docLoading } = useQuery({
     queryKey: ['doc', activeDoc],
     queryFn: () => api.getDoc(activeDoc),
     enabled: !!activeDoc,
   })
 
-  const groups = [
-    { label: 'Core', ids: ['agents', 'readme', 'architecture', 'training-guide', 'roadmap'] },
-    { label: 'Research \u2014 Training', ids: ['research-training-formats', 'research-quality-rubric', 'research-self-blinding', 'research-model-degradation', 'research-training-gaps', 'research-grpo', 'research-qwen-selection'] },
-    { label: 'Research \u2014 Strategy', ids: ['research-alt-data', 'research-halcyon-framework', 'research-universe-size'] },
-    { label: 'Research \u2014 Business', ids: ['research-fund-path', 'research-scaling-plan', 'research-options'] },
-  ]
+  // Group docs by category and filter by search
+  const groupedDocs = useMemo(() => {
+    const docs = docList || []
+    const filtered = search
+      ? docs.filter(d => d.title.toLowerCase().includes(search.toLowerCase()))
+      : docs
+    const groups = {}
+    for (const d of filtered) {
+      const cat = d.category || 'Uncategorized'
+      if (!groups[cat]) groups[cat] = []
+      groups[cat].push(d)
+    }
+    return CATEGORY_ORDER
+      .filter(cat => groups[cat]?.length > 0)
+      .map(cat => ({ label: cat, docs: groups[cat] }))
+  }, [docList, search])
 
-  const docMap = Object.fromEntries((docList || []).map(d => [d.id, d]))
+  // Auto-select first doc if none selected
+  if (!activeDoc && docList?.length > 0) {
+    setActiveDoc(docList[0].id)
+  }
 
   return (
     <div className="flex gap-6 max-w-5xl mx-auto">
-      <nav className="w-56 shrink-0">
-        <h2 className="text-sm font-medium uppercase tracking-wide mb-3" style={{ color: 'var(--slate-400)' }}>Documentation</h2>
-        <div className="space-y-4">
-          {groups.map(g => {
-            const docs = g.ids.map(id => docMap[id]).filter(Boolean)
-            if (docs.length === 0) return null
-            return (
+      <nav className="w-60 shrink-0">
+        <h2 className="text-sm font-medium uppercase tracking-wide mb-3" style={{ color: 'var(--slate-400)' }}>
+          Documentation {docList ? `(${docList.length})` : ''}
+        </h2>
+
+        {/* Search bar */}
+        <div className="relative mb-4">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--slate-400)' }} />
+          <input
+            type="text"
+            placeholder="Search docs..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="w-full pl-9 pr-3 py-2 rounded-lg text-sm"
+            style={{
+              background: 'var(--slate-800)',
+              border: '1px solid var(--slate-600)',
+              color: 'var(--slate-100)',
+              outline: 'none',
+            }}
+          />
+        </div>
+
+        {listLoading ? (
+          <LoadingSpinner />
+        ) : (
+          <div className="space-y-4 max-h-[calc(100vh-200px)] overflow-y-auto">
+            {groupedDocs.map(g => (
               <div key={g.label}>
                 <div className="text-xs uppercase tracking-wide px-3 mb-1" style={{ color: 'var(--slate-400)' }}>{g.label}</div>
                 <div className="space-y-0.5">
-                  {docs.map(d => (
+                  {g.docs.map(d => (
                     <button
                       key={d.id}
                       onClick={() => setActiveDoc(d.id)}
-                      disabled={!d.available}
                       className="w-full text-left px-3 py-1.5 rounded-lg text-sm transition-colors"
                       style={{
                         background: activeDoc === d.id ? 'var(--slate-700)' : 'transparent',
-                        color: activeDoc === d.id ? 'var(--slate-100)' : d.available ? 'var(--slate-300)' : 'var(--slate-500)',
-                        opacity: !d.available ? 0.5 : 1,
-                        cursor: !d.available ? 'not-allowed' : 'pointer',
+                        color: activeDoc === d.id ? 'var(--slate-100)' : 'var(--slate-300)',
                       }}
                     >
-                      {d.title.replace('Research: ', '')}
+                      {d.title}
+                      {d.size_kb > 0 && (
+                        <span className="ml-1 text-xs" style={{ color: 'var(--slate-500)' }}>
+                          {d.size_kb < 1 ? '<1' : Math.round(d.size_kb)}kb
+                        </span>
+                      )}
                     </button>
                   ))}
                 </div>
               </div>
-            )
-          })}
-        </div>
+            ))}
+            {groupedDocs.length === 0 && (
+              <div className="text-center py-4 text-sm" style={{ color: 'var(--slate-400)' }}>
+                {search ? 'No docs match your search' : 'No documents available'}
+              </div>
+            )}
+          </div>
+        )}
       </nav>
 
       <div className="flex-1 min-w-0">
-        {isLoading ? (
+        {docLoading ? (
           <LoadingSpinner />
         ) : doc ? (
           <div className="rounded-lg p-6" style={{ background: 'var(--slate-700)', border: '1px solid var(--slate-600)' }}>

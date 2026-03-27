@@ -3,17 +3,17 @@ import { Outlet, NavLink } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../api'
 import { IS_CLOUD } from '../config'
-import { LayoutDashboard, FileText, TrendingUp, Brain, ClipboardCheck, BarChart3, Settings, Map, BookOpen, Users, Activity, Menu, X } from 'lucide-react'
+import { LayoutDashboard, FileText, TrendingUp, Brain, BarChart3, Settings, Map, BookOpen, Users, Activity, Menu, X, DollarSign } from 'lucide-react'
 import StatusBadge from './StatusBadge'
 
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/shadow', icon: TrendingUp, label: 'Shadow Ledger' },
+  { to: '/live', icon: DollarSign, label: 'Live Ledger' },
   { to: '/packets', icon: FileText, label: 'Packets' },
   { to: '/council', icon: Users, label: 'Council' },
   { to: '/health', icon: Activity, label: 'Health Score' },
   { to: '/training', icon: Brain, label: 'Training' },
-  { to: '/review', icon: ClipboardCheck, label: 'Review' },
   { to: '/cto-report', icon: BarChart3, label: 'CTO Report' },
   { to: '/docs', icon: BookOpen, label: 'Docs' },
   { to: '/roadmap', icon: Map, label: 'Roadmap' },

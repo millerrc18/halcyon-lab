@@ -11,7 +11,7 @@ import Dashboard from './pages/Dashboard'
 import Packets from './pages/Packets'
 import ShadowLedger from './pages/ShadowLedger'
 import Training from './pages/Training'
-import Review from './pages/Review'
+import LiveLedger from './pages/LiveLedger'
 import CTOReport from './pages/CTOReport'
 import Settings from './pages/Settings'
 import Roadmap from './pages/Roadmap'
@@ -71,7 +71,7 @@ export default function App() {
                 <Route path="/packets" element={<Packets />} />
                 <Route path="/shadow" element={<ShadowLedger />} />
                 <Route path="/training" element={<Training />} />
-                <Route path="/review" element={<Review />} />
+                <Route path="/live" element={<LiveLedger />} />
                 <Route path="/cto-report" element={<CTOReport />} />
                 <Route path="/settings" element={<Settings />} />
                 <Route path="/roadmap" element={<Roadmap />} />

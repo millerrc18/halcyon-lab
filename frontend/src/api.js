@@ -77,8 +77,17 @@ export const api = {
   // Council
   getCouncilLatest: () => fetchApi('/council/latest'),
   getCouncilHistory: (days = 30) => fetchApi(`/council/history?days=${days}`),
+  getCouncilSession: (id) => fetchApi(`/council/session/${id}`),
+  // Activity
+  getActivityFeed: (limit = 50, eventType) => fetchApi(`/activity/feed?limit=${limit}${eventType ? `&event_type=${eventType}` : ''}`),
   // Health Score
   getHealthScore: () => fetchApi('/health/score'),
+  // Live Trading
+  getLiveTrades: () => fetchApi('/live/trades'),
+  getLiveSummary: () => fetchApi('/live/summary'),
+  // Settings
+  getSettings: () => fetchApi('/settings'),
+  updateSettings: (data) => fetchApi('/settings', { method: 'POST', body: JSON.stringify(data) }),
   // Actions
   triggerActionScan: () => fetchApi('/actions/scan', { method: 'POST' }),
   triggerCtoReport: () => fetchApi('/actions/cto-report', { method: 'POST' }),

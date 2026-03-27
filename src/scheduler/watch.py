@@ -98,6 +98,10 @@ class WatchLoop:
         self._last_vix_alert_level: float | None = None
         self._earnings_warning_done = False
 
+        # Research synthesis + daily metrics
+        self._research_synthesis_done = False
+        self._daily_metric_snapshot_done = False
+
         # Collector failure tracking: {collector_name: consecutive_failure_count}
         self._collector_failures: dict[str, int] = {}
 
@@ -137,6 +141,9 @@ class WatchLoop:
         self._data_asset_report_done = False
         self._weekly_digest_done = False
         self._earnings_warning_done = False
+        # Research + metrics
+        self._research_synthesis_done = False
+        self._daily_metric_snapshot_done = False
 
     def _is_market_open(self, now: datetime) -> bool:
         """Check if market is currently open (weekday, between open and close)."""
@@ -706,6 +713,10 @@ class WatchLoop:
                 elif hour == self.eod_hour and not self._eod_done:
                     self._safe_run("EOD recap", self._run_eod_recap)
                     self._eod_done = True
+                    # H2. Daily metric snapshot (every trading day, not just Saturday)
+                    if not self._daily_metric_snapshot_done:
+                        self._safe_run("daily metric snapshot", self._save_daily_metric_snapshot)
+                        self._daily_metric_snapshot_done = True
                     # 1C. EOD P&L report via Telegram
                     if not self._eod_report_done:
                         self._safe_run("EOD Telegram report", self._send_eod_report)
@@ -750,6 +761,12 @@ class WatchLoop:
                       and hour == 9 and not self._saturday_reports_done):
                     self._safe_run("Saturday reports", self._run_saturday_reports)
                     self._saturday_reports_done = True
+
+                # H1. Research synthesis (Sunday 6 PM ET)
+                elif (now.weekday() == 6 and hour == 18
+                      and not self._research_synthesis_done):
+                    self._safe_run("research synthesis", self._run_research_synthesis)
+                    self._research_synthesis_done = True
 
                 # 1H. Weekly digest (Sunday 8 PM ET)
                 elif (now.weekday() == 6 and hour == 20
@@ -1372,6 +1389,27 @@ class WatchLoop:
                         self._collector_failures[name] = 0  # Reset on success
         except Exception:
             pass
+
+        # H3. Notify new research papers via Telegram
+        if research_results.get("total_new", 0) > 0:
+            try:
+                from src.notifications.telegram import send_telegram, is_telegram_enabled
+                if is_telegram_enabled():
+                    import sqlite3 as _sq
+                    with _sq.connect("ai_research_desk.sqlite3") as _cn:
+                        top = _cn.execute(
+                            "SELECT title, relevance_score FROM research_papers ORDER BY created_at DESC LIMIT 1"
+                        ).fetchone()
+                    top_title = top[0] if top else "Unknown"
+                    top_score = top[1] if top else 0
+                    send_telegram(
+                        f"<b>NEW RESEARCH PAPERS</b>\n\n"
+                        f"Papers found: {research_results['total_new']}\n"
+                        f"Top paper: {top_title}\n"
+                        f"Relevance: {top_score:.2f}"
+                    )
+            except Exception:
+                pass
 
         # Telegram overnight summary
         try:
@@ -2082,3 +2120,82 @@ class WatchLoop:
         pipeline = PreMarketPipeline()
         result = pipeline.run_candidate_analysis()
         print(f"[WATCH] Pre-analyzed {result['count']} candidates")
+
+    def _run_research_synthesis(self):
+        """Sunday 6 PM ET — Run weekly research synthesis."""
+        from src.data_collection.research_synthesizer import run_weekly_synthesis
+        print("[WATCH] Running weekly research synthesis...")
+        result = run_weekly_synthesis()
+        papers_count = result.get("papers_reviewed", 0)
+        actionable = result.get("actionable_count", 0)
+        print(f"[WATCH] Research synthesis: {papers_count} papers reviewed, {actionable} actionable")
+
+        # Send Telegram digest
+        try:
+            from src.notifications.telegram import send_telegram, is_telegram_enabled
+            if is_telegram_enabled():
+                digest = result.get("digest_summary", "No digest generated")
+                send_telegram(
+                    f"<b>WEEKLY RESEARCH DIGEST</b>\n\n"
+                    f"Papers reviewed: {papers_count}\n"
+                    f"Actionable: {actionable}\n\n"
+                    f"{digest[:500]}"
+                )
+        except Exception:
+            pass
+
+    def _save_daily_metric_snapshot(self):
+        """Save daily metric snapshot at EOD for MetricTrend chart."""
+        import sqlite3
+        db_path = "ai_research_desk.sqlite3"
+        try:
+            from src.training.versioning import save_metric_snapshot
+            with sqlite3.connect(db_path) as conn:
+                closed = conn.execute(
+                    "SELECT pnl_pct, pnl_dollars FROM shadow_trades WHERE status = 'closed'"
+                ).fetchall()
+                pnls = [r[0] for r in closed if r[0] is not None]
+                pnl_dollars = [r[1] for r in closed if r[1] is not None]
+                open_count = conn.execute(
+                    "SELECT COUNT(*) FROM shadow_trades WHERE status = 'open'"
+                ).fetchone()[0]
+
+            if not pnls:
+                snapshot = {
+                    "cumulative_pnl": 0, "win_rate": 0, "sharpe_ratio": 0,
+                    "max_drawdown": 0, "expectancy": 0, "trade_count": 0,
+                    "open_positions": open_count,
+                }
+            else:
+                wins = [p for p in pnls if p > 0]
+                mean_pnl = sum(pnls) / len(pnls)
+                std_pnl = max((sum((p - mean_pnl) ** 2 for p in pnls) / len(pnls)) ** 0.5, 0.001)
+                # Max drawdown from running P&L
+                running = 0
+                peak = 0
+                max_dd = 0
+                for p in pnl_dollars:
+                    running += p
+                    if running > peak:
+                        peak = running
+                    dd = peak - running
+                    if dd > max_dd:
+                        max_dd = dd
+
+                snapshot = {
+                    "cumulative_pnl": sum(pnl_dollars),
+                    "win_rate": len(wins) / len(pnls),
+                    "sharpe_ratio": mean_pnl / std_pnl if len(pnls) > 1 else 0,
+                    "max_drawdown": max_dd,
+                    "expectancy": sum(pnl_dollars) / len(pnl_dollars),
+                    "trade_count": len(pnls),
+                    "open_positions": open_count,
+                }
+
+            save_metric_snapshot(snapshot)
+            logger.info(
+                "[METRICS] Daily snapshot saved: %d trades, %.1f%% win rate",
+                len(pnls), snapshot["win_rate"] * 100,
+            )
+        except Exception as e:
+            logger.debug("[METRICS] Daily snapshot failed: %s", e)

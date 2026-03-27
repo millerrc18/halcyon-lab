@@ -266,7 +266,11 @@ class TestAuditEndpoint:
 class TestDocsEndpoint:
     """Tests for /api/docs."""
 
-    def test_docs_returns_array(self, client):
+    @patch("src.api.cloud_app._query")
+    def test_docs_returns_array(self, mock_query, client):
+        mock_query.return_value = [
+            {"id": "abc123", "filename": "docs/architecture.md", "title": "Architecture", "category": "Core", "size_kb": 10, "updated_at": "2026-03-27"},
+        ]
         resp = client.get("/api/docs")
         assert resp.status_code == 200
         data = resp.json()
@@ -275,11 +279,13 @@ class TestDocsEndpoint:
         assert "id" in data[0]
         assert "title" in data[0]
 
-    def test_docs_single_doc(self, client):
-        resp = client.get("/api/docs/agents")
+    @patch("src.api.cloud_app._query_one")
+    def test_docs_single_doc(self, mock_one, client):
+        mock_one.return_value = {"id": "abc123", "title": "Architecture", "category": "Core", "content": "# Architecture\n\nTest doc content"}
+        resp = client.get("/api/docs/abc123")
         assert resp.status_code == 200
         data = resp.json()
-        assert data["id"] == "agents"
+        assert data["id"] == "abc123"
         assert "content" in data
 
 

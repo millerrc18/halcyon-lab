@@ -19,15 +19,15 @@ import RevenueProjection from '../components/RevenueProjection'
 // CC: when completing sprints, update item statuses here.
 // ═══════════════════════════════════════════════════════════════
 const ROADMAP_DATA = {
-  lastUpdated: '2026-03-25',
+  lastUpdated: '2026-03-27',
 
   phases: [
     {
       id: 'phase-1',
       name: 'Phase 1 — Bootcamp',
       status: 'active', // active | completed | locked
-      capital: 'Paper ($100K Alpaca)',
-      monthlyCost: '$5/mo',
+      capital: '$100K paper + $100 live',
+      monthlyCost: '~$64/mo',
       description: '30-day intensive paper trading. Prove the system has an edge.',
       gate: {
         label: '50+ closed trades, positive expectancy, system proves edge',
@@ -75,8 +75,8 @@ const ROADMAP_DATA = {
       id: 'phase-2',
       name: 'Phase 2 — Micro live',
       status: 'locked',
-      capital: '$500–$1,000',
-      monthlyCost: '$350/mo',
+      capital: '$100 → $1,000 live',
+      monthlyCost: '~$125/mo',
       description: 'Expand to ~325 stocks. Auto-execute with risk governor. No human approval.',
       gate: {
         label: 'Live trading proves execution quality and real-money edge',
@@ -111,10 +111,10 @@ const ROADMAP_DATA = {
     },
     {
       id: 'phase-3',
-      name: 'Phase 3 — Growth',
+      name: 'Phase 3 — Growth + Second Strategy',
       status: 'locked',
-      capital: '$5K–$25K',
-      monthlyCost: '$135/mo',
+      capital: '$1,000 → $5,000',
+      monthlyCost: '~$155/mo',
       description: 'Tiered autonomy by conviction level. Multiple data feeds.',
       gate: {
         label: 'Institutional-quality risk-adjusted returns',
@@ -139,10 +139,10 @@ const ROADMAP_DATA = {
     },
     {
       id: 'phase-4',
-      name: 'Phase 4 — Full autonomous',
+      name: 'Phase 4 — Full Autonomous + Options Research',
       status: 'locked',
-      capital: '$25K+',
-      monthlyCost: '$135/mo',
+      capital: '$5,000 → $25,000',
+      monthlyCost: '~$220/mo',
       description: 'All trades auto-executed within hard risk limits.',
       gate: {
         label: 'Investor-ready track record across market regimes',
@@ -166,11 +166,11 @@ const ROADMAP_DATA = {
     },
     {
       id: 'phase-5',
-      name: 'Phase 5 — Scale capital',
+      name: 'Phase 5 — Scale + Fund Preparation',
       status: 'locked',
-      capital: '$100K+',
-      monthlyCost: '$200/mo',
-      description: 'Grow capital under management. Build auditable track record. Multi-strategy diversification.',
+      capital: '$25,000 → $100,000+',
+      monthlyCost: '~$500+/mo',
+      description: 'Fund formation, audit, PPM, GIPS compliance.',
       gate: {
         label: 'Institutional allocation threshold',
         metrics: [
@@ -191,6 +191,62 @@ const ROADMAP_DATA = {
         { label: 'Family LP structure (General Partner + Limited Partners)', status: 'pending' },
       ],
     },
+    {
+      id: 'phase-6',
+      name: 'Phase 6+ — Multi-Desk Expansion',
+      status: 'locked',
+      capital: '$500K+ AUM',
+      monthlyCost: 'TBD',
+      description: '5-desk architecture, published research, external capital.',
+      gate: {
+        label: 'Proven multi-strategy returns with audited track record',
+        metrics: [],
+      },
+      items: [
+        { label: '5-desk architecture (equity pullback, breakout, options vol, macro, event-driven)', status: 'pending' },
+        { label: 'Published research / thought leadership', status: 'pending' },
+        { label: 'External capital onboarding', status: 'pending' },
+        { label: 'Intraday trading capability', status: 'pending' },
+        { label: 'Multi-model inference serving', status: 'pending' },
+      ],
+    },
+  ],
+
+  hardware: [
+    {
+      phase: 'Phase 2 Build',
+      cost: '$1,500-2,000',
+      items: [
+        'RTX 3090 24GB ($700-900)',
+        'Ryzen 5 5600 ($100-150)',
+        '32GB DDR4 ($60-80)',
+        '1TB NVMe ($80-100)',
+        'B550 mobo ($80-100)',
+        '750W PSU ($80-100)',
+        'Case + UPS ($150-250)',
+      ],
+      unlocks: '14B model, GRPO training, 24/7 uninterrupted operation',
+    },
+    {
+      phase: 'Phase 4+ Build',
+      cost: '$4,000-6,000',
+      items: [
+        'RTX 4090 or 2x RTX 3090 ($2,000-3,500)',
+        'Ryzen 9 7900X ($300-400)',
+        '64GB DDR5 ($150-200)',
+        '2TB NVMe + 4TB HDD ($200-300)',
+        '2.5GbE + cellular failover ($100-200)',
+      ],
+      unlocks: 'Multi-model inference, parallel training, redundant networking',
+    },
+  ],
+
+  monthlyCosts: [
+    { phase: 'Phase 1', cost: '$64/mo' },
+    { phase: 'Phase 2', cost: '$125/mo' },
+    { phase: 'Phase 3', cost: '$155/mo' },
+    { phase: 'Phase 4', cost: '$220/mo' },
+    { phase: 'Phase 5+', cost: '$500+/mo' },
   ],
 
   trainingPipeline: [
@@ -433,6 +489,51 @@ export default function Roadmap() {
       <div className="rounded-lg p-4" style={{ background: 'var(--slate-800)', border: '1px solid var(--slate-600)' }}>
         <RevenueProjection />
       </div>
+
+      {/* Hardware Roadmap */}
+      {data.hardware && (
+        <div className="space-y-3">
+          <h2 className="text-sm font-medium" style={{ color: 'var(--slate-100)' }}>Hardware Roadmap</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {data.hardware.map((hw, i) => (
+              <div key={i} className="rounded-lg p-4" style={{ background: 'var(--slate-700)', border: '1px solid var(--slate-600)' }}>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="font-medium text-sm" style={{ color: 'var(--slate-100)' }}>{hw.phase}</span>
+                  <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: 'var(--slate-600)', color: 'var(--slate-300)' }}>{hw.cost}</span>
+                </div>
+                <ul className="space-y-1 mb-3">
+                  {hw.items.map((item, j) => (
+                    <li key={j} className="text-xs" style={{ color: 'var(--slate-300)' }}>{item}</li>
+                  ))}
+                </ul>
+                <div className="text-xs pt-2" style={{ borderTop: '1px solid var(--slate-600)', color: 'var(--teal-400)' }}>
+                  Unlocks: {hw.unlocks}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Monthly Cost Timeline */}
+      {data.monthlyCosts && (
+        <div className="rounded-lg p-4" style={{ background: 'var(--slate-700)', border: '1px solid var(--slate-600)' }}>
+          <h2 className="text-sm font-medium mb-3" style={{ color: 'var(--slate-100)' }}>Monthly Cost by Phase</h2>
+          <div className="flex items-end gap-3 justify-around">
+            {data.monthlyCosts.map((mc, i) => {
+              const costNum = parseInt(mc.cost.replace(/[^0-9]/g, '')) || 0
+              const height = Math.max(20, Math.min(120, costNum / 5))
+              return (
+                <div key={i} className="flex flex-col items-center gap-1">
+                  <span className="text-xs font-medium" style={{ fontFamily: 'var(--font-mono)', color: 'var(--teal-400)' }}>{mc.cost}</span>
+                  <div className="w-12 rounded-t" style={{ height: `${height}px`, background: 'var(--teal-500)', opacity: 0.6 + (i * 0.08) }} />
+                  <span className="text-xs" style={{ color: 'var(--slate-400)' }}>{mc.phase}</span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       <div>
         <h2 className="text-sm font-medium mb-3" style={{ color: 'var(--slate-100)' }}>Training pipeline (research-validated)</h2>
