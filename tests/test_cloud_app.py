@@ -58,7 +58,12 @@ class TestStatusEndpoint:
     @patch("src.api.cloud_app._query")
     def test_status_returns_structure(self, mock_query, mock_query_one, client):
         mock_query.return_value = [{"count": 3}]
-        mock_query_one.return_value = {"version_name": "v1.0", "created_at": "2025-01-01", "status": "active"}
+        # _query_one: latest_model, latest_audit, training_examples count
+        mock_query_one.side_effect = [
+            {"version_name": "v1.0", "created_at": "2025-01-01", "status": "active"},
+            {"overall_assessment": "green", "created_at": "2025-01-01"},
+            {"c": 978},
+        ]
 
         resp = client.get("/api/status")
         assert resp.status_code == 200
@@ -67,6 +72,8 @@ class TestStatusEndpoint:
         assert "open_positions" in data
         assert "timestamp" in data
         assert data["llm_available"] is False
+        assert data["model_version"] == "v1.0"
+        assert data["training_examples"] == 978
 
     @patch("src.api.cloud_app._query_one")
     @patch("src.api.cloud_app._query")
@@ -84,16 +91,20 @@ class TestStatusEndpoint:
 class TestShadowEndpoints:
     """Tests for shadow trading endpoints."""
 
+    @patch("src.api.cloud_app._query_one")
     @patch("src.api.cloud_app._query")
-    def test_shadow_open_returns_trades(self, mock_query, client):
+    def test_shadow_open_returns_trades(self, mock_query, mock_one, client):
         mock_query.return_value = [
             {"trade_id": "t1", "ticker": "AAPL", "status": "open"},
         ]
+        mock_one.return_value = {"total": 500}
         resp = client.get("/api/shadow/open")
         assert resp.status_code == 200
         data = resp.json()
         assert data["count"] == 1
+        assert data["open_count"] == 1
         assert data["trades"][0]["ticker"] == "AAPL"
+        assert data["account_equity"] == 100500
 
     @patch("src.api.cloud_app._query")
     def test_shadow_closed_accepts_days_param(self, mock_query, client):
@@ -143,13 +154,22 @@ class TestTrainingEndpoints:
     @patch("src.api.cloud_app._query")
     @patch("src.api.cloud_app._query_one")
     def test_training_status(self, mock_one, mock_query, client):
-        mock_one.return_value = {"version_name": "v1.0", "status": "active"}
+        # _query_one is called: active_model, total_examples, win_examples, loss_examples, synthetic_examples
+        mock_one.side_effect = [
+            {"version_name": "v1.0", "status": "active"},  # active_model
+            {"c": 978},    # total_examples
+            {"c": 200},    # win_examples
+            {"c": 100},    # loss_examples
+            {"c": 5},      # synthetic_examples
+        ]
         mock_query.return_value = [{"count": 5}]
 
         resp = client.get("/api/training/status")
         assert resp.status_code == 200
         data = resp.json()
         assert "active_model" in data
+        assert data["model_name"] == "v1.0"
+        assert data["dataset_total"] == 978
         assert data["total_versions"] == 5
 
     @patch("src.api.cloud_app._query")
@@ -161,7 +181,7 @@ class TestTrainingEndpoints:
         resp = client.get("/api/training/versions")
         assert resp.status_code == 200
         data = resp.json()
-        assert len(data) == 2
+        assert len(data["versions"]) == 2
 
 
 # ── Metrics endpoint ─────────────────────────────────────────────────

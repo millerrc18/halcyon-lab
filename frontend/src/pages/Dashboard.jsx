@@ -52,7 +52,7 @@ export default function Dashboard() {
   if (statusLoading) return <LoadingSpinner />
 
   const startingCapital = configData?.risk?.starting_capital || 100000
-  const equity = status?.alpaca_equity || 0
+  const equity = status?.alpaca_equity || openTrades?.account_equity || startingCapital
   const equityDelta = equity - startingCapital
 
   // Build cumulative P&L chart data

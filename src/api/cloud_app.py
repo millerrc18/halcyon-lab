@@ -147,6 +147,15 @@ def status():
             "ORDER BY created_at DESC LIMIT 1"
         )
 
+        model_name = latest_model["version_name"] if latest_model else "base"
+
+        # Count training examples
+        try:
+            te = _query_one("SELECT COUNT(*) as c FROM training_examples")
+            example_count = te["c"] if te else 0
+        except Exception:
+            example_count = 0
+
         return {
             "environment": "cloud",
             "open_positions": open_trades[0]["count"] if open_trades else 0,
@@ -154,6 +163,9 @@ def status():
             "latest_model": latest_model,
             "latest_audit": latest_audit,
             "llm_available": False,
+            "model_version": model_name,
+            "training_examples": example_count,
+            "alpaca_equity": 0,
             "timestamp": datetime.now(ET).isoformat(),
         }
     except HTTPException:
@@ -174,12 +186,28 @@ def shadow_open():
         rows = _query(
             "SELECT * FROM shadow_trades WHERE status = 'open' ORDER BY created_at DESC"
         )
-        return {"trades": rows, "count": len(rows)}
+        # Compute account equity from closed P&L
+        closed_pnl_row = _query_one(
+            "SELECT COALESCE(SUM(pnl_dollars), 0) as total FROM shadow_trades WHERE status = 'closed'"
+        )
+        closed_pnl = closed_pnl_row["total"] if closed_pnl_row else 0
+        starting_capital = 100000
+        equity = starting_capital + (closed_pnl or 0)
+
+        return {
+            "trades": rows,
+            "open_trades": rows,
+            "count": len(rows),
+            "open_count": len(rows),
+            "account_equity": round(equity, 2),
+            "total_unrealized_pnl": 0,
+        }
     except HTTPException:
         raise
     except Exception as exc:
         logger.error("Shadow open error: %s", exc)
-        return {"trades": [], "count": 0, "error": str(exc)}
+        return {"trades": [], "open_trades": [], "count": 0, "open_count": 0,
+                "account_equity": 100000, "total_unrealized_pnl": 0, "error": str(exc)}
 
 
 @app.get("/api/shadow/closed", dependencies=[Depends(verify_auth)])
@@ -192,12 +220,25 @@ def shadow_closed(days: int = 30):
             "AND actual_exit_time >= %s ORDER BY actual_exit_time DESC",
             (cutoff,),
         )
-        return {"trades": rows, "count": len(rows), "days": days}
+        # Compute inline metrics the frontend expects
+        pnls = [r.get("pnl_dollars", 0) or 0 for r in rows]
+        wins = [p for p in pnls if p > 0]
+        losses = [p for p in pnls if p <= 0]
+        total_pnl = sum(pnls)
+        metrics = {
+            "total_trades": len(rows),
+            "win_rate": round(len(wins) / len(rows) * 100, 1) if rows else 0,
+            "avg_gain": round(sum(wins) / len(wins), 2) if wins else 0,
+            "avg_loss": round(sum(losses) / len(losses), 2) if losses else 0,
+            "expectancy": round(total_pnl / len(rows), 2) if rows else 0,
+            "total_pnl": round(total_pnl, 2),
+        }
+        return {"trades": rows, "count": len(rows), "days": days, "metrics": metrics}
     except HTTPException:
         raise
     except Exception as exc:
         logger.error("Shadow closed error: %s", exc)
-        return {"trades": [], "count": 0, "error": str(exc)}
+        return {"trades": [], "count": 0, "metrics": {}, "error": str(exc)}
 
 
 @app.get("/api/shadow/metrics", dependencies=[Depends(verify_auth)])
@@ -265,15 +306,39 @@ def training_status():
         total_versions = _query(
             "SELECT COUNT(*) as count FROM model_versions"
         )
+        # Count training examples by source
+        total_examples = _query_one("SELECT COUNT(*) as c FROM training_examples")
+        win_examples = _query_one("SELECT COUNT(*) as c FROM training_examples WHERE outcome = 'win' OR source = 'blinded_win'")
+        loss_examples = _query_one("SELECT COUNT(*) as c FROM training_examples WHERE outcome = 'loss' OR source = 'blinded_loss'")
+        synthetic_examples = _query_one("SELECT COUNT(*) as c FROM training_examples WHERE source = 'synthetic_claude' OR source = 'synthetic'")
+
+        dataset_total = total_examples["c"] if total_examples else 0
+        dataset_wins = win_examples["c"] if win_examples else 0
+        dataset_losses = loss_examples["c"] if loss_examples else 0
+        dataset_synthetic = synthetic_examples["c"] if synthetic_examples else 0
+        model_name = active_model["version_name"] if active_model else "base"
+
         return {
             "active_model": active_model,
             "total_versions": total_versions[0]["count"] if total_versions else 0,
+            # Fields the Training page expects
+            "model_name": model_name,
+            "dataset_total": dataset_total,
+            "dataset_wins": dataset_wins,
+            "dataset_losses": dataset_losses,
+            "dataset_synthetic": dataset_synthetic,
+            "new_since_last_train": 0,
+            "train_queued": False,
+            "train_reason": "Cloud mode — training runs locally",
+            "rollback_status": "n/a (cloud mode)",
         }
     except HTTPException:
         raise
     except Exception as exc:
         logger.error("Training status error: %s", exc)
-        return {"active_model": None, "error": str(exc)}
+        return {"active_model": None, "model_name": "base", "dataset_total": 0,
+                "dataset_wins": 0, "dataset_losses": 0, "dataset_synthetic": 0,
+                "new_since_last_train": 0, "train_queued": False, "error": str(exc)}
 
 
 @app.get("/api/training/versions", dependencies=[Depends(verify_auth)])
@@ -283,12 +348,12 @@ def training_versions():
         rows = _query(
             "SELECT * FROM model_versions ORDER BY created_at DESC"
         )
-        return rows
+        return {"versions": rows}
     except HTTPException:
         raise
     except Exception as exc:
         logger.error("Training versions error: %s", exc)
-        return []
+        return {"versions": []}
 
 
 @app.get("/api/metrics/history", dependencies=[Depends(verify_auth)])

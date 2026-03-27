@@ -89,7 +89,18 @@ CREATE TABLE IF NOT EXISTS shadow_trades (
     earnings_adjacent INTEGER DEFAULT 0,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
-    alpaca_order_id TEXT
+    alpaca_order_id TEXT,
+    order_type TEXT,
+    timeout_days INTEGER DEFAULT 15,
+    source TEXT DEFAULT 'paper',
+    setup_type TEXT,
+    setup_confidence REAL,
+    signal_entry_price REAL,
+    fill_entry_price REAL,
+    entry_slippage_bps REAL,
+    signal_exit_price REAL,
+    fill_exit_price REAL,
+    exit_slippage_bps REAL
 );
 
 -- Indexes for frequently queried columns
