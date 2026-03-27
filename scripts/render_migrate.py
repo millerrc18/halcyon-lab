@@ -52,6 +52,16 @@ MIGRATIONS = [
     ("edgar_filings", "cautionary_phrases", "ALTER TABLE edgar_filings ADD COLUMN cautionary_phrases TEXT"),
     ("edgar_filings", "sentiment_delta_polarity", "ALTER TABLE edgar_filings ADD COLUMN sentiment_delta_polarity REAL"),
 
+    # Fix column mismatches: SQLite uses different PKs than Postgres init created
+    # api_costs: SQLite has cost_id, Postgres only has id
+    ("api_costs", "cost_id", "ALTER TABLE api_costs ADD COLUMN cost_id TEXT"),
+    # training_examples: SQLite has extra columns not in Postgres init
+    ("training_examples", "recommendation_id", "ALTER TABLE training_examples ADD COLUMN recommendation_id TEXT"),
+    ("training_examples", "feature_snapshot", "ALTER TABLE training_examples ADD COLUMN feature_snapshot TEXT"),
+    ("training_examples", "regime_label", "ALTER TABLE training_examples ADD COLUMN regime_label TEXT"),
+    # setup_signals: SQLite has signal_id, Postgres only has id
+    ("setup_signals", "signal_id", "ALTER TABLE setup_signals ADD COLUMN signal_id TEXT"),
+
     # New tables
     ("schedule_metrics", None, """CREATE TABLE IF NOT EXISTS schedule_metrics (
         id SERIAL PRIMARY KEY,
