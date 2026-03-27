@@ -111,12 +111,12 @@ SYNC_TABLES: dict[str, dict] = {
     "api_costs": {
         "mode": "incremental",
         "time_col": "created_at",
-        "pk": "id",
+        "pk": "cost_id",
     },
     "training_examples": {
         "mode": "incremental",
         "time_col": "created_at",
-        "pk": "id",
+        "pk": "example_id",
     },
     "activity_log": {
         "mode": "incremental",
@@ -126,7 +126,7 @@ SYNC_TABLES: dict[str, dict] = {
     "setup_signals": {
         "mode": "incremental",
         "time_col": "created_at",
-        "pk": "id",
+        "pk": "signal_id",
     },
     "quality_drift_metrics": {
         "mode": "incremental",

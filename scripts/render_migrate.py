@@ -53,14 +53,39 @@ MIGRATIONS = [
     ("edgar_filings", "sentiment_delta_polarity", "ALTER TABLE edgar_filings ADD COLUMN sentiment_delta_polarity REAL"),
 
     # Fix column mismatches: SQLite uses different PKs than Postgres init created
-    # api_costs: SQLite has cost_id, Postgres only has id
+    # api_costs: SQLite has cost_id as PK, Postgres has id SERIAL
     ("api_costs", "cost_id", "ALTER TABLE api_costs ADD COLUMN cost_id TEXT"),
-    # training_examples: SQLite has extra columns not in Postgres init
+    ("api_costs", "cost_dollars", "ALTER TABLE api_costs ADD COLUMN cost_dollars REAL"),
+    # UNIQUE index for ON CONFLICT upsert
+    ("api_costs", "_idx_cost_id", "CREATE UNIQUE INDEX IF NOT EXISTS idx_api_costs_cost_id ON api_costs(cost_id)"),
+
+    # training_examples: SQLite has many columns not in Postgres init
     ("training_examples", "recommendation_id", "ALTER TABLE training_examples ADD COLUMN recommendation_id TEXT"),
     ("training_examples", "feature_snapshot", "ALTER TABLE training_examples ADD COLUMN feature_snapshot TEXT"),
     ("training_examples", "regime_label", "ALTER TABLE training_examples ADD COLUMN regime_label TEXT"),
-    # setup_signals: SQLite has signal_id, Postgres only has id
+    ("training_examples", "trade_outcome", "ALTER TABLE training_examples ADD COLUMN trade_outcome TEXT"),
+    ("training_examples", "instruction", "ALTER TABLE training_examples ADD COLUMN instruction TEXT"),
+    ("training_examples", "difficulty", "ALTER TABLE training_examples ADD COLUMN difficulty TEXT"),
+    ("training_examples", "quality_score_auto", "ALTER TABLE training_examples ADD COLUMN quality_score_auto REAL"),
+
+    # setup_signals: SQLite has rich signal data, Postgres was created minimal
     ("setup_signals", "signal_id", "ALTER TABLE setup_signals ADD COLUMN signal_id TEXT"),
+    ("setup_signals", "date", "ALTER TABLE setup_signals ADD COLUMN date TEXT"),
+    ("setup_signals", "theoretical_entry", "ALTER TABLE setup_signals ADD COLUMN theoretical_entry REAL"),
+    ("setup_signals", "theoretical_stop", "ALTER TABLE setup_signals ADD COLUMN theoretical_stop REAL"),
+    ("setup_signals", "theoretical_target", "ALTER TABLE setup_signals ADD COLUMN theoretical_target REAL"),
+    ("setup_signals", "regime", "ALTER TABLE setup_signals ADD COLUMN regime TEXT"),
+    ("setup_signals", "adx", "ALTER TABLE setup_signals ADD COLUMN adx REAL"),
+    ("setup_signals", "atr_ratio", "ALTER TABLE setup_signals ADD COLUMN atr_ratio REAL"),
+    ("setup_signals", "rsi", "ALTER TABLE setup_signals ADD COLUMN rsi REAL"),
+    ("setup_signals", "volume_profile", "ALTER TABLE setup_signals ADD COLUMN volume_profile TEXT"),
+    ("setup_signals", "actual_return_1d", "ALTER TABLE setup_signals ADD COLUMN actual_return_1d REAL"),
+    ("setup_signals", "actual_return_5d", "ALTER TABLE setup_signals ADD COLUMN actual_return_5d REAL"),
+    ("setup_signals", "actual_return_10d", "ALTER TABLE setup_signals ADD COLUMN actual_return_10d REAL"),
+    ("setup_signals", "actual_return_20d", "ALTER TABLE setup_signals ADD COLUMN actual_return_20d REAL"),
+    ("setup_signals", "was_traded", "ALTER TABLE setup_signals ADD COLUMN was_traded INTEGER"),
+    # UNIQUE index for ON CONFLICT upsert
+    ("setup_signals", "_idx_signal_id", "CREATE UNIQUE INDEX IF NOT EXISTS idx_setup_signals_signal_id ON setup_signals(signal_id)"),
 
     # New tables
     ("schedule_metrics", None, """CREATE TABLE IF NOT EXISTS schedule_metrics (
