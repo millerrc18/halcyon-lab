@@ -119,6 +119,15 @@ def healthz():
     """Unauthenticated health check for Render."""
     return {"status": "ok"}
 
+@app.get("/api/auth", dependencies=[Depends(verify_auth)])
+def auth_check():
+    """Verify auth token without touching the database.
+
+    Used by AuthGate to validate password on login.
+    Returns 200 if token is valid, 401 if not.
+    """
+    return {"authenticated": True}
+
 @app.get("/api/status", dependencies=[Depends(verify_auth)])
 def status():
     """System status overview from cloud data."""

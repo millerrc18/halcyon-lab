@@ -40,7 +40,7 @@ export default function AuthGate({ children }) {
     setError('')
     setLoading(true)
     try {
-      const res = await fetch(`${API_BASE}/status`, {
+      const res = await fetch(`${API_BASE}/auth`, {
         headers: { Authorization: `Bearer ${password}` },
       })
       if (res.ok) {
