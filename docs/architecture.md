@@ -74,11 +74,12 @@
 - **council_sessions** — Council deliberation session metadata and consensus
 - **council_votes** — Individual agent votes per round per session
 
-## API Routes (57+)
+## API Routes (58+)
 
 ### System & Status
 | Route | Method | Description |
 |-------|--------|-------------|
+| `/api/diagnostics` | GET | DB table health check (pass/fail per table) |
 | `/api/status` | GET | System status |
 | `/api/preflight` | GET | Preflight health check |
 | `/api/config` | GET | Current configuration |

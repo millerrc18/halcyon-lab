@@ -1,0 +1,301 @@
+"""Build fund-manager-style email digests for Halcyon Lab.
+
+Four digests per day, each with a specific purpose:
+1. Pre-market (7:30 AM): Portfolio status, overnight events, today's plan
+2. Midday (12:00 PM): Morning activity, P&L update, any risk alerts
+3. EOD (4:15 PM): Full day recap, all trades, daily P&L, next actions
+4. Evening (8:00 PM): Model metrics, training data, flywheel velocity
+"""
+
+import logging
+import sqlite3
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
+
+logger = logging.getLogger(__name__)
+ET = ZoneInfo("America/New_York")
+
+
+def _safe_fetchall(conn, sql, params=()):
+    """Execute query, return list. Returns [] if table missing."""
+    try:
+        return conn.execute(sql, params).fetchall()
+    except sqlite3.OperationalError as e:
+        if "no such table" in str(e):
+            return []
+        raise
+
+
+def _safe_fetchone(conn, sql, params=()):
+    """Execute query, return one row. Returns None if table missing."""
+    try:
+        return conn.execute(sql, params).fetchone()
+    except sqlite3.OperationalError as e:
+        if "no such table" in str(e):
+            return None
+        raise
+
+
+def build_premarket_digest(db_path: str = "ai_research_desk.sqlite3") -> tuple[str, str]:
+    """Pre-market brief: portfolio status, overnight events, today's plan."""
+    now = datetime.now(ET)
+
+    with sqlite3.connect(db_path) as conn:
+        conn.row_factory = sqlite3.Row
+
+        open_trades = _safe_fetchall(
+            conn,
+            "SELECT ticker, entry_price, planned_shares, source, created_at "
+            "FROM shadow_trades WHERE status = 'open' ORDER BY source, ticker",
+        )
+        paper_trades = [t for t in open_trades if t["source"] == "paper"]
+        live_trades = [t for t in open_trades if t["source"] == "live"]
+
+        yesterday = (now - timedelta(days=1)).strftime("%Y-%m-%d")
+        closed_yesterday = _safe_fetchall(
+            conn,
+            "SELECT ticker, pnl_dollars, pnl_pct, exit_reason "
+            "FROM shadow_trades WHERE status = 'closed' AND date(actual_exit_time) = ?",
+            (yesterday,),
+        )
+
+        overnight_activity = _safe_fetchall(
+            conn,
+            "SELECT event_type, detail FROM activity_log "
+            "WHERE created_at > ? ORDER BY created_at DESC LIMIT 10",
+            ((now - timedelta(hours=12)).isoformat(),),
+        )
+
+        council = _safe_fetchone(
+            conn,
+            "SELECT consensus, confidence_weighted_score, is_contested "
+            "FROM council_sessions ORDER BY created_at DESC LIMIT 1",
+        )
+
+    subject = f"Halcyon Pre-Market — {now.strftime('%b %d')} | {len(paper_trades)} paper, {len(live_trades)} live"
+
+    lines = [
+        "HALCYON LAB — PRE-MARKET BRIEF",
+        now.strftime("%A, %B %d, %Y"),
+        "",
+        "━━━ PORTFOLIO STATUS ━━━",
+        f"Paper positions: {len(paper_trades)} open",
+        f"Live positions:  {len(live_trades)} open",
+    ]
+
+    if closed_yesterday:
+        total_pnl = sum(t["pnl_dollars"] or 0 for t in closed_yesterday)
+        wins = sum(1 for t in closed_yesterday if (t["pnl_dollars"] or 0) > 0)
+        lines.extend([
+            "",
+            f"Yesterday: {len(closed_yesterday)} trades closed, "
+            f"{wins}W/{len(closed_yesterday) - wins}L, P&L: ${total_pnl:+.2f}",
+        ])
+
+    if council:
+        consensus = council["consensus"] or "unknown"
+        confidence = council["confidence_weighted_score"]
+        contested = " (contested)" if council["is_contested"] else ""
+        lines.extend(["", "━━━ COUNCIL ━━━", f"Latest assessment: {consensus}{contested}"])
+        if confidence:
+            lines.append(f"Confidence: {confidence:.0%}")
+
+    lines.extend([
+        "", "━━━ TODAY'S PLAN ━━━",
+        "Market scans: every 30 min (9:30 AM – 4:00 PM ET)",
+        "EOD recap at 4:15 PM", "", "— Halcyon Lab",
+    ])
+
+    return subject, "\n".join(lines)
+
+
+def build_midday_digest(db_path: str = "ai_research_desk.sqlite3") -> tuple[str, str]:
+    """Midday update: morning trades, P&L, risk alerts."""
+    now = datetime.now(ET)
+    today = now.strftime("%Y-%m-%d")
+
+    with sqlite3.connect(db_path) as conn:
+        conn.row_factory = sqlite3.Row
+
+        opened_today = _safe_fetchall(
+            conn,
+            "SELECT ticker, entry_price, planned_shares, source "
+            "FROM shadow_trades WHERE date(created_at) = ? AND status IN ('open', 'closed')",
+            (today,),
+        )
+        closed_today = _safe_fetchall(
+            conn,
+            "SELECT ticker, pnl_dollars, pnl_pct, exit_reason "
+            "FROM shadow_trades WHERE status = 'closed' AND date(actual_exit_time) = ?",
+            (today,),
+        )
+        risk_alerts = _safe_fetchall(
+            conn,
+            "SELECT detail, created_at FROM activity_log "
+            "WHERE event_type = 'risk_alert' AND date(created_at) = ?",
+            (today,),
+        )
+        scans = _safe_fetchall(
+            conn,
+            "SELECT scan_number, packet_worthy, paper_traded, llm_success, llm_total "
+            "FROM scan_metrics WHERE date(created_at) = ? ORDER BY scan_number",
+            (today,),
+        )
+
+    total_packets = sum(s["packet_worthy"] or 0 for s in scans)
+    total_traded = sum(s["paper_traded"] or 0 for s in scans)
+    llm_success = sum(s["llm_success"] or 0 for s in scans)
+    llm_total = sum(s["llm_total"] or 0 for s in scans)
+    llm_rate = f"{llm_success}/{llm_total} ({llm_success / llm_total * 100:.0f}%)" if llm_total > 0 else "n/a"
+    closed_pnl = sum(t["pnl_dollars"] or 0 for t in closed_today)
+
+    subject = f"Halcyon Midday — {len(opened_today)} opened, {len(closed_today)} closed, P&L: ${closed_pnl:+.2f}"
+
+    lines = [
+        "HALCYON LAB — MIDDAY UPDATE",
+        f"{now.strftime('%A, %B %d')} — 12:00 PM ET",
+        "", "━━━ MORNING ACTIVITY ━━━",
+        f"Scans completed:  {len(scans)}",
+        f"Setups scored:    {total_packets}",
+        f"Trades opened:    {len(opened_today)} ({total_traded} attempted)",
+        f"Trades closed:    {len(closed_today)}",
+        f"LLM success rate: {llm_rate}",
+    ]
+
+    if closed_today:
+        lines.extend(["", "━━━ CLOSED TRADES ━━━"])
+        for t in closed_today:
+            pnl = t["pnl_dollars"] or 0
+            pct = t["pnl_pct"] or 0
+            icon = "+" if pnl > 0 else "-"
+            lines.append(f"  {icon} {t['ticker']:6s}  ${pnl:+8.2f}  ({pct:+.1f}%)  [{t['exit_reason']}]")
+        lines.append(f"  Net: ${closed_pnl:+.2f}")
+
+    if risk_alerts:
+        lines.extend(["", "━━━ RISK ALERTS ━━━"])
+        for alert in risk_alerts:
+            lines.append(f"  ! {alert['detail']}")
+
+    lines.extend(["", "— Halcyon Lab"])
+    return subject, "\n".join(lines)
+
+
+def build_eod_digest(db_path: str = "ai_research_desk.sqlite3") -> tuple[str, str]:
+    """EOD recap: full day summary, all trades, P&L, position snapshot."""
+    now = datetime.now(ET)
+    today = now.strftime("%Y-%m-%d")
+
+    with sqlite3.connect(db_path) as conn:
+        conn.row_factory = sqlite3.Row
+
+        opened = _safe_fetchall(conn, "SELECT ticker, entry_price, planned_shares, source FROM shadow_trades WHERE date(created_at) = ?", (today,))
+        closed = _safe_fetchall(conn, "SELECT ticker, pnl_dollars, pnl_pct, exit_reason, source FROM shadow_trades WHERE status = 'closed' AND date(actual_exit_time) = ?", (today,))
+        open_positions = _safe_fetchall(conn, "SELECT ticker, entry_price, planned_shares, source, created_at FROM shadow_trades WHERE status = 'open' ORDER BY source, ticker")
+        all_closed = _safe_fetchall(conn, "SELECT pnl_dollars, pnl_pct FROM shadow_trades WHERE status = 'closed'")
+        scans = _safe_fetchone(conn, "SELECT COUNT(*) as cnt FROM scan_metrics WHERE date(created_at) = ?", (today,))
+
+    closed_pnl = sum(t["pnl_dollars"] or 0 for t in closed)
+    total_trades = len(all_closed)
+    total_pnl = sum(t["pnl_dollars"] or 0 for t in all_closed)
+    win_rate = sum(1 for t in all_closed if (t["pnl_dollars"] or 0) > 0) / total_trades if total_trades else 0
+
+    subject = f"Halcyon EOD — {now.strftime('%b %d')} | {len(closed)} closed, P&L: ${closed_pnl:+.2f} | Total: ${total_pnl:+.2f}"
+
+    lines = [
+        "HALCYON LAB — END OF DAY RECAP",
+        now.strftime("%A, %B %d, %Y"),
+        "", "━━━ TODAY'S RESULTS ━━━",
+        f"Trades opened:  {len(opened)}", f"Trades closed:  {len(closed)}",
+        f"Day P&L:        ${closed_pnl:+.2f}",
+        f"Scans run:      {scans['cnt'] if scans else 0}",
+    ]
+
+    if closed:
+        lines.append("")
+        for t in closed:
+            pnl = t["pnl_dollars"] or 0
+            pct = t["pnl_pct"] or 0
+            icon = "+" if pnl > 0 else "-"
+            lines.append(f"  {icon} {t['ticker']:6s}  ${pnl:+8.2f}  ({pct:+.1f}%)  [{t['exit_reason']}]")
+
+    lines.extend([
+        "", f"━━━ CUMULATIVE ({total_trades} trades) ━━━",
+        f"Total P&L:    ${total_pnl:+.2f}", f"Win rate:     {win_rate:.0%}",
+        f"Gate target:  {total_trades}/50 trades ({total_trades / 50 * 100:.0f}%)",
+    ])
+
+    paper = [t for t in open_positions if t["source"] == "paper"]
+    live = [t for t in open_positions if t["source"] == "live"]
+    lines.extend(["", "━━━ OPEN POSITIONS ━━━", f"Paper: {len(paper)} | Live: {len(live)}"])
+    if paper:
+        for t in paper[:10]:
+            lines.append(f"  {t['ticker']:6s}  ${t['entry_price']:.2f}  x{t['planned_shares']}")
+        if len(paper) > 10:
+            lines.append(f"  ...and {len(paper) - 10} more")
+
+    lines.extend(["", "— Halcyon Lab"])
+    return subject, "\n".join(lines)
+
+
+def build_evening_digest(db_path: str = "ai_research_desk.sqlite3") -> tuple[str, str]:
+    """Evening digest: model quality, training data, flywheel velocity."""
+    now = datetime.now(ET)
+    today = now.strftime("%Y-%m-%d")
+
+    with sqlite3.connect(db_path) as conn:
+        conn.row_factory = sqlite3.Row
+
+        total_examples = _safe_fetchone(conn, "SELECT COUNT(*) as c FROM training_examples")
+        today_examples = _safe_fetchone(conn, "SELECT COUNT(*) as c FROM training_examples WHERE date(created_at) = ?", (today,))
+        scored = _safe_fetchone(conn, "SELECT COUNT(*) as c FROM training_examples WHERE quality_score_auto IS NOT NULL")
+        avg_quality = _safe_fetchone(conn, "SELECT AVG(quality_score_auto) as avg FROM training_examples WHERE quality_score_auto IS NOT NULL")
+        closed_total = _safe_fetchone(conn, "SELECT COUNT(*) as c FROM shadow_trades WHERE status = 'closed'")
+        scan_today = _safe_fetchone(conn, "SELECT SUM(llm_success) as s, SUM(llm_total) as t FROM scan_metrics WHERE date(created_at) = ?", (today,))
+        canary = _safe_fetchone(conn, "SELECT verdict, perplexity, distinct_2, created_at FROM canary_evaluations ORDER BY created_at DESC LIMIT 1")
+        costs_today = _safe_fetchone(conn, "SELECT SUM(cost_dollars) as total FROM api_costs WHERE date(created_at) = ?", (today,))
+
+    total_ex = total_examples["c"] if total_examples else 0
+    today_ex = today_examples["c"] if today_examples else 0
+    scored_count = scored["c"] if scored else 0
+    avg_q = avg_quality["avg"] if avg_quality and avg_quality["avg"] else 0
+    closed_count = closed_total["c"] if closed_total else 0
+
+    llm_s = scan_today["s"] if scan_today and scan_today["s"] else 0
+    llm_t = scan_today["t"] if scan_today and scan_today["t"] else 0
+    llm_rate = f"{llm_s / llm_t * 100:.0f}%" if llm_t > 0 else "n/a"
+    cost = costs_today["total"] if costs_today and costs_today["total"] else 0
+
+    subject = f"Halcyon Evening — {total_ex} examples, {closed_count}/50 trades, LLM {llm_rate}"
+
+    lines = [
+        "HALCYON LAB — EVENING DIGEST", now.strftime("%A, %B %d, %Y"),
+        "", "━━━ DATA ASSET ━━━",
+        f"Training examples:  {total_ex}/2,800 target ({total_ex / 2800 * 100:.1f}%)",
+        f"Added today:        {today_ex}",
+        f"Quality scored:     {scored_count}/{total_ex}",
+    ]
+    lines.append(f"Avg quality score:  {avg_q:.1f}/5" if avg_q > 0 else "Avg quality score:  Not scored yet")
+
+    lines.extend([
+        "", "━━━ FLYWHEEL ━━━",
+        f"Closed trades:      {closed_count}/50 gate target ({closed_count / 50 * 100:.0f}%)",
+        f"LLM success rate:   {llm_rate} (today)",
+    ])
+
+    if canary:
+        lines.extend(["", "━━━ MODEL QUALITY ━━━", f"Canary verdict:     {canary['verdict']}"])
+        if canary["perplexity"]:
+            lines.append(f"Perplexity:         {canary['perplexity']:.2f}")
+        if canary["distinct_2"]:
+            lines.append(f"Distinct-2:         {canary['distinct_2']:.4f}")
+        lines.append(f"Last evaluated:     {canary['created_at'][:10]}")
+    else:
+        lines.extend(["", "━━━ MODEL QUALITY ━━━", "Awaiting first Saturday retrain for canary evaluation."])
+
+    lines.extend([
+        "", "━━━ COSTS ━━━",
+        f"API spend today:    ${cost:.2f}" if cost else "API spend today:    $0.00",
+        "", "— Halcyon Lab",
+    ])
+
+    return subject, "\n".join(lines)

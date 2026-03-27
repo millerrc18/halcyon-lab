@@ -1,4 +1,4 @@
-<!-- Counts verified 2026-03-27: 128 Python files, 24,400+ LOC, 52 test files, 657+ tests, 50 CLI commands, 71 API routes, 31 DB tables, 35+ research docs. -->
+<!-- Counts verified 2026-03-27: 129 Python files, 24,800+ LOC, 60 test files, 853+ tests, 50 CLI commands, 72 API routes, 31 DB tables, 35+ research docs. -->
 
 # AGENTS.md — Halcyon Lab Governance Document
 

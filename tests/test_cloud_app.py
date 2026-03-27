@@ -513,3 +513,352 @@ class TestNewEndpoints:
     def test_metric_history_no_db(self, client):
         resp = client.get("/api/metric-history")
         assert resp.status_code == 200
+
+
+# ── Untested endpoint coverage ──────────────────────────────────────
+
+
+class TestActivityFeed:
+    """Tests for /api/activity/feed."""
+
+    @patch("src.api.cloud_app._query")
+    def test_activity_feed_returns_list(self, mock_query, client):
+        mock_query.return_value = [
+            {"id": 1, "event_type": "trade_open", "detail": "LIN", "created_at": "2026-03-27"},
+        ]
+        r = client.get("/api/activity/feed?limit=10")
+        assert r.status_code == 200
+        data = r.json()
+        assert isinstance(data, list)
+        assert len(data) == 1
+
+    @patch("src.api.cloud_app._query")
+    def test_activity_feed_empty(self, mock_query, client):
+        mock_query.return_value = []
+        r = client.get("/api/activity/feed")
+        assert r.status_code == 200
+        assert r.json() == []
+
+    @patch("src.api.cloud_app._query")
+    def test_activity_feed_with_event_type_filter(self, mock_query, client):
+        mock_query.return_value = []
+        r = client.get("/api/activity/feed?event_type=trade_open")
+        assert r.status_code == 200
+        assert isinstance(r.json(), list)
+
+
+class TestLiveTrades:
+    """Tests for /api/live/trades and /api/live/summary."""
+
+    @patch("src.api.cloud_app._query")
+    def test_live_trades_returns_open_and_closed(self, mock_query, client):
+        mock_query.side_effect = [
+            [{"ticker": "AAPL", "status": "open", "source": "live"}],
+            [],
+        ]
+        r = client.get("/api/live/trades")
+        assert r.status_code == 200
+        data = r.json()
+        assert "open" in data
+        assert "closed" in data
+
+    @patch("src.api.cloud_app._query_one")
+    @patch("src.api.cloud_app._query")
+    def test_live_summary_returns_metrics(self, mock_query, mock_one, client):
+        mock_query.return_value = []
+        mock_one.return_value = {"c": 0}
+        r = client.get("/api/live/summary")
+        assert r.status_code == 200
+        data = r.json()
+        assert "starting_capital" in data
+        assert "current_equity" in data
+
+    @patch("src.api.cloud_app._query_one")
+    @patch("src.api.cloud_app._query")
+    def test_live_summary_with_closed_trades(self, mock_query, mock_one, client):
+        mock_query.return_value = [{"pnl_dollars": 5.0, "pnl_pct": 2.0}]
+        mock_one.return_value = {"c": 1}
+        r = client.get("/api/live/summary")
+        data = r.json()
+        assert data["total_pnl"] == 5.0
+        assert data["open_positions"] == 1
+
+
+class TestCouncilSessionDetail:
+    """Tests for /api/council/session/{id}."""
+
+    @patch("src.api.cloud_app._query")
+    @patch("src.api.cloud_app._query_one")
+    def test_council_session_detail_returns_votes(self, mock_one, mock_query, client):
+        mock_one.return_value = {"session_id": "abc", "session_type": "daily", "agent_count": 5}
+        mock_query.return_value = [
+            {"agent_name": "Bull", "position": "BULLISH", "confidence": 0.8},
+        ]
+        r = client.get("/api/council/session/abc")
+        assert r.status_code == 200
+        data = r.json()
+        assert "session" in data
+        assert "votes" in data
+
+    @patch("src.api.cloud_app._query_one")
+    def test_council_session_not_found(self, mock_one, client):
+        mock_one.return_value = None
+        r = client.get("/api/council/session/nonexistent")
+        assert r.status_code == 404
+
+
+class TestHealthScore:
+    """Tests for /api/health/score."""
+
+    @patch("src.api.cloud_app._query_one")
+    @patch("src.api.cloud_app._query")
+    def test_health_score_returns_all_dimensions(self, mock_query, mock_one, client):
+        mock_query.side_effect = [
+            [{"pnl_dollars": 100, "pnl_pct": 4.0}, {"pnl_dollars": -50, "pnl_pct": -2.0}],
+            [{"source": "backfill", "cnt": 700}, {"source": "blinded_win", "cnt": 200}],
+        ]
+        mock_one.side_effect = [
+            {"c": 18}, {"count": 969}, None, None,
+            {"llm_success": 17, "llm_total": 20},
+            {"cnt": 3}, {"cnt": 50},
+        ]
+        r = client.get("/api/health/score")
+        assert r.status_code == 200
+        data = r.json()
+        score = data.get("score", data)
+        assert "overall" in score
+        assert "dimensions" in score
+        dims = score["dimensions"]
+        for key in ["performance", "model_quality", "data_asset", "flywheel_velocity", "defensibility"]:
+            assert key in dims
+            assert isinstance(dims[key], (int, float)), f"{key} is not numeric"
+
+    @patch("src.api.cloud_app._query_one")
+    @patch("src.api.cloud_app._query")
+    def test_health_score_handles_empty_db(self, mock_query, mock_one, client):
+        mock_query.side_effect = [[], []]
+        mock_one.side_effect = [{"c": 0}, {"count": 0}, None, None, None, {"cnt": 0}, {"cnt": 0}]
+        r = client.get("/api/health/score")
+        assert r.status_code == 200
+
+
+class TestSettings:
+    """Tests for /api/settings."""
+
+    def test_settings_returns_safe_config(self, client):
+        r = client.get("/api/settings")
+        assert r.status_code == 200
+        data = r.json()
+        flat = str(data).lower()
+        assert "api_key" not in flat
+        assert "password" not in flat
+        assert "secret" not in flat
+
+    def test_settings_post_returns_cloud_mode(self, client):
+        r = client.post("/api/settings")
+        assert r.status_code == 200
+        assert r.json()["error"] == "cloud_mode"
+
+
+class TestMarketOverview:
+    """Tests for /api/market/overview."""
+
+    @patch("src.api.cloud_app._query")
+    @patch("src.api.cloud_app._query_one")
+    def test_market_overview(self, mock_one, mock_query, client):
+        mock_one.return_value = {"vix_close": 18.5}
+        mock_query.return_value = [{"series_id": "DFF", "value": 4.5}]
+        r = client.get("/api/market/overview")
+        assert r.status_code == 200
+        data = r.json()
+        assert "vix" in data
+        assert "macro" in data
+
+
+class TestDataAssetGrowth:
+    """Tests for /api/data-asset/growth."""
+
+    @patch("src.api.cloud_app._query")
+    def test_data_asset_growth(self, mock_query, client):
+        mock_query.return_value = [{"date": "2026-03-27", "count": 5}]
+        r = client.get("/api/data-asset/growth")
+        assert r.status_code == 200
+        data = r.json()
+        assert "daily_counts" in data
+
+
+class TestJournal:
+    """Tests for /api/journal."""
+
+    @patch("src.api.cloud_app._query")
+    def test_journal(self, mock_query, client):
+        mock_query.return_value = []
+        r = client.get("/api/journal")
+        assert r.status_code == 200
+        data = r.json()
+        assert "trades" in data
+        assert "count" in data
+
+
+class TestSignalZoo:
+    """Tests for /api/signal-zoo."""
+
+    @patch("src.api.cloud_app._query")
+    def test_signal_zoo(self, mock_query, client):
+        mock_query.return_value = []
+        r = client.get("/api/signal-zoo")
+        assert r.status_code == 200
+        data = r.json()
+        assert "signals" in data
+
+
+class TestMacroDashboard:
+    """Tests for /api/macro/dashboard."""
+
+    @patch("src.api.cloud_app._query")
+    def test_macro_dashboard(self, mock_query, client):
+        mock_query.return_value = []
+        r = client.get("/api/macro/dashboard")
+        assert r.status_code == 200
+        data = r.json()
+        assert "series" in data
+
+
+class TestResearchEndpoints:
+    """Tests for /api/research/*."""
+
+    @patch("src.api.cloud_app._query")
+    def test_research_papers(self, mock_query, client):
+        mock_query.return_value = []
+        r = client.get("/api/research/papers")
+        assert r.status_code == 200
+        data = r.json()
+        assert "papers" in data
+
+    @patch("src.api.cloud_app._query_one")
+    def test_research_digest(self, mock_one, client):
+        mock_one.return_value = None
+        r = client.get("/api/research/digest")
+        assert r.status_code == 200
+
+    @patch("src.api.cloud_app._query_one")
+    def test_research_digest_with_data(self, mock_one, client):
+        mock_one.return_value = {"id": "d1", "summary": "Weekly digest", "created_at": "2026-03-27"}
+        r = client.get("/api/research/digest")
+        assert r.status_code == 200
+        data = r.json()
+        assert data["summary"] == "Weekly digest"
+
+
+class TestTrainingQuality:
+    """Tests for /api/training/quality."""
+
+    @patch("src.api.cloud_app._query")
+    @patch("src.api.cloud_app._query_one")
+    def test_training_quality(self, mock_one, mock_query, client):
+        mock_one.return_value = {"c": 500}
+        mock_query.side_effect = [
+            [{"source": "blinded_win", "count": 200}],
+            [{"curriculum_stage": "stage1", "count": 200}],
+            [{"outcome": "win", "count": 200}],
+        ]
+        r = client.get("/api/training/quality")
+        assert r.status_code == 200
+        data = r.json()
+        assert "total" in data
+        assert "by_source" in data
+
+
+class TestScanMetrics:
+    """Tests for /api/scan/metrics."""
+
+    @patch("src.api.cloud_app._query_one")
+    def test_scan_metrics(self, mock_one, client):
+        mock_one.return_value = {"llm_success": 5, "llm_total": 6}
+        r = client.get("/api/scan/metrics")
+        assert r.status_code == 200
+
+
+class TestProjectionsLive:
+    """Tests for /api/projections/live."""
+
+    @patch("src.api.cloud_app._query")
+    def test_projections_live_no_data(self, mock_query, client):
+        mock_query.return_value = []
+        r = client.get("/api/projections/live")
+        assert r.status_code == 200
+        data = r.json()
+        assert data["trades"] == 0
+
+    @patch("src.api.cloud_app._query")
+    def test_projections_live_with_data(self, mock_query, client):
+        mock_query.return_value = [
+            {"pnl_dollars": 100, "pnl_pct": 4.0},
+            {"pnl_dollars": -50, "pnl_pct": -2.0},
+        ]
+        r = client.get("/api/projections/live")
+        assert r.status_code == 200
+        data = r.json()
+        assert data["trades"] == 2
+        assert "winRate" in data
+        assert "sharpe" in data
+
+
+class TestHealthz:
+    """Tests for /healthz."""
+
+    def test_healthz(self, client):
+        r = client.get("/healthz")
+        assert r.status_code == 200
+        assert r.json()["status"] == "ok"
+
+
+class TestDiagnostics:
+    """Tests for /api/diagnostics."""
+
+    @patch("src.api.cloud_app._query_one")
+    def test_diagnostics_healthy(self, mock_one, client):
+        mock_one.return_value = {"c": 10}
+        r = client.get("/api/diagnostics")
+        assert r.status_code == 200
+        data = r.json()
+        assert data["status"] == "healthy"
+        assert data["failed_count"] == 0
+
+    @patch("src.api.cloud_app._query_one")
+    def test_diagnostics_degraded(self, mock_one, client):
+        mock_one.side_effect = Exception("relation does not exist")
+        r = client.get("/api/diagnostics")
+        assert r.status_code == 200
+        data = r.json()
+        assert data["status"] == "degraded"
+        assert data["failed_count"] > 0
+
+
+class TestReconcileEndpoint:
+    """Tests for /api/live/reconcile."""
+
+    def test_reconcile_returns_cloud_mode(self, client):
+        r = client.post("/api/live/reconcile")
+        assert r.status_code == 200
+        assert r.json()["error"] == "cloud_mode"
+
+
+class TestCtoReportShape:
+    """Tests for /api/cto-report response shape matching frontend."""
+
+    @patch("src.api.cloud_app._query_one")
+    @patch("src.api.cloud_app._query")
+    def test_cto_report_has_expected_keys(self, mock_query, mock_one, client):
+        mock_one.side_effect = [{"c": 5}, None, None]
+        mock_query.side_effect = [
+            [{"ticker": "AAPL", "pnl_dollars": 100, "pnl_pct": 4.0, "exit_reason": "target"}],
+        ]
+        r = client.get("/api/cto-report?days=30")
+        assert r.status_code == 200
+        data = r.json()
+        assert "headline_kpis" in data
+        assert "trade_summary" in data
+        ts = data["trade_summary"]
+        assert "trades_closed" in ts
+        assert "total_pnl" in ts
