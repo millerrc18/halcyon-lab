@@ -536,12 +536,48 @@ class WatchLoop:
                 paper_traded INTEGER, live_traded INTEGER, llm_success INTEGER,
                 llm_total INTEGER, llm_fallback INTEGER, avg_conviction REAL,
                 duration_seconds REAL, created_at TEXT)""",
+            # Tables created by data collectors that sync needs
+            """CREATE TABLE IF NOT EXISTS short_interest (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, ticker TEXT NOT NULL,
+                settlement_date TEXT, short_interest INTEGER, avg_daily_volume INTEGER,
+                days_to_cover REAL, short_pct_float REAL, source TEXT,
+                collected_at TEXT NOT NULL)""",
+            """CREATE TABLE IF NOT EXISTS edgar_filings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, ticker TEXT NOT NULL,
+                cik TEXT NOT NULL, form_type TEXT NOT NULL, filing_date TEXT NOT NULL,
+                accession_number TEXT UNIQUE NOT NULL, filing_url TEXT,
+                description TEXT, full_text TEXT, sections_json TEXT,
+                word_count INTEGER, collected_at TEXT NOT NULL,
+                sentiment_polarity REAL, sentiment_negative_count INTEGER,
+                sentiment_uncertainty_count INTEGER, cautionary_phrases TEXT,
+                sentiment_delta_polarity REAL)""",
+            """CREATE TABLE IF NOT EXISTS insider_transactions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, ticker TEXT NOT NULL,
+                insider_name TEXT, title TEXT, transaction_type TEXT,
+                shares INTEGER, price REAL, value REAL, transaction_date TEXT,
+                ownership_type TEXT, source TEXT, collected_at TEXT NOT NULL)""",
+            """CREATE TABLE IF NOT EXISTS fed_communications (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, event_type TEXT NOT NULL,
+                event_date TEXT NOT NULL, title TEXT, summary TEXT,
+                sentiment TEXT, key_phrases TEXT, url TEXT,
+                source TEXT, collected_at TEXT NOT NULL)""",
+            """CREATE TABLE IF NOT EXISTS analyst_estimates (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, ticker TEXT NOT NULL,
+                metric TEXT, period TEXT, estimate REAL, actual REAL,
+                surprise REAL, surprise_pct REAL, num_analysts INTEGER,
+                source TEXT, collected_at TEXT NOT NULL)""",
         ]
         # Slippage columns on shadow_trades
         slippage_cols = [
             ("signal_entry_price", "REAL"), ("fill_entry_price", "REAL"),
             ("entry_slippage_bps", "REAL"), ("signal_exit_price", "REAL"),
             ("fill_exit_price", "REAL"), ("exit_slippage_bps", "REAL"),
+        ]
+        # NLP columns on edgar_filings (for existing DBs)
+        edgar_nlp_cols = [
+            ("sentiment_polarity", "REAL"), ("sentiment_negative_count", "INTEGER"),
+            ("sentiment_uncertainty_count", "INTEGER"), ("cautionary_phrases", "TEXT"),
+            ("sentiment_delta_polarity", "REAL"),
         ]
         try:
             with sqlite3.connect(db_path) as conn:
@@ -550,6 +586,11 @@ class WatchLoop:
                 for col, typ in slippage_cols:
                     try:
                         conn.execute(f"ALTER TABLE shadow_trades ADD COLUMN {col} {typ}")
+                    except Exception:
+                        pass  # Column already exists
+                for col, typ in edgar_nlp_cols:
+                    try:
+                        conn.execute(f"ALTER TABLE edgar_filings ADD COLUMN {col} {typ}")
                     except Exception:
                         pass  # Column already exists
             logger.info("[WATCH] All SQLite tables verified/created")
@@ -895,6 +936,39 @@ class WatchLoop:
             send_email(subject, f"Assessment: RED\n\n{audit.get('summary', '')}")
         elif assessment == "yellow":
             logger.info("[AUDIT] Yellow assessment — included in EOD recap")
+
+        # CUSUM performance change detection
+        try:
+            from src.evaluation.change_detector import detect_performance_change
+            change = detect_performance_change()
+            if change and change.get("alarm"):
+                alarm_msg = f"[CUSUM] Performance change detected: {change.get('direction', 'negative')} shift"
+                logger.warning(alarm_msg)
+                print(f"[WATCH] {alarm_msg}")
+                try:
+                    from src.notifications.telegram import send_telegram_message
+                    send_telegram_message(f"⚠️ CUSUM ALARM\n{alarm_msg}\nDetails: {change.get('detail', '')}")
+                except Exception:
+                    pass
+        except Exception as e:
+            logger.debug("[AUDIT] CUSUM check failed: %s", e)
+
+        # Leakage detection
+        try:
+            from src.training.leakage_detector import run_leakage_check
+            leakage = run_leakage_check()
+            if leakage and leakage.get("balanced_accuracy", 0) > 0.65:
+                leak_msg = f"[LEAKAGE] Balanced accuracy {leakage['balanced_accuracy']:.1%} > 65% threshold"
+                logger.warning(leak_msg)
+                try:
+                    from src.notifications.telegram import send_telegram_message
+                    send_telegram_message(f"🔴 LEAKAGE ALERT\n{leak_msg}")
+                except Exception:
+                    pass
+        except ImportError:
+            pass
+        except Exception as e:
+            logger.debug("[AUDIT] Leakage check failed: %s", e)
 
     def _run_training_collection(self):
         """Collect training data from closed trades."""

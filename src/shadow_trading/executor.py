@@ -1,6 +1,7 @@
 """Shadow trade execution flow: entry and exit monitoring."""
 
 import logging
+import sqlite3
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -111,6 +112,76 @@ def open_shadow_trade(
     target_1 = _parse_price(targets_parts[0]) if len(targets_parts) >= 1 else 0.0
     target_2 = _parse_price(targets_parts[1]) if len(targets_parts) >= 2 else 0.0
 
+    # Thorp-style graduated drawdown reduction
+    try:
+        from src.risk.governor import drawdown_adjusted_risk
+        starting_capital = config.get("risk", {}).get("starting_capital", 100000)
+        closed_trades = get_open_shadow_trades(db_path)  # reuse existing helper
+        # Compute peak equity and current drawdown from closed trades
+        with sqlite3.connect(db_path) as _conn:
+            _row = _conn.execute(
+                "SELECT COALESCE(SUM(pnl_dollars), 0) FROM shadow_trades WHERE status = 'closed'"
+            ).fetchone()
+            total_pnl = _row[0] if _row else 0
+            _peak_row = _conn.execute(
+                "SELECT MAX(running_pnl) FROM ("
+                "  SELECT SUM(pnl_dollars) OVER (ORDER BY updated_at) AS running_pnl"
+                "  FROM shadow_trades WHERE status = 'closed' AND pnl_dollars IS NOT NULL"
+                ")"
+            ).fetchone()
+            peak_pnl = _peak_row[0] if _peak_row and _peak_row[0] else max(total_pnl, 0)
+        peak_equity = starting_capital + peak_pnl
+        current_equity = starting_capital + total_pnl
+        current_dd_pct = max(0, (peak_equity - current_equity) / peak_equity * 100) if peak_equity > 0 else 0
+
+        if current_dd_pct > 0:
+            base_risk = config.get("risk", {}).get("planned_risk_pct_max", 0.02)
+            adjusted = drawdown_adjusted_risk(base_risk, current_dd_pct)
+            if adjusted <= 0:
+                logger.warning("[RISK] Drawdown %.1f%% — trading halted (Thorp protocol)", current_dd_pct)
+                try:
+                    from src.notifications.telegram import send_telegram_message
+                    send_telegram_message(
+                        f"🔴 DRAWDOWN HALT: {current_dd_pct:.1f}%\n"
+                        f"Trading halted per Thorp protocol (≥20% DD).\n"
+                        f"Recovery needed: +{current_dd_pct / (100 - current_dd_pct) * 100:.1f}%"
+                    )
+                except Exception:
+                    pass
+                return None
+            # Scale allocation proportionally
+            scale_factor = adjusted / base_risk if base_risk > 0 else 1.0
+            packet.position_sizing.allocation_dollars *= scale_factor
+            logger.info("[RISK] Drawdown %.1f%% — risk scaled to %.0f%% (alloc $%.0f)",
+                        current_dd_pct, scale_factor * 100, packet.position_sizing.allocation_dollars)
+
+            # Telegram alerts at threshold crossings (5%, 10%, 15%)
+            for threshold in [5.0, 10.0, 15.0]:
+                if current_dd_pct >= threshold:
+                    alert_key = f"dd_alert_{int(threshold)}"
+                    # Check if we already alerted at this threshold today
+                    try:
+                        _alert_row = _conn.execute(
+                            "SELECT 1 FROM activity_log WHERE event_type = ? AND detail LIKE ? AND created_at > date('now')",
+                            (alert_key, f"%{int(threshold)}%")
+                        ).fetchone()
+                        if not _alert_row:
+                            from src.notifications.telegram import send_telegram_message
+                            from src.utils.activity_logger import log_activity
+                            recovery_pct = current_dd_pct / (100 - current_dd_pct) * 100
+                            send_telegram_message(
+                                f"⚠️ DRAWDOWN ALERT: {current_dd_pct:.1f}%\n"
+                                f"Position sizing at {scale_factor * 100:.0f}% of normal.\n"
+                                f"Risk per trade: {adjusted:.3f} (base: {base_risk:.3f})\n"
+                                f"Recovery needed: +{recovery_pct:.1f}%"
+                            )
+                            log_activity(alert_key, f"Drawdown {current_dd_pct:.1f}% crossed {int(threshold)}% threshold")
+                    except Exception:
+                        pass
+                    break  # Only alert at highest crossed threshold
+    except Exception as e:
+        logger.debug("[RISK] Drawdown check failed: %s — continuing with full size", e)
+
     planned_shares = max(1, int(packet.position_sizing.allocation_dollars / entry_price)) if entry_price > 0 else 1
     planned_allocation = packet.position_sizing.allocation_dollars
 
@@ -190,6 +261,16 @@ def open_shadow_trade(
 
     # Source tagging: paper trades always tagged as "paper"
     trade_data["source"] = "paper"
+
+    # Slippage tracking: signal price vs fill price
+    actual_fill = trade_data.get("actual_entry_price", entry_price)
+    trade_data["signal_entry_price"] = entry_price
+    trade_data["fill_entry_price"] = actual_fill
+    if entry_price > 0:
+        slippage_bps = (actual_fill - entry_price) / entry_price * 10000
+        trade_data["entry_slippage_bps"] = round(slippage_bps, 1)
+        logger.info("[SLIPPAGE] %s entry: signal=$%.2f, fill=$%.2f, slippage=%.1f bps",
+                    ticker, entry_price, actual_fill, slippage_bps)
 
     trade_id = insert_shadow_trade(trade_data, db_path)
 
@@ -315,10 +396,19 @@ def check_and_manage_open_trades(
             pnl_dollars = (current_price - entry_price) * shares
             pnl_pct = ((current_price - entry_price) / entry_price * 100) if entry_price > 0 else 0
 
+            # Exit slippage tracking
+            signal_exit = current_price  # price that triggered exit
+            exit_slippage_bps = 0.0
+
             # Try to place paper sell
             try:
                 from src.shadow_trading.alpaca_adapter import place_paper_exit
-                place_paper_exit(ticker, shares)
+                exit_result = place_paper_exit(ticker, shares)
+                fill_exit = exit_result.get("filled_avg_price") if isinstance(exit_result, dict) else None
+                if fill_exit:
+                    exit_slippage_bps = (float(fill_exit) - signal_exit) / signal_exit * 10000 if signal_exit > 0 else 0
+                    logger.info("[SLIPPAGE] %s exit: signal=$%.2f, fill=$%.2f, slippage=%.1f bps",
+                                ticker, signal_exit, float(fill_exit), exit_slippage_bps)
             except Exception as e:
                 logger.warning(f"[SHADOW] Alpaca sell failed for {ticker}: {e}")
 

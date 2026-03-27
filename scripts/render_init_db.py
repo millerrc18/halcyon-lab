@@ -475,6 +475,44 @@ CREATE TABLE IF NOT EXISTS sync_state (
     table_name TEXT PRIMARY KEY,
     last_synced_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS activity_log (
+    id TEXT PRIMARY KEY,
+    event_type TEXT NOT NULL,
+    detail TEXT,
+    metadata TEXT,
+    created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS setup_signals (
+    id SERIAL PRIMARY KEY,
+    ticker TEXT,
+    scan_date TEXT,
+    setup_type TEXT,
+    confidence REAL,
+    features_json TEXT,
+    created_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS quality_drift_metrics (
+    id SERIAL PRIMARY KEY,
+    metric_date TEXT,
+    avg_score REAL,
+    score_std REAL,
+    pass_rate REAL,
+    template_fallback_rate REAL,
+    created_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS canary_evaluations (
+    id SERIAL PRIMARY KEY,
+    model_version TEXT,
+    perplexity REAL,
+    distinct_2 REAL,
+    verdict TEXT,
+    details TEXT,
+    created_at TEXT
+);
 """
 
 

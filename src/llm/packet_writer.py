@@ -259,4 +259,15 @@ def enhance_packet_with_llm(packet: TradePacket, features: dict,
         packet.llm_conviction = conviction
     logger.info("[LLM] Enhanced packet for %s (conviction: %s)", packet.ticker,
                 conviction if conviction else "n/a")
+
+    # Run canary rules-based scorer alongside LLM for comparison
+    try:
+        from src.strategy.canary import compute_canary_score
+        canary = compute_canary_score(features)
+        canary_score = canary.get("score") if isinstance(canary, dict) else canary
+        logger.info("[CANARY] %s: rules-based score=%.1f, LLM conviction=%s",
+                    packet.ticker, canary_score or 0, conviction or "n/a")
+    except Exception as e:
+        logger.debug("[CANARY] Scoring failed for %s: %s", packet.ticker, e)
+
     return packet

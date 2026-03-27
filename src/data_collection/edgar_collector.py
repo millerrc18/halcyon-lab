@@ -337,6 +337,36 @@ def collect_new_filings(
                             ),
                         )
                         filings_stored += 1
+
+                        # Run NLP sentiment scoring on the filing text
+                        if full_text and len(full_text) > 100:
+                            try:
+                                from src.features.filing_nlp import (
+                                    score_filing_sentiment,
+                                    detect_cautionary_phrases,
+                                )
+                                sentiment = score_filing_sentiment(full_text)
+                                cautions = detect_cautionary_phrases(full_text)
+                                conn.execute(
+                                    """UPDATE edgar_filings SET
+                                        sentiment_polarity = ?,
+                                        sentiment_negative_count = ?,
+                                        sentiment_uncertainty_count = ?,
+                                        cautionary_phrases = ?
+                                    WHERE accession_number = ?""",
+                                    (
+                                        sentiment.get("polarity"),
+                                        sentiment.get("negative_count"),
+                                        sentiment.get("uncertainty_count", 0),
+                                        json.dumps([c["phrase"] for c in cautions]) if cautions else None,
+                                        accession,
+                                    ),
+                                )
+                            except ImportError:
+                                pass  # pysentiment2 not installed
+                            except Exception as nlp_err:
+                                logger.debug("[EDGAR] NLP scoring failed for %s: %s", accession, nlp_err)
+
                     except sqlite3.IntegrityError:
                         pass  # Duplicate accession number
 

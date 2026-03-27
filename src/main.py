@@ -611,6 +611,44 @@ def cmd_train_pipeline(args):
 
     print("\n=== HALCYON TRAINING PIPELINE ===\n")
 
+
+def cmd_evaluate_gate(args):
+    """Run the 50-trade gate evaluation."""
+    from src.evaluation.gate_evaluator import evaluate_50_trade_gate
+    import json
+
+    print("\n=== 50-TRADE GATE EVALUATION ===\n")
+    result = evaluate_50_trade_gate()
+
+    gates = result.get("gates", {})
+    for key, g in gates.items():
+        status_icon = {"green": "🟢", "yellow": "🟡", "red": "🔴"}.get(g.get("status"), "⚪")
+        print(f"  {status_icon} {g.get('label', key)}: {g.get('value', 'n/a')} "
+              f"(green: {g.get('green', 'n/a')}, yellow: {g.get('yellow', 'n/a')})")
+
+    print(f"\n  Trade count: {result.get('trade_count', 0)}")
+    print(f"  Greens: {result.get('greens', 0)}, Reds: {result.get('reds', 0)}")
+    print(f"\n  DECISION: {result.get('decision', 'insufficient data')}\n")
+
+    if result.get("psr") is not None:
+        print(f"  PSR(0): {result['psr']:.1%}")
+    if result.get("bootstrap_ci"):
+        ci = result["bootstrap_ci"]
+        print(f"  Bootstrap Sharpe CI: [{ci[0]:.3f}, {ci[2]:.3f}]")
+
+
+def cmd_performance_report(args):
+    """Generate a performance report."""
+    from src.evaluation.cto_report import generate_cto_report, format_cto_report
+    days = getattr(args, "days", 30)
+    print(f"\n=== PERFORMANCE REPORT (last {days} days) ===\n")
+    try:
+        data = generate_cto_report(days=days)
+        text = format_cto_report(data)
+        print(text)
+    except Exception as e:
+        print(f"Error generating report: {e}")
+
     # Step 1: Score unscored examples
     print("[1/5] Scoring unscored training examples...")
     result = score_all_unscored()
@@ -818,6 +856,8 @@ def build_parser() -> argparse.ArgumentParser:
     _p = sp.add_parser("backtest"); _p.add_argument("--model", default="halcyon-latest"); _p.add_argument("--months", type=int, default=6); _p.set_defaults(func=cmd_backtest)
     _p = sp.add_parser("compare-models"); _p.add_argument("--model-a", required=True); _p.add_argument("--model-b", required=True); _p.add_argument("--months", type=int, default=3); _p.set_defaults(func=cmd_compare_models)
     sp.add_parser("check-leakage").set_defaults(func=cmd_check_leakage)
+    sp.add_parser("evaluate-gate", help="Run 50-trade gate evaluation (Phase 1 → Phase 2)").set_defaults(func=cmd_evaluate_gate)
+    _p = sp.add_parser("performance-report", help="Generate performance report"); _p.add_argument("--days", type=int, default=30); _p.set_defaults(func=cmd_performance_report)
 
     # Operations
     sp.add_parser("collect-data", help="Run market data collection pipeline").set_defaults(func=cmd_collect_data)
