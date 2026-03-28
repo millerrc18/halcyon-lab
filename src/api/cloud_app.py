@@ -46,7 +46,12 @@ def verify_auth(
 ) -> None:
     """Verify bearer token if API_SECRET is set. No-op if unset."""
     if not API_SECRET:
-        return  # Auth disabled
+        import logging
+        logging.getLogger(__name__).warning(
+            "[AUTH] API_SECRET is empty — authentication disabled. "
+            "Set API_SECRET env var to enable auth."
+        )
+        return  # Auth disabled — warn but allow (local dev / cold start)
     if not credentials or credentials.credentials != API_SECRET:
         raise HTTPException(status_code=401, detail="Invalid or missing API token")
 

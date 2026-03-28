@@ -135,8 +135,8 @@ def build_shared_context(db_path: str) -> str:
                 f"Today's scan: {r.get('count', 0)} candidates, "
                 f"avg score {r.get('avg_score', 0):.1f}"
             )
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("[COUNCIL] Failed to query recent recommendations: %s", e)
 
     try:
         open_count = _query_db(
@@ -145,8 +145,8 @@ def build_shared_context(db_path: str) -> str:
         )
         if open_count:
             parts.append(f"Open shadow trades: {open_count[0]['n']}")
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("[COUNCIL] Failed to query open shadow trades: %s", e)
 
     try:
         vix = _query_db(
@@ -155,8 +155,8 @@ def build_shared_context(db_path: str) -> str:
         )
         if vix:
             parts.append(f"Latest VIX: {vix[0]['vix_close']}")
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("[COUNCIL] Failed to query VIX data: %s", e)
 
     return "\n".join(parts) if parts else "No shared context data available."
 

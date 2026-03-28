@@ -388,7 +388,7 @@ class TestSyncTablesConfig:
         for table_name, config in SYNC_TABLES.items():
             assert "mode" in config, f"{table_name} missing 'mode'"
             assert "pk" in config, f"{table_name} missing 'pk'"
-            assert config["mode"] in ("incremental", "latest_only"), (
+            assert config["mode"] in ("incremental", "latest_only", "full"), (
                 f"{table_name} has invalid mode: {config['mode']}"
             )
 

@@ -41,7 +41,11 @@ def compute_shadow_metrics(trades: list[dict]) -> dict:
     avg_gain = sum(wins) / len(wins) if wins else 0.0
     avg_loss = sum(losses) / len(losses) if losses else 0.0
     total_pnl = sum(pnls)
-    expectancy = total_pnl / total if total > 0 else 0.0
+    try:
+        from src.evaluation.metrics import expectancy as calc_expectancy
+        expectancy = calc_expectancy(pnls)
+    except Exception:
+        expectancy = total_pnl / total if total > 0 else 0.0
 
     # Max drawdown (cumulative)
     cumulative = 0.0

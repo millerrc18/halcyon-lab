@@ -360,3 +360,27 @@ def update_config(updates: dict):
 
     reload_config()
     return {"success": True}
+
+
+# ── System Validation ────────────────────────────────────────────────
+
+_validation_cache: dict | None = None
+_validation_cache_ts: float = 0
+
+
+@router.get("/system/validation")
+def system_validation(fresh: bool = False):
+    """Run system validation checks. Cached for 5 minutes unless fresh=True."""
+    import time
+    global _validation_cache, _validation_cache_ts
+
+    if not fresh and _validation_cache and (time.time() - _validation_cache_ts < 300):
+        return _validation_cache
+
+    from src.evaluation.system_validator import run_full_validation, save_validation_result
+    result = run_full_validation()
+    save_validation_result(result)
+
+    _validation_cache = result
+    _validation_cache_ts = time.time()
+    return result

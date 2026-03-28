@@ -672,6 +672,43 @@ def cmd_train_pipeline(args):
 
     print("\n=== HALCYON TRAINING PIPELINE ===\n")
 
+    # Step 1: Score unscored examples
+    print("[1/5] Scoring unscored training examples...")
+    result = score_all_unscored()
+    scored = result.get("scored", 0)
+    print(f"  Scored {scored} examples")
+
+    # Step 2: Check for outcome leakage
+    print("\n[2/5] Running outcome leakage test...")
+    leakage = check_outcome_leakage()
+    if leakage.get("is_leaking"):
+        print(f"  LEAKING — balanced accuracy {leakage['balanced_accuracy']:.1%}")
+        if not getattr(args, "force", False):
+            print("  ABORT: Fix leakage before training. Use --force to override.")
+            return
+        print("  --force: Proceeding despite leakage warning")
+    else:
+        ba = leakage.get("balanced_accuracy")
+        status = leakage.get("status", "CLEAN")
+        print(f"  {status} — balanced accuracy {ba:.1%}" if ba else f"  {status}")
+
+    # Step 3: Classify examples into curriculum stages
+    print("\n[3/5] Classifying training examples...")
+    classify_result = classify_all_examples()
+    print(f"  Classified {classify_result.get('classified', 0)} examples")
+
+    # Step 4: Export training data (handled inside run_fine_tune)
+    print("\n[4/5] Exporting training data...")
+
+    # Step 5: Fine-tune
+    print("\n[5/5] Starting fine-tuning...")
+    ft_result = run_fine_tune()
+    if ft_result:
+        print(f"\n  Model registered: {ft_result.get('version_name', 'halcyon-latest')}")
+        print("  TRAINING PIPELINE COMPLETE")
+    else:
+        print("\n  Training failed. Check logs.")
+
 
 def cmd_evaluate_gate(args):
     """Run the 50-trade gate evaluation."""
@@ -709,43 +746,6 @@ def cmd_performance_report(args):
         print(text)
     except Exception as e:
         print(f"Error generating report: {e}")
-
-    # Step 1: Score unscored examples
-    print("[1/5] Scoring unscored training examples...")
-    result = score_all_unscored()
-    scored = result.get("scored", 0)
-    print(f"  Scored {scored} examples")
-
-    # Step 2: Check for outcome leakage
-    print("\n[2/5] Running outcome leakage test...")
-    leakage = check_outcome_leakage()
-    if leakage.get("is_leaking"):
-        print(f"  LEAKING — balanced accuracy {leakage['balanced_accuracy']:.1%}")
-        if not args.force:
-            print("  ABORT: Fix leakage before training. Use --force to override.")
-            return
-        print("  --force: Proceeding despite leakage warning")
-    else:
-        ba = leakage.get("balanced_accuracy")
-        status = leakage.get("status", "CLEAN")
-        print(f"  {status} — balanced accuracy {ba:.1%}" if ba else f"  {status}")
-
-    # Step 3: Classify examples into curriculum stages
-    print("\n[3/5] Classifying training examples...")
-    classify_result = classify_all_examples()
-    print(f"  Classified {classify_result.get('classified', 0)} examples")
-
-    # Step 4: Export training data (handled inside run_fine_tune)
-    print("\n[4/5] Exporting training data...")
-
-    # Step 5: Fine-tune
-    print("\n[5/5] Starting fine-tuning...")
-    ft_result = run_fine_tune()
-    if ft_result:
-        print(f"\n  Model registered: {ft_result.get('version_name', 'halcyon-latest')}")
-        print("  TRAINING PIPELINE COMPLETE")
-    else:
-        print("\n  Training failed. Check logs.")
 
 
 def cmd_collect_data(args):
@@ -856,6 +856,49 @@ def cmd_dashboard(args):
     uvicorn.run("src.api.app:app", host="0.0.0.0", port=port, reload=False)
 
 
+def cmd_validate_system(args):
+    """Run system validation checks across all subsystems."""
+    from src.evaluation.system_validator import run_full_validation, save_validation_result
+    import json as _json
+
+    print("Running system validation...")
+    result = run_full_validation()
+
+    if getattr(args, "json", False):
+        print(_json.dumps(result, indent=2))
+    else:
+        status_icon = {"healthy": "\u2705", "degraded": "\u26a0\ufe0f", "critical": "\u274c"}.get(
+            result["overall_status"], "?")
+        print(f"\n{status_icon} Overall: {result['overall_status'].upper()}")
+        print(f"   Passed: {result['checks_passed']}  |  Warnings: {result['checks_warning']}  |  Failed: {result['checks_failed']}")
+        print(f"   Total checks: {result['checks_total']}\n")
+
+        for category, checks in result["categories"].items():
+            cat_fails = sum(1 for c in checks if c["status"] == "fail")
+            cat_warns = sum(1 for c in checks if c["status"] == "warn")
+            cat_pass = sum(1 for c in checks if c["status"] == "pass")
+            icon = "\u274c" if cat_fails else "\u26a0\ufe0f" if cat_warns else "\u2705"
+            print(f"  {icon} {category.upper()} ({cat_pass}P / {cat_warns}W / {cat_fails}F)")
+            for check in checks:
+                s = {
+                    "pass": "  \u2705",
+                    "warn": "  \u26a0\ufe0f",
+                    "fail": "  \u274c",
+                }.get(check["status"], "  ?")
+                print(f"    {s} {check['name']}: {check['detail']}")
+            print()
+
+    # Save result
+    rid = save_validation_result(result)
+    print(f"Result saved: {rid}")
+
+    if getattr(args, "fix", False):
+        print("\n--fix: Attempting auto-fixes...")
+        from src.journal.store import initialize_database
+        initialize_database()
+        print("  Re-ran initialize_database() to ensure all tables exist.")
+
+
 # ── Argument Parser ───────────────────────────────────────────────────
 
 def build_parser() -> argparse.ArgumentParser:
@@ -930,6 +973,9 @@ def build_parser() -> argparse.ArgumentParser:
     _p = sp.add_parser("council", help="Run an AI Council session"); _p.add_argument("--type", default="daily", choices=["daily", "strategic", "on_demand"]); _p.set_defaults(func=cmd_council)
     _p = sp.add_parser("watch"); _p.add_argument("--email-mode", choices=["full_stream", "daily_summary", "digest", "silent"]); _p.add_argument("--overnight", action="store_true", help="Enable overnight schedule (post-close, news, enrichment, pre-market)"); _p.set_defaults(func=cmd_watch)
     _p = sp.add_parser("dashboard"); _p.add_argument("--port", type=int, default=8000); _p.set_defaults(func=cmd_dashboard)
+
+    # System validation
+    _p = sp.add_parser("validate-system", help="Run system validation checks across all subsystems"); _p.add_argument("--json", action="store_true", help="Output structured JSON"); _p.add_argument("--fix", action="store_true", help="Attempt auto-fixes for common issues"); _p.set_defaults(func=cmd_validate_system)
 
     return p
 
