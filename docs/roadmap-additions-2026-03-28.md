@@ -1,0 +1,95 @@
+# Roadmap Additions — March 28, 2026
+
+## Strategy Decisions (CONFIRMED)
+
+| Decision | Status | Source |
+|---|---|---|
+| Strategy #2 = Mean Reversion | **CONFIRMED** | Strategy #2 Selection research |
+| Strategy #3 = Evolved PEAD (composite earnings info system) | **CONFIRMED** | PEAD Evolved research |
+| PEAD signals as pullback enrichment features | **CONFIRMED** for Phase 2 | PEAD Evolved research |
+| RL method = Dr. GRPO (`loss_type="dr_grpo"`) | **CONFIRMED** | REINFORCE++ research |
+| Skip DPO entirely | **CONFIRMED** | REINFORCE++ + Fin-o1 |
+| Breakout = feature within pullback, not separate strategy | **CONFIRMED** | Multi-strategy scaling research |
+| Traditional PEAD dead for large caps | **CONFIRMED** | Martineau 2022, Subrahmanyam 2025 |
+| Regime: Traffic Light Phase 1, HMM Phase 2-3 | **CONFIRMED** | Regime Detection research |
+
+## Phase 2 Additions (new items from research)
+
+### PEAD Enrichment Features for Pullback Adapter
+- Earnings surprise magnitude (Finnhub `company_earnings()`)
+- Revenue-EPS concordance (revenue beat + EPS beat = stronger signal)
+- Analyst revision velocity (rate of estimate changes in 30 days pre-earnings)
+- Recommendation inconsistency (surprise direction vs consensus rating — 2.5-4.5× stronger drift)
+- Earnings proximity flag (days to next earnings — affects pullback risk)
+- Source: PEAD Evolved research, McCarthy (2025)
+- Implementation: add to `src/data_enrichment/` as new module, include in LLM prompt
+
+### Mean Reversion Strategy #2
+- Connors RSI(2) primary signal + regime-conditional sizing
+- Separate LoRA adapter (different signal source = always separate)
+- Separate Alpaca paper account
+- Training data: ~20,000-25,000 historical labeled examples available
+- Source: Strategy #2 Selection research
+- Gate: pullback 100+ trades with PSR >90%
+
+## Phase 3 Additions
+
+### Evolved PEAD as Strategy #3
+- NOT traditional beat/miss — composite earnings information system
+- 12-quarter elastic net SUE model (trains on SUE_t-1 through SUE_t-12)
+- NLP sentiment surprise via FinBERT on Ollama
+- Revenue concordance filtering
+- Analyst revision velocity as confirming signal
+- Recommendation inconsistency as position sizing multiplier
+- Entry: day+1 at open +15 minutes
+- Exit: triple-barrier at 10 trading days
+- Size: quarter-Kelly, max 4 concurrent positions
+- Expected: ~15-30 qualifying trades per quarter, Sharpe 0.6-0.9
+- Source: PEAD Evolved research, Kaczmarek & Zaremba 2025
+- Gate: mean reversion 100+ trades with PSR >90%
+- Monitor: quarterly out-of-sample AUC; if <0.55, consider IV crush alternative
+
+### Regime Detection Upgrade
+- Phase 2 MVP: Statistical Jump Models via `jumpmodels` Python library
+- Phase 3: 2-state HMM ensemble + VIX term structure features
+- Source: Quantitative Regime Detection research
+- Estimated impact: 15-25% drawdown reduction
+
+## Decision Flags (evaluate at specified gates)
+
+### At 50-trade gate (Phase 1 → Phase 2 transition):
+- [ ] Is pullback edge statistically significant? (PSR >90%, MinTRL check)
+- [ ] What regime coverage do we have? (need ≥2 distinct regimes)
+- [ ] Are PEAD enrichment features ready for pullback adapter?
+- [ ] Is mean reversion implementation spec ready?
+- [ ] Does the Traffic Light regime system change enough to justify building?
+
+### At 100-trade gate:
+- [ ] Is Dr. GRPO ready to fire? (need 100+ closed trades with outcomes)
+- [ ] Has the training pipeline run end-to-end at least 4 times (Saturday retrains)?
+- [ ] Is mean reversion paper trading generating enough data?
+- [ ] What does the alpha decay scorecard show?
+
+### At 200-trade gate (Phase 2 → Phase 3 transition):
+- [ ] Is combined pullback + mean reversion SR ≥1.0?
+- [ ] Has the correlation between strategies held at ρ ≈ −0.35?
+- [ ] Is the evolved PEAD implementation spec ready?
+- [ ] Is the 12-quarter elastic net model validated on out-of-sample data?
+- [ ] Is the RTX 3090 acquired and tested?
+
+### At Phase 3 entry:
+- [ ] Are Options Desk prerequisites met? (VRP research complete, options data >12 months)
+- [ ] Has the evolved PEAD composite model been backtested?
+- [ ] Is FinBERT running on Ollama for earnings NLP?
+- [ ] Is the alpha decay monitoring showing stable or improving metrics?
+
+## Research Pending (from deep research prompts)
+
+| Topic | Status | Fire When |
+|---|---|---|
+| Constrained Decoding (XGrammar/GBNF) | Ready | Now — could eliminate template fallback |
+| Confidence Calibration | Ready | This week — affects position sizing |
+| Data-Centric AI Pipelines | Ready | This week — prevent next training disaster |
+| Qwen3 Fine-Tuning SOTA | Ready | When convenient — may surface quick wins |
+| Strategy #2 Implementation (mean reversion) | Ready | After 50-trade gate (fill in actual performance data) |
+| Alpha Decay Monitoring | Ready | Phase 2 entry |

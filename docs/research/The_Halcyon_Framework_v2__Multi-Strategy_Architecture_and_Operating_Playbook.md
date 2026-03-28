@@ -60,11 +60,17 @@ Each LoRA adapter is ~34MB at rank 32. 10 adapters = 340MB total — trivial.
 
 DoRA (Liu et al., ICML 2024) decomposes weights into magnitude and direction, applying LoRA only to direction. ~8% VRAM savings, no quality loss. Implementation: `use_dora=True` in Unsloth. Comprehensive evaluation (arXiv:2512.23165) found DoRA surpasses full fine-tuning at 46.6% vs 44.9% average accuracy.
 
-### RL stage: REINFORCE++ (updated from GRPO)
+### RL stage: Dr. GRPO (updated from GRPO → REINFORCE++ → Dr. GRPO)
 
-Hu (2025, arXiv:2501.03262) demonstrated GRPO's local advantage normalization causes immediate overfitting on small prompt datasets. REINFORCE++ with global normalization learns more stably. With 969 training examples, this is the primary failure mode for the RL stage — not a theoretical concern.
+REINFORCE++ (Hu 2025) is theoretically superior to GRPO for small datasets but is **NOT available in TRL**. The practical solution: TRL's `GRPOTrainer` with `loss_type="dr_grpo"` — Dr. GRPO (Lan 2025) removes GRPO's question-level difficulty bias through length and difficulty normalization. This is a one-parameter change from standard GRPO.
 
-Key evidence: Alpha-R1 showed Qwen3-8B without RL produces Sharpe -0.77. With RL, dramatic improvement with zero-shot generalization. The RL stage is not optional.
+**Skip DPO entirely** — Fin-o1 found DPO produces inconsistent results in financial reasoning. Pipeline: SFT → Dr. GRPO (at 100+ closed trades).
+
+Composite reward function (from REINFORCE++ research):
+- Volatility-normalized P&L: 40%
+- Quality rubric score: 25%
+- Calibration accuracy (conviction vs outcome): 20%
+- Risk management quality (MAE/ATR): 15%
 
 ### LoRA adapter decision boundary (NEW)
 
@@ -98,17 +104,21 @@ With individual SR = 0.6 and ρ = 0.15:
 
 **Sweet spot for solo founder: 4-6 genuinely uncorrelated strategies, targeting combined SR ~1.0-1.2.**
 
-### Strategy selection by correlation (NEW)
+### Strategy selection by correlation (CONFIRMED by deep research, March 28)
 
-The equity swing desk needs exactly 3 strategies after pullback, in order:
+The equity swing desk strategy sequence, confirmed by 6 deep research documents:
 
-| # | Strategy | Correlation with Pullback | Phase | Why |
+| # | Strategy | Correlation with Pullback | Phase | Evidence |
 |---|---|---|---|---|
-| 2 | **PEAD (post-earnings drift)** | ρ ≈ 0.05 | Phase 2 | Different signal source (earnings vs price), works across all regimes |
-| 3 | **Short-term mean reversion** | ρ ≈ −0.15 | Phase 3 | Works when pullback fails (bear/choppy markets), regime insurance |
-| 4 | Pairs trading / stat arb | ρ ≈ −0.10 | Phase 5 | Market-neutral, requires short-selling infrastructure |
+| 1 | **Pullback-in-uptrend** | — | Phase 1 (LIVE) | Behavioral foundation (underreaction). Decaying but durable. |
+| 2 | **Short-term mean reversion** | ρ ≈ **−0.35** | Phase 2 | Connors RSI(2) 65-75% WR. Enhanced Sharpe 0.7-1.0. Regime insurance. Decisively best #2 per research. |
+| 3 | **Evolved PEAD** (composite earnings info) | ρ ≈ **0.2** | Phase 3 | NOT traditional beat/miss. 12-quarter elastic net + NLP + revenue concordance + analyst revision velocity + recommendation inconsistency. Sharpe 0.6-0.9. ~15-30 trades/quarter. |
 
-**Critical correction:** Breakout (ρ ≈ 0.55 with pullback) should NOT be a separate strategy. Incorporate breakout signals as features within the pullback adapter.
+**PEAD signals as pullback enrichment (Phase 2):** In addition to evolved PEAD as a standalone Strategy #3, key earnings signals (surprise magnitude, revenue concordance, analyst revision velocity, recommendation inconsistency) will be added as enrichment features for the pullback adapter in Phase 2. These improve pullback trades near earnings events without requiring a separate strategy.
+
+**Critical correction (confirmed):** Breakout (ρ ≈ 0.55 with pullback) should NOT be a separate strategy. Incorporate breakout signals as features within the pullback adapter.
+
+**Adding a second uncorrelated strategy reduces portfolio variance by ~50%. Expanding from 100 to 325 stocks with the same strategy reduces variance by only ~1.6%.** (Strategy #2 Selection research)
 
 ### Options desk: 2 strategies, not 6-8 (NEW)
 
@@ -288,8 +298,8 @@ As more AI agents trade pullbacks, pullbacks become shallower and briefer. The e
 | Phase | Timeline | Strategies | Hardware | SR Target | Gate |
 |---|---|---|---|---|---|
 | 1 | Months 0-6 | 1 (pullback) | RTX 3060 | Validate | 100+ trades, t-stat >1.5 |
-| 2 | Months 6-18 | 2 (+ PEAD) | RTX 3060 | 0.79+ | PSR >90%, 2 regimes |
-| 3 | Months 12-24 | 4 (+ mean reversion, VRP) | RTX 3090 | 1.0-1.2 | Each strategy 100+ trades |
+| 2 | Months 6-18 | 2 (+ mean reversion) + PEAD enrichment features | RTX 3060 | 0.79+ | PSR >90%, 2 regimes |
+| 3 | Months 12-24 | 4 (+ evolved PEAD, + VRP) | RTX 3090 | 1.0-1.2 | Each strategy 100+ trades |
 | 4 | Months 24-36 | 5-6 (+ term structure) | RTX 3090 | 1.2+ | Investor-ready track record |
 | 5 | Months 36-48 | 7-8 (+ trend-following, pairs) | Dual 3090 | 1.2-1.5 | Institutional infrastructure |
 | 6 | Months 48-60 | 8 (optimize, don't add) | Dual 3090 | 1.2-1.5 | Fund formation ready |
