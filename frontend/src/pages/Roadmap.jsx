@@ -7,6 +7,7 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { CheckCircle2, Circle, Loader2, ChevronDown, ChevronRight, Lock, Info, Cpu, DollarSign, Calendar } from 'lucide-react'
 import RevenueProjection from '../components/RevenueProjection'
+import { api } from '../api'
 
 const CAT = {
   strategy:   { label: 'Strategy',      color: '#2DD4BF' },
@@ -314,8 +315,8 @@ function PhaseCard({ phase, kpis }) {
 // ═══════════════════════════════════════════════════════════════
 export default function Roadmap() {
   const { data: ctoData } = useQuery({
-    queryKey: ['cto-report'],
-    queryFn: () => fetch('/api/cto-report?days=30').then(r => r.json()),
+    queryKey: ['cto-report-gate'],
+    queryFn: () => api.getCtoReport(90),
     refetchInterval: 60000,
   })
   const ts = ctoData?.trade_summary || {}
