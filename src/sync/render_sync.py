@@ -157,6 +157,11 @@ SYNC_TABLES: dict[str, dict] = {
         "time_col": "updated_at",
         "pk": "id",
     },
+    "validation_results": {
+        "mode": "incremental",
+        "time_col": "created_at",
+        "pk": "result_id",
+    },
 }
 
 # ── Sync state table (local SQLite) ─────────────────────────────────

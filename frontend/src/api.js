@@ -97,4 +97,7 @@ export const api = {
   triggerCouncil: () => fetchApi('/actions/council', { method: 'POST' }),
   // Projections
   getProjectionsLive: () => fetchApi('/projections/live'),
+  // System Validation
+  getValidation: () => fetchApi('/system/validation'),
+  runValidation: () => fetchApi('/system/validation?fresh=true'),
 }

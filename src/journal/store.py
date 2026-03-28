@@ -159,6 +159,20 @@ def initialize_database(db_path: str = "ai_research_desk.sqlite3") -> None:
         except sqlite3.OperationalError:
             pass  # Column already exists
 
+        # Validation results table
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS validation_results (
+                result_id TEXT PRIMARY KEY,
+                created_at TEXT NOT NULL,
+                overall_status TEXT NOT NULL,
+                checks_passed INTEGER NOT NULL,
+                checks_failed INTEGER NOT NULL,
+                checks_warning INTEGER NOT NULL,
+                results_json TEXT NOT NULL
+            )
+        """)
+        conn.commit()
+
 
 def log_recommendation(
     packet: TradePacket,

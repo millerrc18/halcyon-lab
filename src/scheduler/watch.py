@@ -108,6 +108,7 @@ class WatchLoop:
         self._digest_eod_done = False
         self._digest_evening_done = False
         self._action_reminders_done = False
+        self._daily_validation_done = False
 
         # Collector failure tracking: {collector_name: consecutive_failure_count}
         self._collector_failures: dict[str, int] = {}
@@ -157,6 +158,7 @@ class WatchLoop:
         self._digest_eod_done = False
         self._digest_evening_done = False
         self._action_reminders_done = False
+        self._daily_validation_done = False
 
     def _is_market_open(self, now: datetime) -> bool:
         """Check if market is currently open (weekday, between open and close)."""
@@ -836,6 +838,31 @@ class WatchLoop:
                             notify_scoring_summary(self._daily_scored, backlog)
                     except Exception:
                         pass
+
+                # 4b. Daily system validation (4:30 PM ET)
+                elif (hour == 16 and now.minute >= 30 and now.minute < 45
+                      and not self._daily_validation_done):
+                    try:
+                        from src.evaluation.system_validator import (
+                            run_full_validation, save_validation_result,
+                        )
+                        from src.notifications.telegram import (
+                            notify_validation_summary, is_telegram_enabled,
+                        )
+                        result = run_full_validation()
+                        save_validation_result(result)
+                        if is_telegram_enabled():
+                            notify_validation_summary(result)
+                        logger.info(
+                            "[WATCH] Validation complete: %s (%dP/%dW/%dF)",
+                            result["overall_status"],
+                            result["checks_passed"],
+                            result["checks_warning"],
+                            result["checks_failed"],
+                        )
+                    except Exception as e:
+                        logger.warning("[WATCH] Validation failed: %s", e)
+                    self._daily_validation_done = True
 
                 # 5. Training data collection (4:30 PM ET)
                 elif (self.training_enabled and hour == 16 and now.minute >= 30

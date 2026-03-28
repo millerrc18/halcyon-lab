@@ -1289,6 +1289,60 @@ def _cmd_disk() -> str:
     return "\n".join(lines)
 
 
+def notify_validation_summary(result: dict) -> bool:
+    """Send system validation summary via Telegram.
+
+    Silent if all checks pass. Warns on warnings, details on failures.
+    """
+    if not is_telegram_enabled():
+        return False
+
+    passed = result.get("checks_passed", 0)
+    failed = result.get("checks_failed", 0)
+    warnings = result.get("checks_warning", 0)
+    overall = result.get("overall_status", "unknown")
+    total = result.get("checks_total", 0)
+
+    # Silent on all-pass
+    if failed == 0 and warnings == 0:
+        return True
+
+    icon = {"healthy": "\u2705", "degraded": "\u26a0\ufe0f", "critical": "\ud83d\udea8"}.get(overall, "\u2753")
+
+    lines = [
+        f"{icon} <b>SYSTEM VALIDATION</b>",
+        f"Status: <b>{overall.upper()}</b>",
+        f"Passed: {passed} | Warnings: {warnings} | Failed: {failed} | Total: {total}",
+        "",
+    ]
+
+    # Detail failed checks
+    if failed > 0:
+        lines.append("<b>Failures:</b>")
+        for cat, checks in result.get("categories", {}).items():
+            for c in checks:
+                if c["status"] == "fail":
+                    lines.append(f"  \u274c {cat}/{c['name']}: {c['detail'][:80]}")
+        lines.append("")
+
+    # Summary of warning categories
+    if warnings > 0:
+        warn_cats = {}
+        for cat, checks in result.get("categories", {}).items():
+            cnt = sum(1 for c in checks if c["status"] == "warn")
+            if cnt:
+                warn_cats[cat] = cnt
+        if warn_cats:
+            lines.append("<b>Warnings:</b> " + ", ".join(
+                f"{cat}({n})" for cat, n in warn_cats.items()
+            ))
+
+    try:
+        return send_telegram("\n".join(lines))
+    except Exception:
+        return False
+
+
 def _cmd_uptime() -> str:
     """Watch loop uptime and next event."""
     now = datetime.now(ET)
