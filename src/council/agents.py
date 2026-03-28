@@ -191,7 +191,7 @@ def _query_db(query: str, params: tuple = (), db_path: str = DB_PATH) -> list[di
 def gather_risk_officer_data(db_path: str = DB_PATH) -> dict[str, Any]:
     """Gather data payload for the Risk Officer.
 
-    Sees: open shadow trades, recent closed trades, VIX data, credit spreads.
+    Sees: open shadow trades, recent closed trades, VIX term structure, credit spreads.
     """
     try:
         open_trades = _query_db(
@@ -217,18 +217,19 @@ def gather_risk_officer_data(db_path: str = DB_PATH) -> dict[str, Any]:
         )
 
         vix_data = _query_db(
-            """SELECT date, vix_close, vix_open, vix_high, vix_low
-               FROM vix_daily
-               ORDER BY date DESC
+            """SELECT collected_date as date, vix as vix_close,
+                      vix9d, vix3m, vix1y, term_structure_slope
+               FROM vix_term_structure
+               ORDER BY collected_date DESC
                LIMIT 10""",
             db_path=db_path,
         )
 
         credit_spreads = _query_db(
-            """SELECT date, series_id, value
-               FROM fred_observations
+            """SELECT collected_date as date, series_id, value
+               FROM macro_snapshots
                WHERE series_id IN ('BAMLH0A0HYM2', 'BAMLC0A4CBBB')
-               ORDER BY date DESC
+               ORDER BY collected_date DESC
                LIMIT 20""",
             db_path=db_path,
         )
@@ -264,7 +265,8 @@ def gather_alpha_strategist_data(db_path: str = DB_PATH) -> dict[str, Any]:
         )
 
         recent_performance = _query_db(
-            """SELECT ticker, pnl_pct, exit_reason, shadow_duration_days
+            """SELECT ticker, pnl_pct, exit_reason,
+                      CAST(julianday(actual_exit_time) - julianday(created_at) AS INTEGER) as hold_days
                FROM shadow_trades
                WHERE status = 'closed'
                ORDER BY actual_exit_time DESC
@@ -317,7 +319,7 @@ def gather_data_scientist_data(db_path: str = DB_PATH) -> dict[str, Any]:
         )
 
         quality_samples = _query_db(
-            """SELECT quality_score, quality_grade, purpose
+            """SELECT quality_score_auto as quality_score, source, difficulty
                FROM training_examples
                WHERE created_at >= datetime('now', '-7 days')
                ORDER BY created_at DESC
@@ -327,7 +329,7 @@ def gather_data_scientist_data(db_path: str = DB_PATH) -> dict[str, Any]:
 
         model_versions = _query_db(
             """SELECT version_name, status, created_at,
-                      training_examples_count, trade_count, win_rate
+                      training_examples_count
                FROM model_versions
                ORDER BY created_at DESC
                LIMIT 5""",
@@ -348,21 +350,22 @@ def gather_data_scientist_data(db_path: str = DB_PATH) -> dict[str, Any]:
 def gather_regime_analyst_data(db_path: str = DB_PATH) -> dict[str, Any]:
     """Gather data payload for the Regime Analyst.
 
-    Sees: FRED indicators, VIX term structure, breadth data, sector breakdown.
+    Sees: macro indicators, VIX term structure, sector breakdown.
     """
     try:
-        fred_data = _query_db(
-            """SELECT series_id, date, value
-               FROM fred_observations
-               ORDER BY date DESC
+        macro_data = _query_db(
+            """SELECT series_id, collected_date as date, value, previous_value, change_pct
+               FROM macro_snapshots
+               ORDER BY collected_date DESC
                LIMIT 50""",
             db_path=db_path,
         )
 
         vix_term = _query_db(
-            """SELECT date, vix_close, vix_open, vix_high, vix_low
-               FROM vix_daily
-               ORDER BY date DESC
+            """SELECT collected_date as date, vix as vix_close,
+                      vix9d, vix3m, vix1y, term_structure_slope, near_term_ratio
+               FROM vix_term_structure
+               ORDER BY collected_date DESC
                LIMIT 20""",
             db_path=db_path,
         )
@@ -378,20 +381,21 @@ def gather_regime_analyst_data(db_path: str = DB_PATH) -> dict[str, Any]:
             db_path=db_path,
         )
 
-        breadth = _query_db(
-            """SELECT date, series_id, value
-               FROM fred_observations
-               WHERE series_id IN ('ADVANCE', 'DECLINE', 'NHIGH', 'NLOW')
-               ORDER BY date DESC
-               LIMIT 40""",
+        # Financial conditions from macro_snapshots
+        fin_conditions = _query_db(
+            """SELECT series_id, collected_date as date, value
+               FROM macro_snapshots
+               WHERE series_id IN ('NFCI', 'STLFSI2', 'T10Y2Y', 'TEDRATE', 'BAMLH0A0HYM2')
+               ORDER BY collected_date DESC
+               LIMIT 25""",
             db_path=db_path,
         )
 
         return {
-            "fred_data": fred_data,
+            "macro_data": macro_data,
             "vix_term_structure": vix_term,
             "sector_breakdown": sector_breakdown,
-            "breadth_indicators": breadth,
+            "financial_conditions": fin_conditions,
         }
     except Exception as e:
         logger.warning("Regime analyst data gather failed: %s", e)
