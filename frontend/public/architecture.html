@@ -1,0 +1,880 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Halcyon Lab — System Architecture</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  :root, [data-theme="light"] {
+    --teal: #0D9488; --teal-light: #14B8A6; --teal-bg: #F0FDFA;
+    --indigo: #6366F1; --indigo-light: #818CF8; --indigo-bg: #EEF2FF;
+    --amber: #F59E0B; --amber-light: #FBBF24; --amber-bg: #FFFBEB;
+    --rose: #E11D48; --rose-light: #FB7185; --rose-bg: #FFF1F2;
+    --slate: #475569; --slate-light: #64748B; --slate-bg: #F1F5F9;
+    --emerald: #059669; --emerald-light: #34D399;
+    --purple: #7C3AED; --purple-light: #A78BFA; --purple-bg: #F5F3FF;
+    --dark: #0F172A; --body-bg: #F8FAFC; --page-bg: #FFFFFF;
+    --section-bg: rgba(226,232,240,0.4); --risk-section-bg: rgba(254,226,226,0.3);
+    --training-section-bg: rgba(254,249,195,0.25); --border-subtle: #E2E8F0;
+    --text-primary: #0F172A; --text-secondary: #475569; --text-muted: #64748B;
+    --card-bg: #FFFFFF; --card-border: #E2E8F0; --formula-bg: #FFFFFF;
+    --metrics-bg: #0F172A; --metrics-text: #FFFFFF; --metrics-label: #94A3B8;
+    --overlay-bg: rgba(0,0,0,0.3); --detail-bg: #FFFFFF; --detail-border: var(--teal);
+    --planned-text: #0F172A; --planned-sub: #64748B;
+    --radius: 8px; --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06);
+    --shadow-lg: 0 4px 12px rgba(0,0,0,0.1);
+  }
+  [data-theme="dark"] {
+    --teal: #14B8A6; --teal-light: #2DD4BF; --teal-bg: #0D3331;
+    --indigo: #818CF8; --indigo-light: #A5B4FC; --indigo-bg: #1E1B4B;
+    --amber: #FBBF24; --amber-light: #FDE68A; --amber-bg: #422006;
+    --rose: #FB7185; --rose-light: #FDA4AF; --rose-bg: #3B1020;
+    --slate: #94A3B8; --slate-light: #CBD5E1; --slate-bg: #1E293B;
+    --emerald: #34D399; --emerald-light: #6EE7B7;
+    --purple: #A78BFA; --purple-light: #C4B5FD; --purple-bg: #2E1065;
+    --dark: #F1F5F9; --body-bg: #0B1120; --page-bg: #111827;
+    --section-bg: rgba(30,41,59,0.6); --risk-section-bg: rgba(59,16,32,0.4);
+    --training-section-bg: rgba(66,32,6,0.3); --border-subtle: #1E293B;
+    --text-primary: #F1F5F9; --text-secondary: #CBD5E1; --text-muted: #94A3B8;
+    --card-bg: #1E293B; --card-border: #334155; --formula-bg: #1E293B;
+    --metrics-bg: #020617; --metrics-text: #F1F5F9; --metrics-label: #64748B;
+    --overlay-bg: rgba(0,0,0,0.6); --detail-bg: #1E293B; --detail-border: var(--teal);
+    --planned-text: #F1F5F9; --planned-sub: #94A3B8;
+    --shadow: 0 1px 3px rgba(0,0,0,0.3), 0 1px 2px rgba(0,0,0,0.2);
+    --shadow-lg: 0 4px 12px rgba(0,0,0,0.4);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Inter', -apple-system, sans-serif; background: var(--body-bg); color: var(--text-primary); transition: background 0.3s, color 0.3s; }
+
+  .page {
+    width: 8in; margin: 0 auto; padding: 0.25in 0.2in;
+    background: var(--page-bg); transition: background 0.3s;
+  }
+
+  header { text-align: center; margin-bottom: 10px; display: flex; align-items: center; justify-content: center; position: relative; }
+  header h1 { font-size: 16px; font-weight: 700; color: var(--text-primary); letter-spacing: -0.3px; }
+  header p { font-size: 9px; color: var(--text-muted); margin-top: 1px; }
+  .header-text { flex: 1; }
+
+  .theme-toggle {
+    position: absolute; right: 0; top: 50%; transform: translateY(-50%);
+    background: var(--slate-bg); border: 1px solid var(--border-subtle);
+    border-radius: 20px; padding: 4px 10px; cursor: pointer;
+    font-size: 10px; color: var(--text-secondary); font-family: inherit;
+    transition: all 0.2s; display: flex; align-items: center; gap: 4px;
+  }
+  .theme-toggle:hover { background: var(--teal-bg); color: var(--teal); border-color: var(--teal); }
+
+  .legend {
+    display: flex; justify-content: center; gap: 14px; margin-bottom: 8px;
+    font-size: 8px; color: var(--text-muted);
+  }
+  .legend-item { display: flex; align-items: center; gap: 3px; }
+  .legend-dot { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+  .legend-dot.active { background: var(--teal); }
+  .legend-dot.planned { border: 1.5px dashed var(--amber); }
+  .legend-dot.ai { background: var(--indigo); }
+  .legend-dot.training { background: var(--amber); }
+  .legend-dot.risk { background: var(--rose); }
+
+  .section { margin-bottom: 6px; }
+  .section-title {
+    font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;
+    color: var(--text-muted); text-align: center; margin-bottom: 4px;
+  }
+  .section-row {
+    display: flex; gap: 4px; flex-wrap: wrap; justify-content: center;
+    padding: 5px 4px; border-radius: var(--radius);
+  }
+  .section-row.data-bg { background: var(--slate-bg); }
+  .section-row.risk-bg { background: var(--rose-bg); }
+  .section-row.training-bg { background: var(--amber-bg); }
+  .section-row.infra-bg { background: var(--slate-bg); }
+
+  .box {
+    border-radius: 6px; padding: 5px 7px; cursor: pointer;
+    transition: all 0.15s ease; position: relative; min-width: 0;
+    flex-shrink: 0;
+  }
+  .box:hover { transform: translateY(-1px); box-shadow: var(--shadow-lg); }
+  .box.active-teal { background: linear-gradient(135deg, var(--teal-light), var(--teal)); color: white; }
+  .box.active-indigo { background: linear-gradient(135deg, var(--indigo-light), var(--indigo)); color: white; }
+  .box.active-amber { background: linear-gradient(135deg, var(--amber-light), var(--amber)); color: white; }
+  .box.active-rose { background: linear-gradient(135deg, var(--rose-light), var(--rose)); color: white; }
+  .box.active-emerald { background: linear-gradient(135deg, var(--emerald-light), var(--emerald)); color: white; }
+  .box.active-slate { background: linear-gradient(135deg, var(--slate-light), var(--slate)); color: white; }
+  .box.active-purple { background: linear-gradient(135deg, var(--purple-light), var(--purple)); color: white; }
+  .box.active-kill { background: linear-gradient(135deg, #991B1B, #7F1D1D); color: white; }
+  .box.planned {
+    background: var(--card-bg); border: 1.5px dashed var(--amber); color: var(--planned-text);
+  }
+  .box.future { background: var(--card-bg); border: 1.5px dashed var(--border-subtle); color: var(--text-muted); }
+
+  .box-title { font-size: 8px; font-weight: 700; line-height: 1.2; }
+  .box-sub { font-size: 6.5px; opacity: 0.85; line-height: 1.3; margin-top: 1px; }
+  .planned .box-sub { color: var(--slate-light); }
+  .box-sub2 { font-size: 6px; opacity: 0.7; line-height: 1.3; }
+
+  .expand-indicator {
+    position: absolute; top: 3px; right: 5px; font-size: 7px; opacity: 0.5;
+  }
+
+  /* Expanded detail panel */
+  .detail-panel {
+    display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    background: var(--detail-bg); border-radius: 12px; padding: 20px 24px; z-index: 1000;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3); max-width: 480px; width: 90%;
+    max-height: 80vh; overflow-y: auto; border-top: 4px solid var(--detail-border);
+  }
+  .detail-panel.show { display: block; }
+  .detail-panel h3 { font-size: 15px; font-weight: 700; margin-bottom: 12px; color: var(--text-primary); }
+  .detail-panel .close-btn {
+    position: absolute; top: 12px; right: 16px; cursor: pointer;
+    font-size: 18px; color: var(--text-muted); background: none; border: none;
+    font-family: inherit;
+  }
+  .detail-panel .close-btn:hover { color: var(--text-primary); }
+  .detail-grid { display: grid; grid-template-columns: 1fr; gap: 10px; }
+  .detail-item label {
+    display: block; font-size: 9px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.5px; color: var(--teal); margin-bottom: 2px;
+  }
+  .detail-item p { font-size: 12px; color: var(--text-primary); line-height: 1.5; }
+  .detail-item p code {
+    font-family: 'JetBrains Mono', monospace; font-size: 10px;
+    background: var(--slate-bg); padding: 1px 4px; border-radius: 3px; color: var(--text-secondary);
+  }
+  .status-badge {
+    display: inline-block; font-size: 9px; font-weight: 600; padding: 2px 8px;
+    border-radius: 10px; margin-bottom: 10px;
+  }
+  .status-badge.live { background: var(--teal-bg); color: var(--teal); }
+  .status-badge.planned { background: var(--amber-bg); color: var(--amber); }
+  .status-badge.future { background: var(--slate-bg); color: var(--slate); }
+
+  .overlay {
+    display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: var(--overlay-bg); z-index: 999; backdrop-filter: blur(2px);
+  }
+  .overlay.show { display: block; }
+
+  /* Desk containers */
+  .desks-row { display: flex; gap: 5px; justify-content: center; }
+  .desk {
+    border-radius: var(--radius); padding: 5px; flex: 1; max-width: 33%;
+    background: var(--card-bg); border: 2px solid var(--teal);
+  }
+  .desk.planned-desk { border-color: var(--amber); border-style: dashed; }
+  .desk-header {
+    font-size: 7.5px; font-weight: 700; text-align: center;
+    padding: 3px; border-radius: 4px; margin-bottom: 4px;
+  }
+  .desk-header.active-header { background: var(--teal); color: white; }
+  .desk-header.planned-header { background: var(--amber-bg); color: var(--amber); }
+  .desk-sub { font-size: 6px; color: var(--text-muted); text-align: center; margin-bottom: 4px; }
+  .desk-strategies { display: flex; gap: 3px; flex-wrap: wrap; }
+  .desk-strategies .box { flex: 1; min-width: 70px; text-align: center; }
+  .desk-exec { margin-top: 4px; }
+  .desk-exec .box { width: 100%; text-align: center; }
+  .phase-pill {
+    display: inline-block; font-size: 6.5px; font-weight: 700; padding: 1px 6px;
+    border-radius: 8px; color: white; margin-top: 3px;
+  }
+  .phase-pill.p1 { background: var(--teal); }
+  .phase-pill.p34 { background: var(--amber); }
+  .phase-pill.p56 { background: var(--slate); }
+
+  /* Flywheel arrow */
+  .flywheel-label {
+    text-align: center; font-size: 7px; font-weight: 700; color: var(--amber);
+    letter-spacing: 0.5px; margin: 2px 0;
+  }
+  .flywheel-arrow {
+    text-align: center; font-size: 10px; color: var(--amber); margin: -2px 0;
+  }
+
+  /* Phase timeline */
+  .phases-row {
+    display: flex; gap: 3px; justify-content: center; margin-top: 4px;
+  }
+  .phases-row .box { flex: 1; text-align: center; }
+
+  /* Metrics bar */
+  .metrics-bar {
+    background: var(--metrics-bg); border-radius: 6px; padding: 6px 12px;
+    display: flex; gap: 20px; justify-content: center; margin-top: 6px;
+  }
+  .metric-group label {
+    font-size: 6.5px; font-weight: 700; color: var(--metrics-label);
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .metric-group p { font-size: 8px; color: var(--metrics-text); margin-top: 1px; }
+
+  /* Portfolio formula */
+  .formula-bar {
+    text-align: center; border: 1px solid var(--teal); border-radius: 6px;
+    padding: 4px 8px; margin-top: 4px; font-size: 8px; color: var(--text-primary);
+    background: var(--formula-bg);
+  }
+  .formula-bar strong { color: var(--teal); }
+
+  /* Footer */
+  footer {
+    text-align: center; font-size: 7px; color: var(--text-muted); margin-top: 6px;
+    line-height: 1.5;
+  }
+
+  /* Print styles */
+  @media print {
+    body { background: white; }
+    [data-theme="dark"] { --body-bg: white; --page-bg: white; --text-primary: #0F172A; --text-secondary: #475569; --text-muted: #64748B; --card-bg: white; --section-bg: rgba(226,232,240,0.4); --risk-section-bg: rgba(254,226,226,0.3); --training-section-bg: rgba(254,249,195,0.25); --formula-bg: white; --planned-text: #0F172A; --planned-sub: #64748B; }
+    .page { width: 8in; min-height: 5.5in; padding: 0.15in; margin: 0; box-shadow: none; }
+    .box:hover { transform: none; box-shadow: none; }
+    .expand-indicator { display: none; }
+    .theme-toggle { display: none; }
+    .detail-panel, .overlay { display: none !important; }
+    @page { size: 8in 5.5in; margin: 0; }
+  }
+
+  /* Screen adjustments */
+  @media screen {
+    .page { box-shadow: var(--shadow-lg); margin: 10px auto; border-radius: 4px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="page" id="page">
+  <header>
+    <div class="header-text">
+      <h1>HALCYON LAB — System Architecture</h1>
+      <p>Autonomous AI-Powered Equity Trading System · v1 Live · March 2026</p>
+    </div>
+    <button class="theme-toggle" onclick="toggleTheme()" id="themeBtn">☀ Light</button>
+  </header>
+
+  <div class="legend">
+    <div class="legend-item"><div class="legend-dot active"></div> Active</div>
+    <div class="legend-item"><div class="legend-dot planned"></div> Planned</div>
+    <div class="legend-item"><div class="legend-dot ai"></div> AI / LLM</div>
+    <div class="legend-item"><div class="legend-dot training"></div> Training</div>
+    <div class="legend-item"><div class="legend-dot risk"></div> Risk</div>
+  </div>
+
+  <!-- DATA SOURCES -->
+  <div class="section">
+    <div class="section-title">Data Sources</div>
+    <div class="section-row data-bg" id="data-row"></div>
+  </div>
+
+  <div class="flywheel-arrow">▼</div>
+
+  <!-- PROCESSING PIPELINE -->
+  <div class="section">
+    <div class="section-title">Processing Pipeline</div>
+    <div class="section-row data-bg" id="pipeline-row"></div>
+  </div>
+
+  <div class="flywheel-arrow">▼</div>
+
+  <!-- DECISION & RISK -->
+  <div class="section">
+    <div class="section-title">Decision &amp; Risk Layer</div>
+    <div class="section-row risk-bg" id="risk-row"></div>
+  </div>
+
+  <div class="flywheel-arrow">▼</div>
+
+  <!-- TRADING DESKS -->
+  <div class="section">
+    <div class="section-title">Trading Desks</div>
+    <div class="desks-row" id="desks-row"></div>
+  </div>
+
+  <div class="flywheel-label">◀ ─ ─ TRAINING DATA FLYWHEEL ─ ─ ▶</div>
+
+  <!-- TRAINING FLYWHEEL -->
+  <div class="section">
+    <div class="section-title">Training Data Flywheel</div>
+    <div class="section-row training-bg" id="training-row"></div>
+  </div>
+
+  <div class="flywheel-arrow">▼</div>
+
+  <!-- INFRASTRUCTURE -->
+  <div class="section">
+    <div class="section-title">Outputs &amp; Infrastructure</div>
+    <div class="section-row infra-bg" id="infra-row"></div>
+  </div>
+
+  <!-- METRICS BAR -->
+  <div class="metrics-bar">
+    <div class="metric-group"><label>Codebase</label><p>141 files · 29K LOC · 1,032 tests · 72 routes</p></div>
+    <div class="metric-group"><label>HSHS Dimensions</label><p>Performance · Model Quality · Data Asset · Flywheel · Defensibility</p></div>
+    <div class="metric-group"><label>Phase Gates</label><p>50 trades → 100 (PSR>90%) → 200 (SR≥1.0) → 500 (DSR>0.95)</p></div>
+  </div>
+
+  <!-- PHASE TIMELINE -->
+  <div class="phases-row" id="phases-row"></div>
+
+  <!-- PORTFOLIO FORMULA -->
+  <div class="formula-bar">
+    <strong>SR_portfolio = S × √N / √(1 + (N−1) × ρ)</strong> &nbsp;|&nbsp; 4 strategies (ρ=0.15): SR ≈ 0.99 &nbsp;|&nbsp; 8 strategies: SR ≈ 1.17 &nbsp;|&nbsp; Equal-weight → Inv-vol → Correlation-aware + BL
+  </div>
+
+  <footer>
+    Halcyon Lab · github.com/millerrc18/halcyon-lab · halcyonlab.app · 34 research docs · Framework v2<br/>
+    Core principle: Training data quality is the #1 competitive advantage. The data asset is the most valuable component.
+  </footer>
+</div>
+
+<!-- Detail Panel -->
+<div class="overlay" id="overlay" onclick="closeDetail()"></div>
+<div class="detail-panel" id="detail">
+  <button class="close-btn" onclick="closeDetail()">&times;</button>
+  <div id="detail-content"></div>
+</div>
+
+<script>
+function toggleTheme() {
+  const current = document.documentElement.getAttribute('data-theme') || 'light';
+  const next = current === 'light' ? 'dark' : 'light';
+  document.documentElement.setAttribute('data-theme', next);
+  document.getElementById('themeBtn').textContent = next === 'dark' ? '☾ Dark' : '☀ Light';
+  localStorage.setItem('halcyon-theme', next);
+}
+// Restore saved theme
+(function() {
+  const saved = localStorage.getItem('halcyon-theme') || 'light';
+  document.documentElement.setAttribute('data-theme', saved);
+  const btn = document.getElementById('themeBtn');
+  if (btn) btn.textContent = saved === 'dark' ? '☾ Dark' : '☀ Light';
+})();
+
+const DATA = {
+  data: [
+    { id:'yfinance', cls:'active-teal', title:'yfinance OHLCV', sub:'S&P 100 · Daily', sub2:'→ Polygon.io (Phase 2)',
+      what:'Daily OHLCV price data for all S&P 100 constituents plus SPY benchmark. Computes open, high, low, close, volume, and adjusted close.',
+      why:'Foundation of the entire feature engine. Every technical indicator, trend classification, and relative strength calculation depends on accurate price data. Moving to Polygon.io in Phase 2 for reliability and intraday data.',
+      who:'Ingested by <code>src/data_ingestion/market_data.py</code> via the yfinance Python library. Called by the scan pipeline every 30 minutes during market hours.',
+      when:'Every scan cycle (30 min during market hours). Pre-market refresh at 6:00 AM ET. Overnight pre-cache at 11:00 PM.',
+      where:'Stored in memory during scans (not persisted to DB). Options chains stored in <code>options_chains</code> table by the overnight collector.'
+    },
+    { id:'fred', cls:'active-teal', title:'FRED Macro', sub:'34+ series', sub2:'Yield curve · CPI · NFP',
+      what:'34+ macroeconomic time series from the Federal Reserve Economic Data API: Fed Funds rate, 10Y-2Y spread, unemployment, CPI, GDP, housing starts, consumer sentiment, financial conditions indices, credit spreads, and more.',
+      why:'Macro context is critical for regime classification and trade quality. An inverted yield curve with widening credit spreads changes the meaning of every pullback. The credit spread z-score powers the Traffic Light regime system.',
+      who:'Collected by <code>src/data_collection/macro_collector.py</code> and <code>src/data_collection/fed_collector.py</code>. Enriched into features by <code>src/data_enrichment/macro.py</code>.',
+      when:'Full collection runs nightly at 9:30 PM in the overnight pipeline. Key series (VIX, credit spreads) refreshed in pre-market at 6:00 AM.',
+      where:'Stored in <code>macro_snapshots</code> table. Fed communications in <code>fed_communications</code> table.'
+    },
+    { id:'finnhub', cls:'active-teal', title:'Finnhub', sub:'News · Insiders', sub2:'Analysts · Earnings',
+      what:'Company news headlines with sentiment, insider buy/sell transactions (Form 4), analyst consensus recommendations and price targets, and earnings announcement dates.',
+      why:'Multi-source enrichment that transforms a pure-technical signal into an informed signal. A pullback with insider buying is fundamentally different from one with insider selling. Analyst revisions and earnings proximity are key risk factors.',
+      who:'News via <code>src/data_enrichment/news.py</code>, insiders via <code>src/data_enrichment/insiders.py</code>, analysts via <code>src/data_collection/analyst_collector.py</code>.',
+      when:'News and insiders enriched on every scan. Analyst estimates collected nightly (batched 20/night due to rate limits). Earnings calendar updated daily.',
+      where:'<code>insider_transactions</code>, <code>analyst_estimates</code>, <code>earnings_calendar</code> tables. News is ephemeral (used during enrichment, not stored long-term).'
+    },
+    { id:'edgar', cls:'active-teal', title:'SEC EDGAR', sub:'10-K · 10-Q · 8-K', sub2:'XBRL · Form 4',
+      what:'SEC filings (10-K annual, 10-Q quarterly, 8-K current events) with NLP sentiment analysis using Loughran-McDonald dictionary. XBRL structured financial data for revenue, margins, cash flow. Form 4 insider transactions.',
+      why:'Fundamental backbone for the training data enrichment. Filing sentiment delta detects management tone shifts. L-M dictionary + 17 cautionary phrases scored per filing. Technical-fundamental divergence scoring is the most novel feature for the pullback strategy.',
+      who:'<code>src/data_collection/edgar_collector.py</code> for collection. <code>src/features/filing_nlp.py</code> for NLP scoring. <code>src/data_enrichment/fundamentals.py</code> for XBRL data.',
+      when:'Nightly collection at 9:30 PM. NLP runs automatically on each new filing. XBRL fundamental snapshots updated quarterly.',
+      where:'<code>edgar_filings</code> table with NLP columns (sentiment_score, cautionary_count, sentiment_delta).'
+    },
+    { id:'options', cls:'active-teal', title:'Options / VIX', sub:'Chains · Term struct', sub2:'CBOE ratios',
+      what:'Full EOD options chain snapshots (strikes, IV, Greeks, OI) via yfinance. VIX term structure (VIX, VIX9D, VIX3M, VIX1Y) with contango/backwardation classification. CBOE equity/index/total put/call ratios.',
+      why:'Passive options data collection builds the irreplaceable dataset for the future Options Volatility Desk (Phase 3-4). VIX term structure powers regime detection. Put/call ratios indicate market positioning.',
+      who:'<code>src/data_collection/options_collector.py</code>, <code>src/data_collection/options_metrics.py</code>, <code>src/data_collection/vix_collector.py</code>, <code>src/data_collection/cboe_collector.py</code>.',
+      when:'All collected nightly at 9:30 PM. Options metrics derived signals computed alongside.',
+      where:'<code>options_chains</code>, <code>options_metrics</code>, <code>vix_term_structure</code>, <code>cboe_ratios</code> tables.'
+    },
+    { id:'collectors', cls:'active-teal', title:'12 Night Collectors', sub:'Short interest · Fed comms', sub2:'Google Trends · CBOE',
+      what:'12 specialized collectors running nightly: options chains, options metrics, VIX term structure, CBOE ratios, FRED macro (34+), Google Trends (8 sentiment terms), earnings calendar, EDGAR filings, insider transactions, short interest, Fed communications, analyst estimates.',
+      why:'Each night produces irreplaceable daily snapshots that accumulate into the data moat. Short interest reveals institutional positioning. Google Trends captures retail attention spikes. Fed communications track policy evolution. This data cannot be reconstructed retroactively.',
+      who:'Orchestrated by <code>src/scheduler/watch.py</code> <code>_run_data_collection()</code>. Each collector is a standalone module in <code>src/data_collection/</code>.',
+      when:'9:30 PM ET nightly. Each collector runs concurrently. Total pipeline takes ~5-15 minutes.',
+      where:'12 dedicated SQLite tables. All synced to Render Postgres within 2 minutes.'
+    },
+    { id:'research', cls:'active-teal', title:'Research #13', sub:'arXiv · SSRN · HF', sub2:'Reddit · GitHub',
+      what:'Automated research intelligence collector scanning 7 sources: arXiv (quant finance, ML), SSRN (finance papers), HuggingFace (new financial models), Reddit (r/algotrading, r/machinelearning), GitHub (trading repos), AI blogs, SEC/FINRA regulatory updates.',
+      why:'Continuous competitive intelligence at zero API cost. Discovers new techniques, identifies emerging competitors, tracks regulatory changes. Weekly Claude synthesis produces actionable research digest. Equivalent to having a research analyst on staff.',
+      who:'<code>src/data_collection/research_collector.py</code> for collection, <code>src/data_collection/research_synthesizer.py</code> for weekly synthesis.',
+      when:'Collected nightly. Weekly synthesis on Sunday evenings for Monday action items.',
+      where:'<code>research_papers</code>, <code>research_docs</code>, <code>research_digests</code> tables.'
+    },
+    { id:'unusual', cls:'planned', title:'Unusual Whales', sub:'Options flow', sub2:'$50/mo · Phase 2',
+      what:'Real-time unusual options activity data: large block trades, sweep orders, dark pool prints, and institutional positioning signals.',
+      why:'Research identified options flow as the highest-value alternative data source for the budget (Alternative Data Signals doc). Pan & Poteshman, Cremers & Weinbaum showed informed trading concentrates in options markets before equity moves.',
+      who:'Will be integrated into the enrichment pipeline as a new data source.',
+      when:'Phase 2, after core strategy is validated. Passive collection only initially.',
+      where:'New <code>options_flow</code> table (planned).'
+    },
+    { id:'claude', cls:'active-indigo', title:'Claude Sonnet', sub:'Council · Scoring', sub2:'Training gen',
+      what:'Anthropic Claude Sonnet API used for three critical functions: (1) AI Council daily sessions (~$0.50/session), (2) Quality scoring of training examples via LLM-as-judge with 6-dimension rubric, (3) Self-blinded training data generation.',
+      why:'Local LLM analyzing itself causes model collapse. Claude provides an independent, higher-capability evaluation and generation layer. Prompt quality contributes ~5× more than teacher model tier to training data quality.',
+      who:'<code>src/training/claude_client.py</code> — all Claude calls route through this single module for cost tracking.',
+      when:'Council: 8:30 AM daily. Scoring: overnight batches. Generation: on-demand for closed trades.',
+      where:'Costs tracked in <code>api_costs</code> table. Council outputs in <code>council_sessions</code>/<code>council_votes</code>.'
+    },
+    { id:'chatgpt', cls:'active-indigo', title:'ChatGPT', sub:'Multi-teacher', sub2:'Blinded gen',
+      what:'ChatGPT Plus subscription used as a second teacher model for self-blinded training data generation. Manual workflow: paste feature inputs, collect XML outputs, import to database.',
+      why:'Multi-teacher diversity reduces single-model mode collapse (research recommendation). When ChatGPT generates and Claude scores, zero cross-contamination between generation and evaluation. Different model biases produce more robust training data.',
+      who:'Manual workflow via ChatGPT web interface. Export script: <code>scripts/export_chatgpt_inputs.py</code>. Import script: <code>scripts/import_chatgpt_outputs.py</code>.',
+      when:'Ryan generates batches of 20-50 examples in spare time. Source tagged as <code>chatgpt_blinded_*</code>.',
+      where:'Imported into <code>training_examples</code> table with source tag for tracking.'
+    },
+    { id:'ollama', cls:'active-indigo', title:'Ollama Local', sub:'halcyonlatest', sub2:'Qwen3 8B Q8 GGUF',
+      what:'Local LLM inference server running the fine-tuned halcyonlatest model (Qwen3 8B, Q8_0 GGUF quantization, 8.7GB). Generates trade commentary for every qualifying setup during market scans.',
+      why:'Local-first architecture means zero API costs for inference, no latency to cloud services, complete privacy of trading signals, and the ability to fine-tune on proprietary data. The model IS the product.',
+      who:'<code>src/llm/client.py</code> calls Ollama\'s OpenAI-compatible API at <code>localhost:11434</code>.',
+      when:'Loaded at 5:15 AM (morning VRAM handoff). Active 5:15 AM - 6:50 PM. Unloaded for training at 6:50 PM.',
+      where:'Model weights in Ollama\'s model directory. GGUF file ~8.7GB on disk.'
+    },
+  ],
+
+  pipeline: [
+    { id:'features', cls:'active-teal', title:'Feature Engine', sub:'Technicals · Regime · Sector', sub2:'Earnings · Options metrics',
+      what:'Computes 50+ features per ticker: trend state, relative strength (1m/3m/6m), RSI, ATR, volume analysis, moving average relationships, pullback depth, sector context, market regime classification (7 categories), earnings proximity, options-derived metrics.',
+      why:'Transforms raw OHLCV data into the structured signal that drives ranking, LLM commentary, and training data quality. The setup classifier and signal zoo both depend on feature quality.',
+      who:'<code>src/features/engine.py</code> (<code>compute_all_features()</code>). Regime via <code>src/features/regime.py</code>. Earnings via <code>src/features/earnings.py</code>. Setup classifier via <code>src/features/setup_classifier.py</code>.',
+      when:'Every scan cycle (13 per day). Pre-computed for the full S&P 100 universe.',
+      where:'In-memory during scans. Key features persisted in <code>recommendations</code> table when a packet is generated.'
+    },
+    { id:'enrichment', cls:'active-teal', title:'Data Enrichment', sub:'Fundamentals · Insiders · News', sub2:'Macro context · Filing NLP',
+      what:'Enriches raw feature data with multi-source context: SEC EDGAR fundamentals (revenue, margins, PE), Finnhub insider activity (buy/sell classification), recent news headlines with sentiment, FRED macro context, and SEC filing NLP scores.',
+      why:'A technical pullback with insider buying and strong fundamentals is a fundamentally different trade than one with insider selling and declining margins. The enrichment layer is what makes LLM commentary genuinely insightful rather than just pattern-matching.',
+      who:'<code>src/data_enrichment/enricher.py</code> orchestrates all enrichment modules.',
+      when:'Every scan, after feature computation. Adds ~10-15 seconds to the scan pipeline.',
+      where:'Enriched features passed to ranking and LLM. Full enriched prompt stored in <code>recommendations.enriched_prompt</code> for training data generation.'
+    },
+    { id:'traffic', cls:'planned', title:'Traffic Light', sub:'VIX + 200-DMA + Credit', sub2:'Score 0-6 → Sizing mult',
+      what:'Rules-based regime detection overlay using 3 indicators: VIX level (Green <20 / Yellow 20-30 / Red >30), S&P 500 vs 200-DMA, and HY credit spread z-score vs 1-year MA. Total 0-6 maps to position sizing multiplier.',
+      why:'The system\'s biggest structural weakness is generating zero signals in bear markets. Traffic Light provides regime-aware position sizing with only 3 inputs — nearly impossible to overfit. Research: regime-aware sizing is more robust than strategy selection for Phase 1-2.',
+      who:'Will be <code>src/features/traffic_light.py</code>. Wired into risk governor and scan pipeline.',
+      when:'Computed on every scan. 5-day persistence filter prevents whipsaw.',
+      where:'Score logged to <code>scan_metrics</code>. Displayed on dashboard. Included in Telegram notifications.'
+    },
+    { id:'ranking', cls:'active-teal', title:'Ranking & Qualification', sub:'Score 0-100 · Regime thresholds', sub2:'Packet-worthy ≥40 (bootcamp)',
+      what:'Scores every ticker 0-100 based on technical features, then applies regime-adaptive thresholds to classify as packet-worthy (generate full LLM analysis), watchlist (monitor), or below threshold. 7 regime-specific thresholds from 40 (bull) to 90 (crisis).',
+      why:'Filters the S&P 100 universe down to 5-15 actionable candidates per scan. Regime-adaptive thresholds automatically tighten in volatile markets and loosen in calm markets, preventing over-trading in stress and under-trading in opportunity.',
+      who:'<code>src/ranking/ranker.py</code> (<code>rank_universe()</code>, <code>get_top_candidates()</code>).',
+      when:'Every scan cycle. Thresholds adjusted by AI Council (planned).',
+      where:'Rankings passed to scan service. Top candidates proceed to LLM analysis.'
+    },
+    { id:'classifier', cls:'active-teal', title:'Setup Classifier', sub:'6 types: pullback · breakout', sub2:'momentum · MR · range · break',
+      what:'Classifies each qualifying setup into one of 6 categories: pullback_in_uptrend, breakout_from_consolidation, momentum_continuation, mean_reversion, range_bound, breakdown. Rule-based with 80-85% accuracy (research-validated).',
+      why:'Enables the signal zoo to log ALL setup types regardless of which strategy is active. When Strategy #2 launches, we already have months of classified data for that setup type. Also enables per-strategy LoRA adapter routing.',
+      who:'<code>src/features/setup_classifier.py</code>.',
+      when:'Every scan, for every ticker above watchlist threshold.',
+      where:'Classifications stored in <code>setup_signals</code> table and <code>recommendations.setup_type</code>.'
+    },
+    { id:'signalzoo', cls:'active-teal', title:'Signal Zoo', sub:'Logs ALL setups', sub2:'Regardless of type',
+      what:'Logs every qualifying setup with full feature data, regardless of whether the current strategy would trade it. Captures breakout signals, mean reversion signals, momentum signals — everything the classifier identifies.',
+      why:'The signal zoo is the future strategy development laboratory. When evaluating Strategy #2 candidates, we have months of historical signal data with actual subsequent price outcomes. This is the research finding "start logging signal zoo NOW."',
+      who:'Integrated into the scan pipeline via setup classifier output.',
+      when:'Every scan. All 6 setup types logged.',
+      where:'<code>setup_signals</code> table with full features, classification, and subsequent price data.'
+    },
+    { id:'council', cls:'active-indigo', title:'AI Council (5 Agents)', sub:'Vote-first Modified Delphi', sub2:'→ Position sizing · Sector tilts',
+      what:'5-agent strategic deliberation system: Tactical Operator (market microstructure), Strategic Architect (capital allocation), Red Team (adversarial pre-mortem), Innovation Engine (R&D pipeline), Macro Navigator (regime/regulatory). Vote-first protocol with structured JSON output.',
+      why:'NeurIPS 2025 finding: majority voting accounts for most gains. The council provides 5 genuinely different analytical lenses. Structured output controls position sizing, cash reserve, scan aggressiveness, and sector tilts within hard guardrails. Earns authority through demonstrated accuracy.',
+      who:'<code>src/council/agents.py</code> (agent definitions + data gathering), <code>src/council/protocol.py</code> (Delphi protocol), <code>src/council/engine.py</code> (session orchestration).',
+      when:'Daily at 8:30 AM (tactical, ~$0.50). Weekly Sunday (strategic, ~$1.50). Monthly first weekend (~$3.00).',
+      where:'<code>council_sessions</code> and <code>council_votes</code> tables. Full JSON in <code>result_json</code> column. Calibration in <code>council_calibrations</code> (planned).'
+    },
+    { id:'watchloop', cls:'active-teal', title:'Watch Loop', sub:'2,313-line orchestrator', sub2:'27 scheduled events',
+      what:'The central nervous system. Orchestrates the entire 24/7 schedule: 13 market-hours scans, pre-market pipeline (6 tasks), post-market collection, overnight data ingestion, Saturday retrain, Sunday digest. Manages all timing, error recovery, and event sequencing.',
+      why:'Everything flows through the watch loop. It is the single process that turns a collection of modules into a living system. Without it, you have libraries. With it, you have an autonomous trading system.',
+      who:'<code>src/scheduler/watch.py</code> — <code>WatchLoop</code> class with 40+ methods. Started via <code>python -m src.main watch --overnight</code>.',
+      when:'Runs 24/7. Market hours: scans every 30 min. Overnight: data collection, training, pre-cache. Weekend: retrain + reports.',
+      where:'Coordinates all other modules. State tracked in <code>scan_metrics</code>, <code>schedule_metrics</code>, <code>activity_log</code>.'
+    },
+    { id:'vram', cls:'active-teal', title:'VRAM Manager', sub:'Morning/evening handoffs', sub2:'Inference ↔ Training',
+      what:'Manages GPU VRAM allocation between inference (Ollama) and training (PEFT). Morning handoff at 5:15 AM kills training and loads Ollama. Evening handoff at 6:50 PM unloads Ollama and starts training subprocess.',
+      why:'Single RTX 3060 (12GB) cannot run inference and training simultaneously. The VRAM manager ensures the GPU is always allocated to the right workload — inference during market hours, training overnight.',
+      who:'<code>src/scheduler/vram_manager.py</code>. Called by watch loop at scheduled handoff times.',
+      when:'5:15 AM (→ inference), 6:50 PM (→ training). Known issue: Ollama sometimes won\'t release VRAM (1.3GB held).',
+      where:'GPU state monitored via nvidia-smi. Handoff results logged and notified via Telegram.'
+    },
+  ],
+
+  risk: [
+    { id:'governor', cls:'active-rose', title:'Risk Governor (8 Checks)', sub:'Emergency halt · Daily loss · Position size', sub2:'Sector cap · Correlation · VIX halt',
+      what:'8-check risk gate that every trade must pass before execution: (1) Emergency halt/kill switch, (2) Daily loss limit -3%, (3) Position size ≤5% of equity, (4) Max open positions, (5) Sector concentration ≤22%, (6) Correlated position cap, (7) VIX volatility halt, (8) Duplicate ticker check.',
+      why:'The last line of defense before capital is deployed. No trade bypasses the governor. Research: position sizing and risk management may now contain more alpha than signal generation itself.',
+      who:'<code>src/risk/governor.py</code> (<code>RiskGovernor.check_trade()</code>).',
+      when:'Every trade attempt, both paper and live.',
+      where:'Rejection reasons logged in <code>recommendations</code> table. Kill switch state in <code>activity_log</code>.'
+    },
+    { id:'llm', cls:'active-indigo', title:'LLM Packet Writer', sub:'Ollama → halcyonlatest', sub2:'XML: why_now · analysis · metadata',
+      what:'Sends enriched feature data to the local Qwen3 8B model (halcyonlatest) which generates trade commentary in XML format: <code>&lt;why_now&gt;</code> (2-3 sentence thesis), <code>&lt;analysis&gt;</code> (4-6 paragraphs), <code>&lt;metadata&gt;</code> (conviction 1-10, direction, time horizon, key risk).',
+      why:'The LLM commentary IS the product. It synthesizes technical, fundamental, insider, news, and macro data into a unified investment thesis. The conviction score drives position sizing. Commentary quality is what separates Halcyon from a simple rules-based scanner.',
+      who:'<code>src/llm/packet_writer.py</code> (<code>enhance_packet_with_llm()</code>). Parser: <code>_parse_llm_response()</code>.',
+      when:'Every packet-worthy ticker during scans. Full prompt + condensed fallback. 180s timeout.',
+      where:'Commentary stored in <code>recommendations</code> table. Raw prompts in <code>enriched_prompt</code> column for training data.'
+    },
+    { id:'validator', cls:'active-rose', title:'LLM Validator', sub:'Ticker · Price · Stop', sub2:'Allocation · Conviction',
+      what:'Hard-bounds validation on LLM output before it reaches the risk governor: ticker must be in universe, price within 10% of current, stop below entry, allocation ≤5%, conviction 1-10 integer. Prevents hallucination-driven trades.',
+      why:'LLMs hallucinate at ~4% baseline rate. A hallucinated price or stop level could cause the risk governor to approve an unsafe trade. The validator catches these before they become real positions.',
+      who:'<code>src/llm/validator.py</code>. Wired before risk governor in <code>open_shadow_trade()</code>.',
+      when:'Every trade, after LLM generates commentary, before risk governor check.',
+      where:'Validation failures logged at WARNING level.'
+    },
+    { id:'constrained', cls:'planned', title:'Constrained Decode', sub:'XGrammar / GBNF', sub2:'Guaranteed XML',
+      what:'Grammar-constrained decoding that makes it structurally impossible for the model to produce malformed XML output. Uses GBNF grammar or XGrammar to enforce tag structure at the token generation level.',
+      why:'Current template fallback rate is ~15-20% (down from 62% after training data cleanup). Constrained decoding could take this to 0% with near-zero latency overhead. Deep research prompt #5 covers implementation options.',
+      who:'Will be integrated into <code>src/llm/client.py</code> Ollama API call.',
+      when:'Research in progress. Implementation when the optimal approach is identified.',
+      where:'Configuration in Ollama model file or llama.cpp grammar parameter.'
+    },
+    { id:'drawdown', cls:'active-rose', title:'Graduated Drawdown', sub:'Thorp protocol: 0% DD → 100%', sub2:'20% DD → 0% (linear)',
+      what:'Ed Thorp\'s graduated position sizing reduction: at 0% drawdown, full position sizes. Linear reduction to 0% position size at 20% drawdown. Recovery hysteresis requires 2% improvement before size increases.',
+      why:'Dramatically reduces probability of catastrophic loss. The Triple Penance Rule says recovery from max DD takes ~3× the formation period — graduated drawdown prevents DD from reaching levels that take years to recover from.',
+      who:'<code>src/risk/governor.py</code> (<code>drawdown_adjusted_risk()</code>).',
+      when:'Computed on every trade. DD calculated from <code>shadow_trades</code> equity curve.',
+      where:'Current DD tracked in portfolio state. Alerts at 5%, 10%, 15% thresholds via Telegram.'
+    },
+    { id:'killswitch', cls:'active-kill', title:'Kill Switch', sub:'CLI · Telegram · Dashboard', sub2:'',
+      what:'Immediately halts all new position opening across paper and live accounts. Does not close existing positions (bracket orders protect those). Can be triggered via CLI (<code>halt-trading</code>), Telegram (<code>/halt</code>), or dashboard button.',
+      why:'The ultimate safety mechanism. If the system behaves unexpectedly, one command stops everything. Existing positions are protected by Alpaca\'s server-side bracket orders.',
+      who:'<code>src/risk/governor.py</code> (<code>_global_halt()</code>, <code>_is_halted()</code>).',
+      when:'Checked on every trade attempt. Resume requires explicit <code>resume-trading</code> command.',
+      where:'Halt state persisted to ensure it survives restarts.'
+    },
+    { id:'is_tracking', cls:'planned', title:'IS Tracking', sub:'Signal price vs fill', sub2:'Slippage in bps',
+      what:'Implementation Shortfall tracking: logs the mid-price at signal generation time (decision price) vs actual Alpaca fill price. Computes slippage in basis points per trade.',
+      why:'At current scale ($100-$5K), slippage is negligible. But building measurement infrastructure now means we\'ll detect systematic slippage before it erodes alpha at higher capital. Also: switching from market to limit-at-ask orders saves 0.5-2 bps/trade.',
+      who:'Will be added to <code>src/shadow_trading/executor.py</code> and <code>src/services/scan_service.py</code>.',
+      when:'Signal price captured at scan time. IS computed on fill.',
+      where:'New columns on <code>shadow_trades</code>: <code>signal_price</code>, <code>implementation_shortfall_bps</code>.'
+    },
+  ],
+
+  training: [
+    { id:'outcomes', cls:'active-emerald', title:'Trade Outcomes', sub:'P&L · MFE/MAE', sub2:'Exit reason · Duration',
+      what:'Closed trade data: P&L dollars and percent, maximum favorable excursion (MFE), maximum adverse excursion (MAE), holding period, exit reason (target hit, stop hit, timeout), conviction at entry, enriched prompt.',
+      why:'Real trade outcomes are the highest-quality training signal. Each closed trade becomes a labeled example that no competitor can replicate without making the same trade. This is the flywheel\'s fuel.',
+      who:'<code>src/shadow_trading/executor.py</code> (<code>check_and_manage_open_trades()</code>) closes trades and records outcomes.',
+      when:'Checked every scan cycle. Outcomes trigger training data collection at 4:30 PM.',
+      where:'<code>shadow_trades</code> table. Linked to <code>recommendations</code> via <code>recommendation_id</code>.'
+    },
+    { id:'blinding', cls:'active-amber', title:'Self-Blinded Gen', sub:'Claude + ChatGPT', sub2:'2-stage · No outcome leak',
+      what:'Two-stage self-blinding pipeline: Stage 1 sends Claude/ChatGPT ONLY the setup data (zero outcome info), generating genuine pre-trade analysis. Stage 2 enhances writing quality without seeing outcomes. Multi-teacher diversity reduces single-model mode collapse.',
+      why:'Instruction-based approaches ("pretend you don\'t know the outcome") fail reliably. Self-blinding is architectural, not instructional — the model literally cannot leak what it doesn\'t receive. TF-IDF leakage detector verifies integrity at ≤55%.',
+      who:'<code>src/training/data_collector.py</code> (from closed trades), <code>src/training/backfill.py</code> (historical). ChatGPT via manual workflow with export/import scripts.',
+      when:'Closed trade collection at 4:30 PM daily. Backfill and ChatGPT batches on-demand.',
+      where:'<code>training_examples</code> table. Source column tracks origin (blinded_win, blinded_loss, chatgpt_blinded_win, etc.).'
+    },
+    { id:'scoring', cls:'active-amber', title:'Quality Scoring', sub:'6-dim rubric · LLM judge', sub2:'Prune bottom 15%',
+      what:'Claude Sonnet scores each training example across 6 dimensions (0-5 each): thesis clarity (25%), evidence grounding (20%), risk identification (20%), calibration (15%), structural quality (10%), temporal reasoning (10%). Process-first, outcome-blind.',
+      why:'Quality crushes quantity. LIMA showed 1,000 curated examples matched GPT-4. AlpaGasus showed 9,000 filtered examples beat 52,000 unfiltered. Pruning the bottom 15% dramatically improves the model trained on the remaining data.',
+      who:'<code>src/training/quality_filter.py</code> for scoring. Uses <code>src/training/claude_client.py</code>.',
+      when:'New examples scored within 24 hours of creation. Full dataset re-scored before each retrain.',
+      where:'Scores stored in <code>training_examples</code> columns: <code>quality_score</code>, <code>quality_detail</code>.'
+    },
+    { id:'leakage', cls:'active-amber', title:'Leakage Detector', sub:'TF-IDF classifier', sub2:'Must be ≤55%',
+      what:'Trains a simple TF-IDF + logistic regression classifier on training example output text with outcome labels (win/loss). If balanced accuracy exceeds 55%, the self-blinding pipeline is leaking outcome information through subtle linguistic patterns.',
+      why:'Even without explicit outcome words, models leak through sentence structure, adverb selection, risk factor count, analysis length, and narrative framing. These patterns are undetectable by human review but caught by the classifier.',
+      who:'<code>src/training/leakage_detector.py</code>. CLI: <code>python -m src.main check-leakage</code>.',
+      when:'Before every retrain. Also overnight at 2:30 AM with model probing.',
+      where:'Results logged. Telegram alert if leakage detected.'
+    },
+    { id:'curriculum', cls:'active-amber', title:'Curriculum 3-Stage', sub:'Structure → Evidence', sub2:'→ Decision',
+      what:'Three-stage progressive curriculum: Stage 1 (structure) teaches format with easy examples, Stage 2 (evidence) teaches grounded reasoning, Stage 3 (decision) teaches complex multi-factor analysis. Decreasing learning rates per stage.',
+      why:'Trading-R1 validated this approach (Sharpe 2.72 on Qwen3-4B). Models learn structure first, then analytical depth, then nuanced judgment. Jumping straight to hard examples degrades learning.',
+      who:'<code>src/training/curriculum.py</code> for classification. <code>src/training/trainer.py</code> for staged training.',
+      when:'Examples classified on creation. Curriculum applied during Saturday retrain.',
+      where:'<code>training_examples.curriculum_stage</code> column. Known issue: 976/978 currently "structure" — needs proper classification.'
+    },
+    { id:'sft', cls:'active-purple', title:'QDoRA SFT', sub:'PEFT + TRL 0.24', sub2:'Weekly Saturday retrain',
+      what:'QDoRA (QLoRA + DoRA) fine-tuning via PEFT + TRL 0.24 + BitsAndBytes 4-bit. DoRA decomposes weights into magnitude and direction, applying LoRA only to direction. ~8% VRAM savings over standard QLoRA. Rank 16, all linear layers.',
+      why:'DoRA surpasses full fine-tuning at 46.6% vs 44.9% (arXiv:2512.23165). Weekly Saturday retrain matches nightly at 90% lower compute cost. Merge-and-reset LoRA strategy prevents intruder dimension accumulation.',
+      who:'<code>src/training/trainer.py</code> (<code>run_fine_tune()</code>). Export via llama.cpp.',
+      when:'Saturday overnight. Emergency retrain on >5% performance drift only.',
+      where:'Adapters saved to checkpoints. GGUF exported and registered as new Ollama model version.'
+    },
+    { id:'rl', cls:'planned', title:'REINFORCE++', sub:'Replaces GRPO', sub2:'At 100+ trades',
+      what:'Reinforcement learning stage using REINFORCE++ with global normalization (replacing GRPO which overfits on small prompt datasets). Uses composite reward: volatility-normalized P&L + quality rubric + calibration + risk management.',
+      why:'Alpha-R1 showed Qwen3-8B without RL produces Sharpe -0.77. With RL, dramatic improvement. The RL stage is not optional. But GRPO\'s local normalization causes overfitting with <2,000 prompts. REINFORCE++ is explicitly more stable.',
+      who:'Will use TRL or alternative library. Deep research prompt #1 covers implementation.',
+      when:'Activates after 100+ closed trades (~June 2026). Single stage, with possible incremental rounds.',
+      where:'RL adapter saved and evaluated via champion-challenger before deployment.'
+    },
+    { id:'challenger', cls:'active-amber', title:'Champion-Challenger', sub:'Holdout eval · A/B shadow', sub2:'Auto-rollback on regression',
+      what:'New model versions are evaluated against the current champion on a 15% chronological holdout (with 5-day temporal gap). If the challenger underperforms, automatic rollback preserves the working model.',
+      why:'Prevents "the new model seemed better in training but was worse in production" failure mode. Holdout evaluation uses the same metrics the system tracks in live trading (format compliance, conviction calibration, rubric scores).',
+      who:'<code>src/training/versioning.py</code>, <code>src/training/canary.py</code>, <code>src/training/ab_evaluation.py</code>.',
+      when:'After every retrain. Challenger runs in shadow for evaluation period before promotion.',
+      where:'<code>model_versions</code>, <code>model_evaluations</code>, <code>canary_evaluations</code> tables.'
+    },
+    { id:'gguf', cls:'active-indigo', title:'GGUF → Ollama', sub:'llama.cpp converter', sub2:'Q8_0 → halcyonlatest',
+      what:'Converts the trained QDoRA adapter: (1) merge adapter into base model, (2) convert to GGUF format via llama.cpp Python converter, (3) quantize to Q8_0 (8.7GB), (4) register in Ollama as halcyonlatest, (5) verify inference quality.',
+      why:'GGUF is the universal format for local LLM deployment. Q8_0 provides near-lossless quality. Ollama handles GPU memory management and serves the OpenAI-compatible API.',
+      who:'<code>src/training/trainer.py</code> export pipeline. <code>scripts/register_model_v1.py</code>.',
+      when:'After champion-challenger evaluation passes. Automatic as part of <code>train-pipeline</code> command.',
+      where:'GGUF file in Ollama model directory. Registered as halcyonlatest (or versioned name).'
+    },
+    { id:'postmortem', cls:'active-indigo', title:'Postmortem Writer', sub:'Post-trade review', sub2:'LLM-generated lessons',
+      what:'After a trade closes, the LLM generates a structured postmortem: what worked, what didn\'t, whether thesis was right but execution wrong, stop placement analysis, MFE vs realized gain analysis, and lessons for future trades.',
+      why:'Postmortems are the highest-quality training signal — they connect prediction to outcome with analytical reasoning. Each postmortem teaches the model to calibrate better. Also valuable for the human weekly review.',
+      who:'<code>src/llm/postmortem_writer.py</code>. Uses the same Ollama model with a postmortem-specific system prompt.',
+      when:'Generated when trades close. Stored alongside the training example.',
+      where:'Postmortem text stored in <code>recommendations</code> table. Viewable on dashboard and in Telegram trade-closed notifications.'
+    },
+    { id:'scorer', cls:'active-teal', title:'Between-Scan Scorer', sub:'~420 examples/day free', sub2:'Uses idle inference GPU',
+      what:'During the 22-minute gaps between 30-minute scans, scores unscored training examples via Claude API. The model is already loaded in VRAM for inference — scoring uses the idle capacity rather than letting it waste.',
+      why:'Between-scan scoring is effectively free compute — the GPU is warm for inference anyway. At ~3 examples/minute across 10 scoring windows/day, this processes ~420 examples/day without impacting scan latency.',
+      who:'<code>src/scheduler/scorer.py</code>. Orchestrated by the watch loop between scan cycles.',
+      when:'Market hours, between scans. Guard band: stops 3 minutes before next scan to ensure GPU is ready.',
+      where:'Quality scores written to <code>training_examples</code> table. Progress tracked in <code>schedule_metrics</code>.'
+    },
+  ],
+
+  infra: [
+    { id:'dashboard', cls:'active-teal', title:'halcyonlab.app', sub:'11 pages · Render cloud', sub2:'AuthGate · PWA',
+      what:'React 18 + Vite + Tailwind web dashboard deployed on Render. 11 pages: Dashboard (KPIs), Packets, Shadow Ledger, Training, Live Ledger, CTO Report, Settings, Roadmap, Docs, Council, Health Score. Password-protected via AuthGate.',
+      why:'Accessible from anywhere — phone, work, anywhere. PWA installable on iOS/Android. Real-time data from Render Postgres synced every 2 minutes. The visual interface that makes the system\'s behavior observable.',
+      who:'<code>frontend/src/</code> — React app. <code>src/api/cloud_app.py</code> — FastAPI cloud backend.',
+      when:'Always accessible. Data refreshes via React Query every 30 seconds.',
+      where:'Hosted on Render: static site (frontend) + Python API (Starter $7/mo) + Postgres ($7/mo). Domain: halcyonlab.app (IONOS, prepaid 2 years).'
+    },
+    { id:'telegram', cls:'active-teal', title:'Telegram (29 types)', sub:'Trade alerts · P&L · Council', sub2:'Regime · Data asset · Streaks',
+      what:'29 notification types covering every system event: trade open/close, scan results, P&L, council sessions, regime alerts, earnings warnings, data asset reports, loss streaks, milestone achievements, collection failures, research papers, weekly digest, retrain reports.',
+      why:'Push notifications to phone mean Ryan knows what the system is doing at all times without opening the dashboard. Telegram commands (/trades, /pnl, /status, /halt) provide mobile control.',
+      who:'<code>src/notifications/telegram.py</code> — 1,318 lines, 29 notification functions.',
+      when:'Real-time: trade events, alerts. Scheduled: pre-market brief, EOD report, weekly digest.',
+      where:'Telegram Bot API. Bot token in settings.local.yaml.'
+    },
+    { id:'email', cls:'active-teal', title:'Email Digests', sub:'Daily summary', sub2:'Weekly scorecard',
+      what:'Configurable email delivery: full_stream (every packet), daily_summary (EOD recap), digest (weekly), or silent. Rich HTML formatting with trade details, P&L, and performance metrics.',
+      why:'Email serves as the permanent record and formal communication channel. Daily summary provides end-of-day wrap. Weekly scorecard for performance review.',
+      who:'<code>src/email/notifier.py</code> and <code>src/email/digest_builder.py</code>. Gmail SMTP.',
+      when:'Configurable via --email-mode flag on watch command.',
+      where:'Sent from halcyonlabai@gmail.com to Ryan\'s work email.'
+    },
+    { id:'render', cls:'active-slate', title:'Render Cloud', sub:'Static + API + Postgres', sub2:'$14/mo · Sync 2min',
+      what:'Cloud infrastructure: static site hosting (frontend), Python API on Starter plan ($7/mo, eliminates cold starts), PostgreSQL database ($7/mo). Render sync thread pushes local SQLite data to Postgres every 2 minutes.',
+      why:'Makes the dashboard accessible from anywhere without exposing Ryan\'s home machine to the internet. Postgres serves as cloud-accessible read replica of the local SQLite database.',
+      who:'<code>src/sync/render_sync.py</code> — incremental sync with upsert logic. <code>render.yaml</code> Blueprint.',
+      when:'Sync every 2 minutes while watch loop runs. Frontend deployed on git push.',
+      where:'Render dashboard. DATABASE_URL in environment variables.'
+    },
+    { id:'sqlite', cls:'active-slate', title:'SQLite (35 tables)', sub:'WAL mode · Backups', sub2:'Local primary DB',
+      what:'35-table SQLite database: recommendations, shadow_trades, training_examples, model_versions, council_sessions, scan_metrics, activity_log, and 28 more. WAL mode for concurrent access. Daily automated backups.',
+      why:'SQLite is the right choice at this scale — zero configuration, single file, fast reads, and the WAL mode handles concurrent access from the scan pipeline and API server. Renders to Postgres for cloud access.',
+      who:'Used by virtually every module. Accessed via <code>sqlite3.connect("ai_research_desk.sqlite3")</code>.',
+      when:'Written to continuously during market hours. Backed up daily at EOD.',
+      where:'<code>ai_research_desk.sqlite3</code> in repo root. ~50-200MB depending on data volume.'
+    },
+    { id:'hardware', cls:'active-slate', title:'Hardware', sub:'RTX 3060 12GB · 32GB RAM', sub2:'→ RTX 3090 24GB (Phase 3)',
+      what:'Current: NVIDIA RTX 3060 12GB VRAM, 32GB system RAM, Windows. Handles inference + training for 1-2 strategies. Planned: RTX 3090 24GB for 10-12 strategies. Phase 5+: Dual 3090 NVLink for 20 strategies.',
+      why:'Consumer hardware keeps costs minimal ($300 used). The 75% utilization framework (inference ≤30%, training ≤45%, slack ≥25%) maximizes throughput without degrading inference latency.',
+      who:'VRAM managed by <code>src/scheduler/vram_manager.py</code>. Morning/evening handoffs.',
+      when:'GPU schedule: 5:15 AM-6:50 PM inference, 7:00 PM-5:15 AM training.',
+      where:'Ryan\'s development machine. Running 24/7 with UPS planned for Phase 2.'
+    },
+    { id:'sysval', cls:'planned', title:'System Validator', sub:'50+ automated checks', sub2:'8 categories · Dashboard',
+      what:'Automated validation engine with 50+ checks across 8 categories: database integrity, trading pipeline, training pipeline, API/dashboard, data collectors, notifications, scheduler, and LLM health. Returns pass/warn/fail per check.',
+      why:'141 Python files, 72 API routes, 50 CLI commands, 35 DB tables. No single human can verify all of this manually. Automated validation catches broken integrations, stale data, and configuration drift before they affect trading.',
+      who:'Will be <code>src/evaluation/system_validator.py</code>. CLI: <code>validate-system</code>. API: <code>/api/system/validation</code>.',
+      when:'Daily at 4:30 PM (auto-run). On-demand via dashboard button. Telegram alert on failures.',
+      where:'Results in <code>validation_results</code> table. Dashboard page with expandable category cards.'
+    },
+    { id:'statval', cls:'active-teal', title:'Stat Validation', sub:'PSR · DSR · MinTRL', sub2:'Bootstrap · Gate eval',
+      what:'Statistical validation framework: Probabilistic Sharpe Ratio, Deflated Sharpe Ratio (corrects for multiple testing), Minimum Track Record Length, bootstrap Sharpe confidence intervals, win rate binomial test, expectancy t-test. 50-trade gate evaluator.',
+      why:'At 5 closed trades, the system has zero statistical significance. These tools define exactly when evidence becomes trustworthy (MinTRL: ~68 trades for SR=1.0) and prevent fooling yourself with multiple testing (DSR).',
+      who:'<code>src/evaluation/statistics.py</code>, <code>src/evaluation/gate_evaluator.py</code>.',
+      when:'Gate evaluator auto-runs at 50 trades. Monthly performance reports use all metrics.',
+      where:'Results in gate evaluation output. Displayed on Health Score dashboard page.'
+    },
+    { id:'cost', cls:'active-slate', title:'$64/mo', sub:'Render $14 · APIs $50', sub2:'→ $125/mo Phase 2',
+      what:'Monthly operating costs: Render hosting $14 (API $7 + Postgres $7), Claude API ~$20-30 (council + scoring + generation), Finnhub free tier, FRED free, yfinance free. Phase 2 adds Polygon.io $29 + Unusual Whales $50.',
+      why:'The architecture is deliberately designed around consumer hardware and free/cheap data sources. Monthly cost of $64 is less than many streaming subscriptions. The cost advantage vs institutional competitors ($100K+/month) is a structural moat.',
+      who:'Tracked in <code>api_costs</code> table. Dashboard Settings page shows cost breakdown.',
+      when:'Costs tracked per API call. Monthly summary in CTO report.',
+      where:'API costs in database. Render costs on Render dashboard. Total in monthly budget.'
+    },
+    { id:'ctoreport', cls:'active-teal', title:'CTO Report', sub:'Weekly performance', sub2:'Fund metrics · Trends',
+      what:'Comprehensive weekly performance report: Sharpe, Sortino, Calmar, win rate, profit factor, max drawdown, equity curve, sector exposure, model health, training data growth, data collection stats, cost tracking. Formatted for both dashboard and email.',
+      why:'The CTO Report is the single document that answers "is the system working?" Tracks metric trends over time so degradation is visible. Will become the foundation for investor reporting in later phases.',
+      who:'<code>src/evaluation/cto_report.py</code> (731 lines). CLI: <code>python -m src.main cto-report</code>.',
+      when:'Auto-generated Saturday morning. On-demand via CLI or dashboard button.',
+      where:'Displayed on CTO Report dashboard page. Emailed in weekly digest. Data from <code>metric_snapshots</code> table.'
+    },
+    { id:'websocket', cls:'active-teal', title:'WebSocket', sub:'Real-time updates', sub2:'React Query invalidation',
+      what:'WebSocket server pushes real-time events to the dashboard: scan_complete, trade_opened, trade_closed, pnl_update, training_update, system_status. Dashboard React Query caches auto-invalidate on relevant events.',
+      why:'Without WebSocket, the dashboard polls every 30 seconds and misses time-sensitive events. With it, trade opens/closes appear instantly, scan results populate in real-time, and toast notifications fire immediately.',
+      who:'<code>src/api/websocket.py</code> (ConnectionManager). Frontend: <code>frontend/src/contexts/WebSocketContext.jsx</code>, <code>CacheInvalidator</code> in App.jsx.',
+      when:'Always active when the dashboard is open. Events pushed by the watch loop after each significant action.',
+      where:'WebSocket connection at <code>ws://localhost:8000/ws</code>. Local only (not exposed through Render).'
+    },
+    { id:'reconcile', cls:'active-teal', title:'Reconciliation', sub:'Alpaca ↔ DB sync', sub2:'Orphan detection',
+      what:'Detects discrepancies between Alpaca positions and the local shadow_trades database. Finds orphaned positions (in Alpaca but not DB), ghost trades (in DB but not Alpaca), and quantity mismatches. Reports discrepancies for manual resolution.',
+      why:'Bracket orders can partially fill, Alpaca can close positions server-side (stop/target hits), and the system can crash mid-trade. Reconciliation ensures the DB reflects reality. Critical for accurate P&L and training data.',
+      who:'<code>src/shadow_trading/reconcile.py</code>. CLI: <code>python -m src.main reconcile-live</code>. Telegram: <code>/reconcile</code>.',
+      when:'On-demand via CLI. Planned: automatic daily reconciliation at EOD.',
+      where:'Discrepancies logged to <code>activity_log</code>. Alerts via Telegram.'
+    },
+  ],
+
+  phases: [
+    { id:'p1', cls:'active-teal', title:'Phase 1: Bootcamp', sub:'$100K paper + $100 live', sub2:'1 strategy · Gate: 50 trades',
+      what:'Prove the system works. Accumulate 50+ closed trades. Validate the pullback strategy has a statistically significant edge. Build the training data flywheel.',
+      why:'Performance-gated, not calendar-driven. No scaling until evidence supports it. The 50-trade gate with PSR, random benchmark, and Sharpe CI prevents premature scaling.',
+      who:'All system components running autonomously. Ryan monitors via dashboard and Telegram.',
+      when:'Current phase. ~35 trades/month → gate at ~6 weeks.',
+      where:'Paper: Alpaca $100K. Live: Alpaca $100. Dashboard: halcyonlab.app.'
+    },
+    { id:'p2', cls:'planned', title:'Phase 2: Micro Live', sub:'$100→$1K · 2 strategies', sub2:'LLC · Gate: 100 trades PSR>90%',
+      what:'Scale live capital to $1K. Launch Strategy #2 (mean reversion candidate). Form Wyoming LLC. Begin Section 475 MTM election process.',
+      why:'First real capital at risk. Strategy diversification reduces regime dependency. LLC formation starts the legal infrastructure for eventual fund.',
+      who:'System runs both strategies with per-strategy LoRA adapters. Separate paper account for Strategy #2.',
+      when:'After Phase 1 gate passed. Target: Jul-Sep 2026.',
+      where:'Same infrastructure, expanded universe to ~325 stocks. Polygon.io replaces yfinance.'
+    },
+    { id:'p3', cls:'planned', title:'Phase 3: Growth', sub:'$1K→$5K · 4 strategies', sub2:'Options desk · SR≥1.0',
+      what:'Add mean reversion + VRP harvesting. Launch Options Volatility Desk. Upgrade to RTX 3090. Implement full correlation monitoring and stress testing.',
+      why:'4 genuinely uncorrelated strategies (ρ≈0.15) roughly doubles portfolio Sharpe. Options desk adds a second desk with partially independent risk premia.',
+      who:'System manages 2 desks, 4 LoRA adapters. Inverse-volatility risk parity allocation.',
+      when:'After Phase 2 gate. Target: Oct 2026-Mar 2027.',
+      where:'RTX 3090 handles 4 adapters. VRP strategy on options data collected since Phase 1.'
+    },
+    { id:'p4', cls:'planned', title:'Phase 4: Full Auto', sub:'$5K→$25K · 6 strategies', sub2:'Investor-ready · Track record',
+      what:'Full autonomous operation with 6 strategies across 2 desks. Build investor-ready track record. Institutional-grade risk reporting. GIPS-aligned performance presentation.',
+      why:'This is where the system must prove it can run unsupervised for extended periods. The track record built here is the most valuable asset for future fundraising.',
+      who:'System fully autonomous. Ryan shifts from builder to monitor/researcher.',
+      when:'After Phase 3 gate. Target: 2027.',
+      where:'Same infrastructure. Possibly Interactive Brokers for verified track record.'
+    },
+    { id:'p5', cls:'planned', title:'Phase 5: Scale', sub:'$25K→$100K · 8 strategies', sub2:'Family LP · DSR>0.95',
+      what:'Add Equity Momentum Desk. Expand to Russell 1000. 8 strategies across 3 desks. Family LP structure for initial external capital.',
+      why:'Portfolio Sharpe target 1.2-1.5 with 8 uncorrelated strategies. Family LP is the legal structure for managing others\' money before full fund formation.',
+      who:'Dual RTX 3090 NVLink for 20-strategy capacity. MoLE gating for adapter routing.',
+      when:'After Phase 4 gate. Target: 2028.',
+      where:'Dedicated trading machine. Possibly co-located infrastructure.'
+    },
+    { id:'p6', cls:'future', title:'Phase 6: Fund', sub:'$100K+ · Optimize', sub2:'SEC reg · SR 1.2-1.5',
+      what:'Optimization over expansion. 8 strategies refined, not more added. SEC registration approaching $100M AUM. Fund formation.',
+      why:'Institutional allocators care about quality of operations (84%), research process (82%), and infrastructure (78%) — not strategy count. The system must be institutional-grade.',
+      who:'Possibly first employee (operations/compliance). Advisory board.',
+      when:'Target: 2029-2030.',
+      where:'Institutional fund structure. Full regulatory compliance.'
+    },
+  ],
+};
+
+function renderBoxes(containerId, items) {
+  const container = document.getElementById(containerId);
+  items.forEach(item => {
+    const box = document.createElement('div');
+    box.className = `box ${item.cls}`;
+    box.onclick = () => showDetail(item);
+    box.innerHTML = `
+      <span class="expand-indicator">＋</span>
+      <div class="box-title">${item.title}</div>
+      <div class="box-sub">${item.sub}</div>
+      ${item.sub2 ? `<div class="box-sub2">${item.sub2}</div>` : ''}
+    `;
+    container.appendChild(box);
+  });
+}
+
+function renderDesks() {
+  const container = document.getElementById('desks-row');
+  const desks = [
+    { header:'DESK 1: EQUITY SWING — ACTIVE', headerCls:'active-header', deskCls:'',
+      sub:'S&P 100 · 2-15 day holds · Alpaca bracket orders',
+      strategies: DATA.training.slice(0,0), // we'll add inline
+      pill:'p1', pillLabel:'PHASE 1' },
+    { header:'DESK 2: OPTIONS VOLATILITY — PHASE 3-4', headerCls:'planned-header', deskCls:'planned-desk',
+      sub:'LLM as volatility analyst · 15-check risk governor · Separate LoRA',
+      pill:'p34', pillLabel:'PHASE 3-4' },
+    { header:'DESK 3: EQUITY MOMENTUM — PHASE 5', headerCls:'planned-header', deskCls:'planned-desk',
+      sub:'Russell 1000 · Separate LoRA · Low corr with Swing',
+      pill:'p56', pillLabel:'PHASE 5-6' },
+  ];
+
+  const deskStrategies = [
+    [
+      {cls:'active-teal', title:'Pullback', sub:'LoRA r=16 · LIVE', what:'Pullback-in-uptrend on S&P 100. The core strategy. 2-15 day holds with bracket orders.', why:'Most persistent equity anomaly. Behavioral foundation (underreaction) provides durability.', who:'halcyonlatest (Qwen3 8B)', when:'Phase 1 (now)', where:'Alpaca paper $100K + live $100'},
+      {cls:'planned', title:'Mean Rev?', sub:'Phase 2 · Separate LoRA', what:'Short-term mean reversion (1-5 day). Leading Strategy #2 candidate. ρ ≈ −0.15 with pullback.', why:'Works precisely when pullback fails — bear/choppy markets. Regime insurance. PEAD ruled out (dead for large caps).', who:'Separate LoRA adapter on same base model.', when:'Phase 2 (target Aug 2026)', where:'Separate Alpaca paper account'},
+      {cls:'planned', title:'TBD', sub:'Phase 3 · ρ ≈ −0.15', what:'Third equity swing strategy. Candidates: pairs trading, universe expansion, earnings-adjacent signals.', why:'Further diversification. Must demonstrate genuine decorrelation.', who:'Separate LoRA adapter.', when:'Phase 3 (after 200+ trades on first two)', where:'Same infrastructure'},
+    ],
+    [
+      {cls:'planned', title:'VRP Harvest', sub:'70% desk · LoRA r=32', what:'Systematic Volatility Risk Premium harvesting via delta-hedged strangles with ML-driven regime timing.', why:'VRP is one of the most robust risk premia in finance (Bakshi & Kapadia 2003). Credit spreads, iron condors, covered calls are all the SAME trade — VRP subsumes them all.', who:'Separate LoRA adapter (different asset class = always separate).', when:'Phase 3-4', where:'Options-capable broker (possibly IB)'},
+      {cls:'planned', title:'Term Structure', sub:'30% desk · LoRA r=32', what:'Calendar/diagonal spreads exploiting the upward-sloping vol term structure.', why:'Partially independent from VRP level. Different vol dimension provides genuine diversification within the options desk.', who:'Separate LoRA adapter.', when:'Phase 4', where:'Same options broker'},
+    ],
+    [
+      {cls:'planned', title:'Trend Following', sub:'Risk-managed · LoRA r=16', what:'Barroso & Santa-Clara (2015) risk-managed momentum (SR ~0.97). Built-in crash protection.', why:'Low correlation with swing desk. Captures the full momentum premium without crash vulnerability of raw momentum.', who:'Separate LoRA adapter.', when:'Phase 5', where:'Expanded universe: Russell 1000'},
+      {cls:'planned', title:'Pairs / Stat Arb', sub:'Market-neutral · LoRA r=32', what:'ML-based pair selection (Sarmento & Horta 2023: Sharpe 0.81-2.69). Market-neutral.', why:'Profitability increases in poor market conditions (Gatev et al. 2006). Requires short-selling infrastructure.', who:'Separate LoRA adapter. Requires margin/short capability.', when:'Phase 5', where:'Full-capability broker'},
+      {cls:'future', title:'Future', sub:'Intraday · Event · Macro', what:'Phase 6+ desks: Intraday (VWAP reversion), Event-driven, Macro/Rates, Crypto. Scoped but not scheduled.', why:'Each desk gated by previous desk profitability. Do not build until proven need.', who:'Separate models entirely for intraday (different data frequency).', when:'Phase 6+', where:'Dedicated GPU + real-time data required'},
+    ]
+  ];
+
+  desks.forEach((desk, i) => {
+    const deskEl = document.createElement('div');
+    deskEl.className = `desk ${desk.deskCls}`;
+    deskEl.innerHTML = `
+      <div class="desk-header ${desk.headerCls}">${desk.header}</div>
+      <div class="desk-sub">${desk.sub}</div>
+      <div class="desk-strategies" id="desk-strats-${i}"></div>
+      <div style="text-align:right"><span class="phase-pill ${desk.pill}">${desk.pillLabel}</span></div>
+    `;
+    container.appendChild(deskEl);
+
+    const stratsContainer = deskEl.querySelector(`#desk-strats-${i}`);
+    deskStrategies[i].forEach(s => {
+      const box = document.createElement('div');
+      box.className = `box ${s.cls}`;
+      box.style.cursor = 'pointer';
+      box.onclick = () => showDetail(s);
+      box.innerHTML = `
+        <span class="expand-indicator">＋</span>
+        <div class="box-title">${s.title}</div>
+        <div class="box-sub">${s.sub}</div>
+      `;
+      stratsContainer.appendChild(box);
+    });
+  });
+}
+
+function showDetail(item) {
+  const status = item.cls.includes('planned') ? 'planned' : item.cls.includes('future') ? 'future' : 'live';
+  const statusLabel = status === 'live' ? 'Active' : status === 'planned' ? 'Planned' : 'Future';
+
+  document.getElementById('detail-content').innerHTML = `
+    <h3>${item.title}</h3>
+    <span class="status-badge ${status}">${statusLabel}</span>
+    <div class="detail-grid">
+      <div class="detail-item"><label>What</label><p>${item.what || 'Details coming soon.'}</p></div>
+      <div class="detail-item"><label>Why</label><p>${item.why || 'Details coming soon.'}</p></div>
+      <div class="detail-item"><label>Who (code / owner)</label><p>${item.who || 'Details coming soon.'}</p></div>
+      <div class="detail-item"><label>When</label><p>${item.when || 'Details coming soon.'}</p></div>
+      <div class="detail-item"><label>Where (data / infra)</label><p>${item.where || 'Details coming soon.'}</p></div>
+    </div>
+  `;
+  document.getElementById('detail').classList.add('show');
+  document.getElementById('overlay').classList.add('show');
+}
+
+function closeDetail() {
+  document.getElementById('detail').classList.remove('show');
+  document.getElementById('overlay').classList.remove('show');
+}
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDetail(); });
+
+// Render everything
+renderBoxes('data-row', DATA.data);
+renderBoxes('pipeline-row', DATA.pipeline);
+renderBoxes('risk-row', DATA.risk);
+renderDesks();
+renderBoxes('training-row', DATA.training);
+renderBoxes('infra-row', DATA.infra);
+renderBoxes('phases-row', DATA.phases);
+</script>
+</body>
+</html>
