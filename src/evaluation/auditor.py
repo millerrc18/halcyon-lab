@@ -229,48 +229,72 @@ def run_weekly_audit(days: int = 7, db_path: str = "ai_research_desk.sqlite3") -
     return result
 
 
-def check_escalation(audit: dict) -> list[dict]:
+def check_escalation(audit: dict, db_path: str = "ai_research_desk.sqlite3") -> list[dict]:
     """Check if any audit flags require immediate escalation.
 
     Escalation actions:
     - "critical" severity → halt trading immediately + send alert email
     - "alert" severity → send alert email, continue trading
     - "warning" severity → log only, include in next scheduled email
+
+    During bootcamp (< 50 closed trades), critical flags are downgraded to alerts
+    and auto-halt is skipped. The system needs to accumulate trades to prove edge.
     """
     actions = []
     flags = audit.get("flags", [])
+
+    # Check if we're in bootcamp mode (< 50 closed trades)
+    bootcamp_mode = False
+    try:
+        import sqlite3
+        with sqlite3.connect(db_path) as conn:
+            row = conn.execute("SELECT COUNT(*) as c FROM shadow_trades WHERE status = 'closed'").fetchone()
+            closed_count = row[0] if row else 0
+            bootcamp_mode = closed_count < 50
+    except Exception:
+        pass
 
     for flag in flags:
         severity = flag.get("severity", "warning")
 
         if severity == "critical":
-            # Halt trading
-            from src.risk.governor import _global_halt
-            _global_halt(True)
-            logger.critical("[AUDIT] CRITICAL flag — trading halted: %s", flag.get("description"))
-
-            actions.append({
-                "action": "halt_trading",
-                "severity": "critical",
-                "flag": flag,
-            })
-
-            # Send alert email
-            try:
-                from src.email.notifier import send_email
-                subject = "[TRADE DESK] CRITICAL AUDIT ALERT — Trading Halted"
-                body = (
-                    f"CRITICAL AUDIT FLAG\n\n"
-                    f"Category: {flag.get('category')}\n"
-                    f"Description: {flag.get('description')}\n"
-                    f"Recommendation: {flag.get('recommendation')}\n\n"
-                    f"Trading has been automatically halted. Resume via dashboard or CLI."
+            if bootcamp_mode:
+                # During bootcamp, downgrade critical to alert — don't halt
+                logger.warning(
+                    "[AUDIT] CRITICAL flag DOWNGRADED to alert (bootcamp mode, %d closed trades): %s",
+                    closed_count, flag.get("description"),
                 )
-                send_email(subject, body)
-            except Exception as e:
-                logger.error("[AUDIT] Failed to send critical alert email: %s", e)
+                severity = "alert"
+                flag["severity"] = "alert"
+                flag["description"] = f"[BOOTCAMP DOWNGRADE] {flag.get('description', '')}"
+            else:
+                # Production mode — halt trading
+                from src.risk.governor import _global_halt
+                _global_halt(True)
+                logger.critical("[AUDIT] CRITICAL flag — trading halted: %s", flag.get("description"))
 
-            actions.append({"action": "email_alert", "severity": "critical", "flag": flag})
+                actions.append({
+                    "action": "halt_trading",
+                    "severity": "critical",
+                    "flag": flag,
+                })
+
+                # Send alert email
+                try:
+                    from src.email.notifier import send_email
+                    subject = "[TRADE DESK] CRITICAL AUDIT ALERT — Trading Halted"
+                    body = (
+                        f"CRITICAL AUDIT FLAG\n\n"
+                        f"Category: {flag.get('category')}\n"
+                        f"Description: {flag.get('description')}\n"
+                        f"Recommendation: {flag.get('recommendation')}\n\n"
+                        f"Trading has been automatically halted. Resume via dashboard or CLI."
+                    )
+                    send_email(subject, body)
+                except Exception as e:
+                    logger.error("[AUDIT] Failed to send critical alert email: %s", e)
+
+                actions.append({"action": "email_alert", "severity": "critical", "flag": flag})
 
         elif severity == "alert":
             try:
