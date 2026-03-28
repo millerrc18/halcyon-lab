@@ -5,74 +5,74 @@
 <title>Halcyon Lab — Master Blueprint (11×17)</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400&display=swap');
-  :root, [data-theme="light"] {
-    --teal:#0D9488;--teal-l:#14B8A6;--teal-bg:#F0FDFA;--indigo:#6366F1;--indigo-l:#818CF8;
-    --amber:#F59E0B;--amber-l:#FBBF24;--amber-bg:#FFFBEB;--rose:#E11D48;--rose-l:#FB7185;
-    --emerald:#059669;--emerald-l:#34D399;--purple:#7C3AED;--purple-l:#A78BFA;
+  :root,[data-theme="light"]{
+    --teal:#0D9488;--teal-l:#14B8A6;--teal-bg:#F0FDFA;
+    --indigo:#6366F1;--indigo-l:#818CF8;--indigo-bg:#EEF2FF;
+    --amber:#F59E0B;--amber-l:#FBBF24;--amber-bg:#FFFBEB;
+    --rose:#E11D48;--rose-l:#FB7185;--rose-bg:#FFF1F2;
+    --emerald:#059669;--emerald-l:#34D399;
+    --purple:#7C3AED;--purple-l:#A78BFA;
     --slate:#475569;--slate-l:#64748B;--slate-bg:#F1F5F9;
-    --bg:#F8FAFC;--page:#FFFFFF;--text:#0F172A;--text2:#475569;--muted:#94A3B8;
-    --card:#FFFFFF;--border:#E2E8F0;--overlay:rgba(0,0,0,.3);--detail-bg:#FFF;
+    --bg:#F8FAFC;--page:#FFF;--text:#0F172A;--text2:#475569;--muted:#94A3B8;
+    --card:#FFF;--border:#E2E8F0;--detail-bg:#FFF;--overlay:rgba(0,0,0,.3);
+    --flow-bg:rgba(226,232,240,0.35);
   }
-  [data-theme="dark"] {
-    --teal:#14B8A6;--teal-l:#2DD4BF;--teal-bg:#0D3331;--indigo:#818CF8;--indigo-l:#A5B4FC;
-    --amber:#FBBF24;--amber-l:#FDE68A;--amber-bg:#422006;--rose:#FB7185;--rose-l:#FDA4AF;
-    --emerald:#34D399;--emerald-l:#6EE7B7;--purple:#A78BFA;--purple-l:#C4B5FD;
+  [data-theme="dark"]{
+    --teal:#14B8A6;--teal-l:#2DD4BF;--teal-bg:#0D3331;
+    --indigo:#818CF8;--indigo-l:#A5B4FC;--indigo-bg:#1E1B4B;
+    --amber:#FBBF24;--amber-l:#FDE68A;--amber-bg:#422006;
+    --rose:#FB7185;--rose-l:#FDA4AF;--rose-bg:#3B1020;
+    --emerald:#34D399;--emerald-l:#6EE7B7;
+    --purple:#A78BFA;--purple-l:#C4B5FD;
     --slate:#94A3B8;--slate-l:#CBD5E1;--slate-bg:#1E293B;
     --bg:#0B1120;--page:#111827;--text:#F1F5F9;--text2:#CBD5E1;--muted:#64748B;
-    --card:#1E293B;--border:#334155;--overlay:rgba(0,0,0,.6);--detail-bg:#1E293B;
+    --card:#1E293B;--border:#334155;--detail-bg:#1E293B;--overlay:rgba(0,0,0,.6);
+    --flow-bg:rgba(30,41,59,0.5);
   }
   *{margin:0;padding:0;box-sizing:border-box}
-  body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);transition:background .3s}
-  .page{width:17in;height:11in;margin:0 auto;padding:.3in;background:var(--page);position:relative;overflow:hidden}
+  body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text)}
+  .page{width:17in;height:11in;margin:0 auto;padding:.25in .3in;background:var(--page);display:grid;grid-template-columns:280px 1fr 280px;grid-template-rows:auto 1fr auto auto;gap:0 12px;overflow:hidden}
   @media screen{.page{box-shadow:0 4px 24px rgba(0,0,0,.15);margin:20px auto;border-radius:6px}}
   @media print{
     @page{size:17in 11in;margin:0}
     body{background:#fff}
-    [data-theme="dark"]{--bg:#fff;--page:#fff;--text:#0F172A;--text2:#475569;--muted:#94A3B8;--card:#fff;--border:#E2E8F0;--detail-bg:#fff}
-    .page{box-shadow:none;margin:0;border-radius:0}
-    .toggle,.expand-i,.detail-panel,.overlay{display:none!important}
+    [data-theme="dark"]{--bg:#fff;--page:#fff;--text:#0F172A;--text2:#475569;--muted:#94A3B8;--card:#fff;--border:#E2E8F0;--detail-bg:#fff;--flow-bg:rgba(226,232,240,0.35)}
+    .page{box-shadow:none;margin:0}
+    .toggle,.expand-i{display:none!important}
+    .detail-panel,.overlay{display:none!important}
     .box:hover{transform:none!important}
   }
-  /* Header */
-  .hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;border-bottom:2px solid var(--teal);padding-bottom:6px}
-  .hdr h1{font-size:20px;font-weight:700;color:var(--teal);letter-spacing:-.5px}
-  .hdr p{font-size:10px;color:var(--muted)}
-  .toggle{background:var(--slate-bg);border:1px solid var(--border);border-radius:16px;padding:3px 10px;cursor:pointer;font-size:9px;color:var(--text2);font-family:inherit}
+
+  /* Header spans full width */
+  .hdr{grid-column:1/-1;display:flex;align-items:flex-start;justify-content:space-between;border-bottom:2px solid var(--teal);padding-bottom:5px;margin-bottom:4px}
+  .hdr h1{font-size:18px;font-weight:700;color:var(--teal);letter-spacing:-.5px}
+  .hdr-sub{font-size:9px;color:var(--muted);margin-top:1px}
+  .legend{display:flex;gap:10px;font-size:7.5px;color:var(--muted);margin-top:3px;flex-wrap:wrap}
+  .legend span{display:flex;align-items:center;gap:2px}
+  .legend i{width:8px;height:8px;border-radius:2px;display:inline-block;flex-shrink:0}
+  .lg-a{background:var(--teal)}.lg-p{border:1.5px dashed var(--amber)}.lg-ai{background:var(--indigo)}.lg-t{background:var(--amber)}.lg-r{background:var(--rose)}
+  .toggle{background:var(--slate-bg);border:1px solid var(--border);border-radius:16px;padding:3px 10px;cursor:pointer;font-size:9px;color:var(--text2);font-family:inherit;white-space:nowrap;margin-top:4px}
   .toggle:hover{border-color:var(--teal);color:var(--teal)}
-  .legend{display:flex;gap:12px;font-size:8px;color:var(--muted);margin-top:4px}
-  .legend span{display:flex;align-items:center;gap:3px}
-  .legend i{width:10px;height:10px;border-radius:2px;display:inline-block}
-  .lg-active{background:var(--teal)}
-  .lg-planned{border:1.5px dashed var(--amber)}
-  .lg-ai{background:var(--indigo)}
-  .lg-train{background:var(--amber)}
-  .lg-risk{background:var(--rose)}
-  .lg-data{border-bottom:2px solid var(--teal)}
-  .lg-flywheel{border-bottom:2px dashed var(--amber)}
 
-  /* SVG Flowchart Layer */
-  .flow-layer{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0}
-  .flow-layer path,.flow-layer line{stroke-width:2;fill:none}
-  .flow-data{stroke:var(--teal);opacity:.4}
-  .flow-trade{stroke:var(--emerald);opacity:.5}
-  .flow-train{stroke:var(--amber);stroke-dasharray:8,4;opacity:.5}
-  .flow-risk{stroke:var(--rose);opacity:.3}
-  .flow-council{stroke:var(--indigo);opacity:.3;stroke-dasharray:4,3}
-  .arrow-head{fill:var(--teal);opacity:.5}
+  /* LEFT COLUMN: Data sources + infrastructure */
+  .left{display:flex;flex-direction:column;gap:4px;overflow:hidden}
+  .col-title{font-size:7px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);text-align:center;margin-bottom:2px}
 
-  /* Content Grid */
-  .grid{display:grid;grid-template-columns:1fr;grid-template-rows:auto;gap:6px;position:relative;z-index:1}
-  .row{display:flex;gap:5px;align-items:stretch}
-  .row-label{writing-mode:vertical-rl;text-orientation:mixed;font-size:8px;font-weight:700;color:var(--muted);letter-spacing:1px;text-transform:uppercase;padding:0 4px;display:flex;align-items:center;flex-shrink:0;min-width:18px}
-  .row-content{display:flex;gap:4px;flex-wrap:wrap;flex:1;padding:6px;border-radius:8px}
-  .row-content.bg-data{background:var(--slate-bg);opacity:.8}
-  .row-content.bg-risk{background:rgba(225,29,72,.06)}
-  .row-content.bg-train{background:rgba(245,158,11,.06)}
-  .row-content.bg-infra{background:var(--slate-bg);opacity:.7}
+  /* CENTER COLUMN: Narrative flow */
+  .center{display:flex;flex-direction:column;align-items:center;gap:0;position:relative;background:var(--flow-bg);border-radius:12px;padding:6px 10px;overflow:hidden}
+  .flow-title{font-size:9px;font-weight:700;color:var(--teal);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px}
+  .flow-arrow{color:var(--teal);font-size:12px;line-height:1;margin:1px 0}
+  .flow-label{font-size:7px;color:var(--muted);font-weight:600;margin:0 0 1px}
+  .flywheel-arrow{color:var(--amber);font-size:10px;line-height:1;margin:2px 0}
+  .flywheel-label{font-size:7.5px;font-weight:700;color:var(--amber);letter-spacing:.5px}
+
+  /* RIGHT COLUMN: Training + parallel systems */
+  .right{display:flex;flex-direction:column;gap:4px;overflow:hidden}
 
   /* Boxes */
-  .box{border-radius:6px;padding:6px 8px;cursor:pointer;position:relative;transition:all .15s;min-width:100px;flex-shrink:0}
-  .box:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,0,0,.15);z-index:10}
+  .box{border-radius:6px;padding:5px 7px;cursor:pointer;position:relative;transition:all .12s;width:100%}
+  .box:hover{transform:translateY(-1px);box-shadow:0 3px 10px rgba(0,0,0,.12);z-index:10}
+  .box.flow-box{max-width:360px;width:100%}
   .b-teal{background:linear-gradient(135deg,var(--teal-l),var(--teal));color:#fff}
   .b-indigo{background:linear-gradient(135deg,var(--indigo-l),var(--indigo));color:#fff}
   .b-amber{background:linear-gradient(135deg,var(--amber-l),var(--amber));color:#fff}
@@ -83,297 +83,251 @@
   .b-kill{background:linear-gradient(135deg,#991B1B,#7F1D1D);color:#fff}
   .b-plan{background:var(--card);border:1.5px dashed var(--amber);color:var(--text)}
   .b-future{background:var(--card);border:1.5px dashed var(--border);color:var(--muted)}
-  .bt{font-size:9px;font-weight:700;line-height:1.2}
-  .bs{font-size:7px;opacity:.85;line-height:1.3;margin-top:1px}
-  .bs2{font-size:6.5px;opacity:.7;line-height:1.2}
-  .expand-i{position:absolute;top:2px;right:4px;font-size:6px;opacity:.4}
+  .bt{font-size:8px;font-weight:700;line-height:1.2}.bs{font-size:6.5px;opacity:.85;line-height:1.25;margin-top:1px}.bs2{font-size:6px;opacity:.7}
+  .expand-i{position:absolute;top:2px;right:4px;font-size:6px;opacity:.35}
 
-  /* Desks */
-  .desks{display:flex;gap:6px;flex:1}
-  .desk{flex:1;border-radius:8px;padding:6px;background:var(--card);border:2px solid var(--teal)}
-  .desk.planned{border-color:var(--amber);border-style:dashed}
-  .desk-hdr{font-size:8px;font-weight:700;text-align:center;padding:3px;border-radius:4px;margin-bottom:4px}
+  /* Side boxes are narrower */
+  .side-box{padding:4px 6px}
+  .side-box .bt{font-size:7.5px}.side-box .bs{font-size:6px}
+
+  /* Desk mini-cards */
+  .desk-card{border:1.5px solid var(--teal);border-radius:6px;padding:4px;background:var(--card);width:100%}
+  .desk-card.planned{border-color:var(--amber);border-style:dashed}
+  .desk-hdr{font-size:7px;font-weight:700;text-align:center;padding:2px;border-radius:3px;margin-bottom:2px}
   .desk-hdr.active{background:var(--teal);color:#fff}
   .desk-hdr.plan{background:var(--amber-bg);color:var(--amber)}
-  .desk-sub{font-size:6px;color:var(--muted);text-align:center;margin-bottom:4px}
-  .desk-strats{display:flex;gap:3px;flex-wrap:wrap}
-  .desk-strats .box{flex:1;min-width:80px;text-align:center}
-  .desk-exec{margin-top:4px}
-  .pill{display:inline-block;font-size:6px;font-weight:700;padding:1px 6px;border-radius:8px;color:#fff}
+  .strat-row{display:flex;gap:2px}
+  .strat-row .box{flex:1;text-align:center;padding:3px 4px}
+  .pill{font-size:5.5px;font-weight:700;padding:1px 5px;border-radius:6px;color:#fff;display:inline-block}
   .pill-1{background:var(--teal)}.pill-34{background:var(--amber)}.pill-56{background:var(--slate)}
 
-  /* Flywheel visual */
-  .flywheel-strip{display:flex;align-items:center;gap:2px;justify-content:center;padding:2px 0}
-  .flywheel-strip .arrow{color:var(--amber);font-size:10px;font-weight:700}
-  .flywheel-strip .label{font-size:7px;font-weight:700;color:var(--amber);letter-spacing:.5px}
+  /* Outcomes row */
+  .outcomes{display:flex;gap:3px;width:100%;max-width:360px}
+  .outcomes .box{flex:1;text-align:center;padding:3px}
 
-  /* Phase timeline */
-  .phases{display:flex;gap:4px;margin-top:4px}
-  .phases .box{flex:1;text-align:center}
-
-  /* Metrics bar */
-  .metrics{background:var(--text);border-radius:6px;padding:5px 12px;display:flex;gap:16px;justify-content:center;margin-top:4px}
+  /* Bottom bar */
+  .bottom{grid-column:1/-1;display:flex;flex-direction:column;gap:3px;margin-top:4px}
+  .phases{display:flex;gap:3px}
+  .phases .box{flex:1;text-align:center;padding:3px 4px}
+  .metrics{background:var(--text);border-radius:6px;padding:4px 12px;display:flex;gap:14px;justify-content:center}
   .metrics label{font-size:6px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
-  .metrics p{font-size:8px;color:#fff;margin-top:1px}
+  .metrics p{font-size:7.5px;color:#fff;margin-top:1px}
   [data-theme="dark"] .metrics{background:#020617}
-
-  /* Formula */
-  .formula{text-align:center;border:1px solid var(--teal);border-radius:6px;padding:3px 8px;margin-top:4px;font-size:8px;color:var(--text);background:var(--card)}
+  .formula{text-align:center;border:1px solid var(--teal);border-radius:6px;padding:3px;font-size:7.5px;color:var(--text);background:var(--card)}
   .formula strong{color:var(--teal)}
-
-  /* Footer */
-  footer{text-align:center;font-size:7px;color:var(--muted);margin-top:4px;line-height:1.4}
+  footer{grid-column:1/-1;text-align:center;font-size:6.5px;color:var(--muted);margin-top:2px}
 
   /* Detail panel */
   .overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:var(--overlay);z-index:999;backdrop-filter:blur(2px)}
   .overlay.show{display:block}
-  .detail-panel{display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--detail-bg);border-radius:12px;padding:20px 24px;z-index:1000;box-shadow:0 20px 60px rgba(0,0,0,.25);max-width:500px;width:90%;max-height:80vh;overflow-y:auto;border-top:4px solid var(--teal)}
+  .detail-panel{display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--detail-bg);border-radius:12px;padding:18px 22px;z-index:1000;box-shadow:0 20px 60px rgba(0,0,0,.25);max-width:480px;width:90%;max-height:80vh;overflow-y:auto;border-top:4px solid var(--teal)}
   .detail-panel.show{display:block}
-  .detail-panel h3{font-size:15px;font-weight:700;margin-bottom:10px;color:var(--text)}
+  .detail-panel h3{font-size:14px;font-weight:700;margin-bottom:8px;color:var(--text)}
   .detail-panel .close{position:absolute;top:10px;right:14px;cursor:pointer;font-size:18px;color:var(--muted);background:none;border:none;font-family:inherit}
   .detail-panel .close:hover{color:var(--text)}
   .dg{display:grid;gap:8px}
-  .dg label{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--teal)}
-  .dg p{font-size:12px;color:var(--text);line-height:1.5}
-  .dg code{font-family:'JetBrains Mono',monospace;font-size:10px;background:var(--slate-bg);padding:1px 4px;border-radius:3px}
-  .badge{display:inline-block;font-size:9px;font-weight:600;padding:2px 8px;border-radius:10px;margin-bottom:8px}
-  .badge-live{background:var(--teal-bg);color:var(--teal)}
-  .badge-plan{background:var(--amber-bg);color:var(--amber)}
-  .badge-future{background:var(--slate-bg);color:var(--slate)}
+  .dg label{font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--teal)}
+  .dg p{font-size:11px;color:var(--text);line-height:1.5}
+  .dg code{font-family:'JetBrains Mono',monospace;font-size:9px;background:var(--slate-bg);padding:1px 4px;border-radius:3px}
+  .badge{display:inline-block;font-size:8px;font-weight:600;padding:2px 7px;border-radius:8px;margin-bottom:6px}
+  .badge-live{background:var(--teal-bg);color:var(--teal)}.badge-plan{background:var(--amber-bg);color:var(--amber)}.badge-future{background:var(--slate-bg);color:var(--slate)}
+
+  /* Connector lines between columns */
+  .conn{position:absolute;pointer-events:none}
 </style>
 </head>
 <body>
 <div class="page">
-  <!-- SVG Flow Layer - arrows connecting components -->
-  <svg class="flow-layer" viewBox="0 0 1632 1056" preserveAspectRatio="none">
-    <defs>
-      <marker id="ah-teal" viewBox="0 0 8 6" refX="8" refY="3" markerWidth="6" markerHeight="5" orient="auto"><path d="M0,0 L8,3 L0,6z" fill="var(--teal)" opacity=".5"/></marker>
-      <marker id="ah-amber" viewBox="0 0 8 6" refX="8" refY="3" markerWidth="6" markerHeight="5" orient="auto"><path d="M0,0 L8,3 L0,6z" fill="var(--amber)" opacity=".6"/></marker>
-      <marker id="ah-emerald" viewBox="0 0 8 6" refX="8" refY="3" markerWidth="6" markerHeight="5" orient="auto"><path d="M0,0 L8,3 L0,6z" fill="var(--emerald)" opacity=".5"/></marker>
-      <marker id="ah-rose" viewBox="0 0 8 6" refX="8" refY="3" markerWidth="6" markerHeight="5" orient="auto"><path d="M0,0 L8,3 L0,6z" fill="var(--rose)" opacity=".4"/></marker>
-    </defs>
-    <!-- Data flow: Sources → Features → Enrichment → Ranking -->
-    <path d="M816,115 L816,145" class="flow-data" marker-end="url(#ah-teal)"/>
-    <!-- Pipeline → Risk/Decision -->
-    <path d="M816,230 L816,270" class="flow-data" marker-end="url(#ah-teal)"/>
-    <!-- Risk → Desks -->
-    <path d="M816,355 L816,395" class="flow-trade" marker-end="url(#ah-emerald)"/>
-    <!-- Desks → Outcomes (flywheel start) -->
-    <path d="M816,580 L816,615" class="flow-train" marker-end="url(#ah-amber)"/>
-    <!-- Flywheel: Training pipeline horizontal -->
-    <path d="M200,660 L1500,660" class="flow-train" marker-end="url(#ah-amber)"/>
-    <!-- Flywheel return: GGUF → back to LLM (right side loop) -->
-    <path d="M1560,650 L1560,330 L1050,330" class="flow-train" marker-end="url(#ah-amber)" stroke-width="2.5"/>
-    <!-- Council → Risk governor -->
-    <path d="M1400,210 L1400,290" class="flow-council" marker-end="url(#ah-teal)"/>
-    <!-- Risk checks at trade points -->
-    <path d="M350,340 L350,400" class="flow-risk" marker-end="url(#ah-rose)"/>
-  </svg>
-
+  <!-- HEADER -->
   <div class="hdr">
     <div>
       <h1>HALCYON LAB — Master Blueprint</h1>
-      <p>Autonomous AI-Powered Equity Trading System · Architecture v2 · March 2026</p>
+      <div class="hdr-sub">Autonomous AI-Powered Equity Trading System · Architecture v2 · March 2026</div>
       <div class="legend">
-        <span><i class="lg-active"></i> Active</span>
-        <span><i class="lg-planned"></i> Planned</span>
+        <span><i class="lg-a"></i> Active</span>
+        <span><i class="lg-p"></i> Planned</span>
         <span><i class="lg-ai"></i> AI/LLM</span>
-        <span><i class="lg-train"></i> Training</span>
-        <span><i class="lg-risk"></i> Risk</span>
-        <span>━━ Data flow</span>
-        <span>╍╍ Flywheel</span>
+        <span><i class="lg-t"></i> Training</span>
+        <span><i class="lg-r"></i> Risk</span>
+        <span>Center: how a trade flows. Left: what feeds it. Right: what improves it.</span>
       </div>
     </div>
     <button class="toggle" onclick="toggleTheme()" id="themeBtn">☀ Light</button>
   </div>
 
-  <div class="grid">
-    <!-- ROW 1: DATA SOURCES -->
-    <div class="row">
-      <div class="row-label">DATA</div>
-      <div class="row-content bg-data" id="r-data"></div>
-    </div>
-
-    <!-- ROW 2: PROCESSING PIPELINE -->
-    <div class="row">
-      <div class="row-label">PROCESS</div>
-      <div class="row-content bg-data" id="r-pipe"></div>
-    </div>
-
-    <!-- ROW 3: DECISION & RISK -->
-    <div class="row">
-      <div class="row-label">RISK</div>
-      <div class="row-content bg-risk" id="r-risk"></div>
-    </div>
-
-    <!-- ROW 4: TRADING DESKS -->
-    <div class="row">
-      <div class="row-label">DESKS</div>
-      <div class="desks" id="r-desks"></div>
-    </div>
-
-    <!-- FLYWHEEL STRIP -->
-    <div class="flywheel-strip">
-      <span class="arrow">▲</span>
-      <span class="label">◀ ─ ─ ─ TRAINING DATA FLYWHEEL ─ ─ ─ ▶</span>
-      <span class="arrow">▼</span>
-    </div>
-
-    <!-- ROW 5: TRAINING FLYWHEEL -->
-    <div class="row">
-      <div class="row-label">TRAIN</div>
-      <div class="row-content bg-train" id="r-train"></div>
-    </div>
-
-    <!-- ROW 6: OUTPUTS & INFRASTRUCTURE -->
-    <div class="row">
-      <div class="row-label">INFRA</div>
-      <div class="row-content bg-infra" id="r-infra"></div>
-    </div>
+  <!-- LEFT COLUMN -->
+  <div class="left">
+    <div class="col-title">Data Sources &amp; Infrastructure</div>
+    <div id="left-col"></div>
   </div>
 
-  <!-- PHASE TIMELINE -->
-  <div class="phases" id="r-phases"></div>
+  <!-- CENTER COLUMN: The narrative flow -->
+  <div class="center">
+    <div class="flow-title">How a trade flows → how it makes money</div>
+    <div id="center-flow"></div>
+  </div>
 
-  <!-- METRICS + FORMULA -->
-  <div class="metrics">
-    <div><label>Codebase</label><p>141 files · 29K LOC · 1,032 tests · 72 routes · 50 commands</p></div>
-    <div><label>HSHS</label><p>Performance · Model Quality · Data Asset · Flywheel · Defensibility</p></div>
-    <div><label>Phase Gates</label><p>50 trades → 100 (PSR>90%) → 200 (SR≥1.0) → 500 (DSR>0.95)</p></div>
-    <div><label>Audit Status</label><p>38 issues (3C · 8H · 15M · 12L) · System Validator: 50+ checks</p></div>
+  <!-- RIGHT COLUMN -->
+  <div class="right">
+    <div class="col-title">Training Flywheel &amp; Intelligence</div>
+    <div id="right-col"></div>
   </div>
-  <div class="formula">
-    <strong>SR_portfolio = S × √N / √(1 + (N−1) × ρ)</strong> &nbsp;|&nbsp; 4 strategies (ρ=0.15): SR ≈ 0.99 &nbsp;|&nbsp; 8 strategies: SR ≈ 1.17 &nbsp;|&nbsp; Target: 8 strategies, 3 desks, SR 1.2-1.5 at maturity
+
+  <!-- BOTTOM -->
+  <div class="bottom">
+    <div class="phases" id="phases"></div>
+    <div class="metrics">
+      <div><label>Codebase</label><p>141 files · 29K LOC · 1,032 tests · 72 routes · 50 CLI</p></div>
+      <div><label>HSHS</label><p>Performance · Model Quality · Data Asset · Flywheel · Defensibility</p></div>
+      <div><label>Gates</label><p>50 trades → 100 (PSR>90%) → 200 (SR≥1.0) → 500 (DSR>0.95)</p></div>
+      <div><label>Audit</label><p>38 issues (3C · 8H · 15M · 12L) → Reliability Sprint queued</p></div>
+    </div>
+    <div class="formula"><strong>SR = S×√N / √(1+(N−1)×ρ)</strong> · 4 strategies (ρ=0.15): SR≈0.99 · 8 strategies: SR≈1.17 · Equal-weight → Inv-vol → Correlation-aware + Black-Litterman</div>
   </div>
-  <footer>halcyonlab.app · github.com/millerrc18/halcyon-lab · 34 research documents · Halcyon Framework v2 · Training data quality is the #1 competitive advantage</footer>
+
+  <footer>halcyonlab.app · github.com/millerrc18/halcyon-lab · 34 research docs · Framework v2 · Core: the data asset — not the model, not the returns — is the most valuable component</footer>
 </div>
 
 <div class="overlay" id="ov" onclick="closeD()"></div>
 <div class="detail-panel" id="dp"><button class="close" onclick="closeD()">&times;</button><div id="dc"></div></div>
 
 <script>
-function toggleTheme(){const c=document.documentElement.getAttribute('data-theme')||'light';const n=c==='light'?'dark':'light';document.documentElement.setAttribute('data-theme',n);document.getElementById('themeBtn').textContent=n==='dark'?'☾ Dark':'☀ Light';localStorage.setItem('hl-theme',n)}
-(function(){const s=localStorage.getItem('hl-theme')||'light';document.documentElement.setAttribute('data-theme',s);const b=document.getElementById('themeBtn');if(b)b.textContent=s==='dark'?'☾ Dark':'☀ Light'})();
-
-function showD(item){
-  const st=item.cls&&item.cls.includes('plan')?'plan':item.cls&&item.cls.includes('future')?'future':'live';
-  document.getElementById('dc').innerHTML=`<h3>${item.t}</h3><span class="badge badge-${st}">${st==='live'?'Active':st==='plan'?'Planned':'Future'}</span><div class="dg"><div><label>What</label><p>${item.what||'—'}</p></div><div><label>Why</label><p>${item.why||'—'}</p></div><div><label>Who (code)</label><p>${item.who||'—'}</p></div><div><label>When</label><p>${item.when||'—'}</p></div><div><label>Where</label><p>${item.where||'—'}</p></div></div>`;
-  document.getElementById('dp').classList.add('show');document.getElementById('ov').classList.add('show');
-}
+function toggleTheme(){const c=document.documentElement.getAttribute('data-theme')||'light',n=c==='light'?'dark':'light';document.documentElement.setAttribute('data-theme',n);document.getElementById('themeBtn').textContent=n==='dark'?'☾ Dark':'☀ Light';localStorage.setItem('hl-bp',n)}
+(function(){const s=localStorage.getItem('hl-bp')||'light';document.documentElement.setAttribute('data-theme',s);const b=document.getElementById('themeBtn');if(b)b.textContent=s==='dark'?'☾ Dark':'☀ Light'})();
+function showD(i){const st=i.c?.includes('plan')?'plan':i.c?.includes('future')?'future':'live';document.getElementById('dc').innerHTML=`<h3>${i.t}</h3><span class="badge badge-${st}">${{live:'Active',plan:'Planned',future:'Future'}[st]}</span><div class="dg"><div><label>What</label><p>${i.W||'—'}</p></div><div><label>Why</label><p>${i.Y||'—'}</p></div><div><label>Who (code)</label><p>${i.H||'—'}</p></div><div><label>When</label><p>${i.N||'—'}</p></div><div><label>Where</label><p>${i.R||'—'}</p></div></div>`;document.getElementById('dp').classList.add('show');document.getElementById('ov').classList.add('show')}
 function closeD(){document.getElementById('dp').classList.remove('show');document.getElementById('ov').classList.remove('show')}
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeD()});
+function mk(i,el,cls=''){const d=document.createElement('div');d.className=`box ${i.c} ${cls}`;d.onclick=()=>showD(i);d.innerHTML=`<span class="expand-i">＋</span><div class="bt">${i.t}</div><div class="bs">${i.s}</div>${i.s2?`<div class="bs2">${i.s2}</div>`:''}`;el.appendChild(d);return d}
+function mkLabel(text,el,cls='flow-label'){const d=document.createElement('div');d.className=cls;d.textContent=text;el.appendChild(d)}
+function mkArrow(el,cls='flow-arrow'){const d=document.createElement('div');d.className=cls;d.textContent='▼';el.appendChild(d)}
 
-function mkBox(item,container){
-  const d=document.createElement('div');d.className=`box ${item.cls}`;d.onclick=()=>showD(item);
-  d.innerHTML=`<span class="expand-i">＋</span><div class="bt">${item.t}</div><div class="bs">${item.s}</div>${item.s2?`<div class="bs2">${item.s2}</div>`:''}`;
-  container.appendChild(d);
-}
+// ═══════════════════════════════════════════
+// LEFT COLUMN: Data Sources + Infrastructure
+// ═══════════════════════════════════════════
+const L=document.getElementById('left-col');
+[
+  {c:'b-teal side-box',t:'yfinance OHLCV',s:'S&P 100 daily → Polygon.io Ph2',W:'Daily OHLCV for all S&P 100 + SPY. Foundation of the feature engine.',Y:'Every indicator depends on price data.',H:'<code>src/data_ingestion/market_data.py</code>',N:'Every scan (30min) + pre-market 6AM',R:'In-memory during scans'},
+  {c:'b-teal side-box',t:'FRED Macro (34+ series)',s:'Yield curve · CPI · Credit spreads',W:'34+ macroeconomic series from Federal Reserve.',Y:'Credit spread z-score powers Traffic Light regime. Macro context for all analysis.',H:'<code>src/data_collection/macro_collector.py</code>',N:'Nightly 9:30PM + pre-market',R:'<code>macro_snapshots</code> table'},
+  {c:'b-teal side-box',t:'Finnhub',s:'News · Insiders · Analysts · Earnings',W:'Company news sentiment, insider Form 4, analyst consensus, earnings dates.',Y:'A pullback + insider buying ≠ pullback + insider selling.',H:'<code>src/data_enrichment/</code> modules',N:'News per scan. Analysts nightly.',R:'<code>insider_transactions</code>, <code>analyst_estimates</code>'},
+  {c:'b-teal side-box',t:'SEC EDGAR',s:'10-K/Q/8-K · XBRL · L-M NLP',W:'Filings with Loughran-McDonald NLP scoring. XBRL fundamentals.',Y:'Filing sentiment delta + technical-fundamental divergence.',H:'<code>src/data_collection/edgar_collector.py</code>',N:'Nightly. NLP auto per filing.',R:'<code>edgar_filings</code> table'},
+  {c:'b-teal side-box',t:'Options / VIX / CBOE',s:'Chains · Term structure · Put/call',W:'Full EOD options chains, VIX term structure, CBOE ratios.',Y:'Passive collection for future Options Desk. VIX powers regime detection.',H:'<code>options_collector.py</code>, <code>vix_collector.py</code>',N:'Nightly 9:30PM',R:'<code>options_chains</code>, <code>vix_term_structure</code>'},
+  {c:'b-teal side-box',t:'12 Night Collectors',s:'Short int · Fed · Trends · Earnings',W:'12 specialized collectors each producing irreplaceable daily snapshots.',Y:'Temporal coverage is the #1 defensible asset. Cannot be reconstructed.',H:'<code>src/data_collection/</code> 12 modules',N:'9:30PM nightly, concurrent',R:'12 dedicated tables → Render'},
+  {c:'b-plan side-box',t:'Unusual Whales ($50/mo)',s:'Options flow · Phase 2',W:'Unusual options activity: block trades, sweeps, dark pool.',Y:'Highest-value alt data for budget.',H:'Future integration',N:'Phase 2, passive only',R:'New <code>options_flow</code> table'},
+  {c:'b-slate side-box',t:'SQLite (35 tables)',s:'WAL · Backups · Local primary',W:'35 tables, WAL mode, daily backup.',Y:'Right choice at this scale. Zero config.',H:'All modules',N:'Written continuously',R:'<code>ai_research_desk.sqlite3</code>'},
+  {c:'b-teal side-box',t:'halcyonlab.app',s:'11 pages · Render · AuthGate · PWA',W:'React 18 dashboard. 11 pages. Accessible anywhere.',Y:'Makes the system observable.',H:'<code>frontend/src/</code> + <code>cloud_app.py</code>',N:'Always. 30s refresh.',R:'Render: API $7 + Postgres $7'},
+  {c:'b-teal side-box',t:'Telegram (29 types)',s:'Trade · P&L · Council · Regime',W:'29 notification types + command interface.',Y:'Push notifications = always aware.',H:'<code>src/notifications/telegram.py</code>',N:'Real-time + scheduled',R:'Telegram Bot API'},
+  {c:'b-slate side-box',t:'RTX 3060 12GB → 3090',s:'75% util · Inference ≤30% · Train ≤45%',W:'Consumer GPU. Upgrade path: 3090 → dual 3090.',Y:'Strategic slack (25%) prevents latency degradation.',H:'<code>src/scheduler/vram_manager.py</code>',N:'24/7. Handoffs at 5:15AM/6:50PM.',R:'Ryan\'s machine'},
+  {c:'b-slate side-box',t:'$64/month total',s:'Render $14 · APIs $50 · → $125 Ph2',W:'Architecture designed for minimal cost.',Y:'$64/mo vs institutional $100K+/mo.',H:'<code>api_costs</code> table',N:'Tracked per API call',R:'Monthly CTO report'},
+].forEach(i=>mk(i,L,'side-box'));
 
-// === DATA ===
-const D={
-data:[
-  {cls:'b-teal',t:'yfinance OHLCV',s:'S&P 100 · Daily',s2:'→ Polygon.io (Ph2)',what:'Daily OHLCV for S&P 100 + SPY. Foundation of feature engine.',why:'Every technical indicator depends on price data. Polygon.io upgrade for reliability.',who:'<code>src/data_ingestion/market_data.py</code>',when:'Every scan (30min) + pre-market 6AM',where:'In-memory during scans'},
-  {cls:'b-teal',t:'FRED Macro',s:'34+ series',s2:'Yield · CPI · Credit',what:'Fed Funds, yield curve, unemployment, CPI, GDP, credit spreads, financial conditions.',why:'Macro context for regime classification. Credit spread powers Traffic Light.',who:'<code>src/data_collection/macro_collector.py</code>',when:'Nightly 9:30PM + pre-market refresh',where:'<code>macro_snapshots</code> table'},
-  {cls:'b-teal',t:'Finnhub',s:'News · Insiders · Analysts',s2:'Earnings calendar',what:'News sentiment, Form 4 insider trades, analyst consensus, earnings dates.',why:'Multi-source enrichment. Insider buying + pullback ≠ insider selling + pullback.',who:'<code>src/data_enrichment/</code> modules',when:'Every scan (news/insiders) + nightly (analysts)',where:'<code>insider_transactions</code>, <code>analyst_estimates</code>, <code>earnings_calendar</code>'},
-  {cls:'b-teal',t:'SEC EDGAR',s:'10-K · 10-Q · 8-K · XBRL',s2:'L-M sentiment · NLP',what:'Filings with NLP sentiment (L-M dictionary + 17 cautionary phrases). XBRL fundamentals.',why:'Filing sentiment delta + tech-fundamental divergence = most novel pullback feature.',who:'<code>src/data_collection/edgar_collector.py</code>, <code>src/features/filing_nlp.py</code>',when:'Nightly collection. NLP on each new filing.',where:'<code>edgar_filings</code> table'},
-  {cls:'b-teal',t:'Options / VIX',s:'Chains · Term structure',s2:'CBOE ratios',what:'EOD option chains, VIX/VIX9D/VIX3M/VIX1Y, put/call ratios.',why:'Passive data collection for future Options Desk. VIX term structure powers regime detection.',who:'<code>src/data_collection/options_collector.py</code>, <code>vix_collector.py</code>, <code>cboe_collector.py</code>',when:'Nightly 9:30PM',where:'<code>options_chains</code>, <code>vix_term_structure</code>, <code>cboe_ratios</code>'},
-  {cls:'b-teal',t:'12 Night Collectors',s:'Short int · Fed · Trends',s2:'Irreplaceable daily snapshots',what:'12 specialized collectors. Each night = irreplaceable snapshot that builds the data moat.',why:'Data cannot be reconstructed retroactively. Temporal coverage is the #1 defensible asset.',who:'<code>src/data_collection/</code> — 12 modules',when:'9:30PM nightly, concurrent',where:'12 dedicated SQLite tables → Render Postgres'},
-  {cls:'b-teal',t:'Research #13',s:'arXiv · SSRN · HF · GitHub',s2:'Weekly Claude synthesis',what:'7-source automated research intelligence. Weekly synthesis produces actionable digest.',why:'Competitive intelligence at zero API cost. Discovers new techniques, tracks competitors.',who:'<code>src/data_collection/research_collector.py</code>',when:'Nightly collect. Weekly Sunday synthesis.',where:'<code>research_papers</code>, <code>research_digests</code>'},
-  {cls:'b-plan',t:'Unusual Whales',s:'Options flow · $50/mo',s2:'Phase 2',what:'Unusual options activity: block trades, sweeps, dark pool prints.',why:'Highest-value alt data for budget. Informed trading concentrates in options pre-equity moves.',who:'Future enrichment pipeline integration',when:'Phase 2, passive collection',where:'New <code>options_flow</code> table'},
-  {cls:'b-indigo',t:'Claude Sonnet API',s:'Council · Scoring · Gen',s2:'~$20-30/mo',what:'AI Council ($0.50/day), quality scoring (LLM-as-judge), self-blinded training data generation.',why:'Local LLM analyzing itself = model collapse. Claude provides independent evaluation layer.',who:'<code>src/training/claude_client.py</code> — single choke point for cost tracking',when:'Council 8:30AM. Scoring overnight. Gen on-demand.',where:'<code>api_costs</code>, <code>council_sessions</code>, <code>council_votes</code>'},
-  {cls:'b-indigo',t:'ChatGPT',s:'Multi-teacher diversity',s2:'Manual blinded gen',what:'Second teacher model for training data. Reduces single-model mode collapse.',why:'ChatGPT generates, Claude evaluates = zero cross-contamination. Different biases = more robust.',who:'Manual workflow + <code>scripts/export_chatgpt_inputs.py</code>',when:'Ryan generates 20-50 examples in spare time',where:'Imported to <code>training_examples</code> with chatgpt_blinded_* source tag'},
-  {cls:'b-indigo',t:'Ollama (halcyonlatest)',s:'Qwen3 8B · Q8_0 GGUF',s2:'8.7GB · Local inference',what:'Fine-tuned LLM for trade commentary. XML output: why_now + analysis + metadata.',why:'Local-first = zero API cost, privacy, fine-tunable on proprietary data. The model IS the product.',who:'<code>src/llm/client.py</code> → <code>localhost:11434</code>',when:'Loaded 5:15AM. Active until 6:50PM. Unloaded for training.',where:'Ollama model directory'},
-],
-pipe:[
-  {cls:'b-teal',t:'Feature Engine',s:'50+ features per ticker',s2:'Trend · RS · Regime · Sector',what:'Technicals, regime (7 categories), sector context, earnings proximity, options metrics.',why:'Transforms raw data into structured signal. Everything downstream depends on feature quality.',who:'<code>src/features/engine.py</code>',when:'Every scan (13/day)',where:'In-memory → persisted in <code>recommendations</code>'},
-  {cls:'b-teal',t:'Data Enrichment',s:'Fundamentals · Insiders',s2:'News · Macro · Filing NLP',what:'Multi-source context layered onto features. SEC fundamentals, insider activity, news sentiment.',why:'Enrichment makes LLM commentary insightful, not just pattern-matching.',who:'<code>src/data_enrichment/enricher.py</code>',when:'Every scan after features',where:'Enriched prompt stored in <code>recommendations.enriched_prompt</code>'},
-  {cls:'b-plan',t:'Traffic Light',s:'VIX + 200-DMA + Credit',s2:'Score 0-6 → Sizing ×',what:'Rules-based regime overlay. 3 indicators, 5-day persistence filter. Nearly impossible to overfit.',why:'Biggest weakness: zero signals in bear markets. TL provides regime-aware sizing.',who:'<code>src/features/traffic_light.py</code> (planned)',when:'Every scan. Applied to risk governor.',where:'<code>scan_metrics</code> + Telegram + dashboard'},
-  {cls:'b-teal',t:'Ranking',s:'Score 0-100',s2:'7 regime thresholds',what:'Scores all tickers, applies regime-adaptive thresholds (40 bull → 90 crisis).',why:'Filters 102 tickers to 5-15 actionable candidates. Auto-adjusts to market conditions.',who:'<code>src/ranking/ranker.py</code>',when:'Every scan',where:'Candidates → LLM analysis'},
-  {cls:'b-teal',t:'Setup Classifier',s:'6 types',s2:'Pullback · Breakout · MR',what:'Rule-based classification: pullback, breakout, momentum, mean_reversion, range, breakdown.',why:'Enables signal zoo logging. Future adapter routing. 80-85% accuracy validated.',who:'<code>src/features/setup_classifier.py</code>',when:'Every scan, every ticker above threshold',where:'<code>setup_signals</code> table'},
-  {cls:'b-teal',t:'Signal Zoo',s:'Logs ALL setups',s2:'Future strategy lab',what:'Captures every qualifying setup regardless of type. Months of historical data before Strategy #2 launches.',why:'The research lab for future strategies. When evaluating candidates, we have data.',who:'Integrated via setup classifier',when:'Every scan',where:'<code>setup_signals</code> table'},
-  {cls:'b-teal',t:'Watch Loop',s:'2,313 lines · 27 events',s2:'Central nervous system',what:'Orchestrates the entire 24/7 schedule: scans, pre-market, overnight, Saturday retrain, Sunday digest.',why:'Turns a collection of modules into a living system.',who:'<code>src/scheduler/watch.py</code>',when:'Runs 24/7',where:'Coordinates all modules. State in <code>scan_metrics</code>, <code>schedule_metrics</code>'},
-  {cls:'b-indigo',t:'AI Council (5)',s:'Vote-first Delphi',s2:'→ Sizing · Tilts · Risk',what:'5 analytical lenses: Tactical, Strategic, Red Team, Innovation, Macro. Structured JSON output.',why:'NeurIPS 2025: majority voting > debate. Council earns authority through demonstrated accuracy.',who:'<code>src/council/</code> — agents.py, protocol.py, engine.py',when:'Daily 8:30AM ($0.50), Weekly Sunday ($1.50)',where:'<code>council_sessions</code>, <code>council_votes</code>'},
-  {cls:'b-teal',t:'VRAM Manager',s:'Morning ↔ Evening',s2:'Inference ↔ Training',what:'Manages GPU between Ollama (inference) and PEFT (training). 12GB cannot do both.',why:'Single GPU requires time-slicing. Inference during market hours, training overnight.',who:'<code>src/scheduler/vram_manager.py</code>',when:'5:15AM (→inference), 6:50PM (→training)',where:'GPU state via nvidia-smi'},
-],
-risk:[
-  {cls:'b-rose',t:'Risk Governor',s:'8 checks + kill switch',s2:'Every trade must pass',what:'Emergency halt, daily loss -3%, position ≤5%, max positions, sector 22%, correlation, VIX halt, duplicate.',why:'Last defense before capital deployed. Research: risk mgmt may contain more alpha than signals.',who:'<code>src/risk/governor.py</code>',when:'Every trade attempt',where:'Rejections in <code>recommendations</code>'},
-  {cls:'b-indigo',t:'LLM Packet Writer',s:'Ollama → halcyonlatest',s2:'XML: why_now · analysis · meta',what:'Generates institutional-quality trade commentary from enriched features. Conviction 1-10 drives sizing.',why:'The LLM commentary IS the product. Synthesizes all data sources into unified thesis.',who:'<code>src/llm/packet_writer.py</code>',when:'Every packet-worthy ticker',where:'<code>recommendations</code> table'},
-  {cls:'b-rose',t:'LLM Validator',s:'Ticker · Price · Stop',s2:'Allocation · Conviction',what:'Hard-bounds on LLM output. Catches hallucinated prices, invalid stops, oversized positions.',why:'LLMs hallucinate ~4%. One bad price = unsafe trade. ⚠ AUDIT: bypassed on exception (C2).',who:'<code>src/llm/validator.py</code>',when:'Every trade, before risk governor',where:'Failures logged at WARNING'},
-  {cls:'b-plan',t:'Constrained Decode',s:'XGrammar / GBNF',s2:'Guaranteed XML → 0% fallback',what:'Grammar-constrained token generation. Structurally impossible to produce malformed XML.',why:'Could eliminate template fallback entirely. Deep research #5 in progress.',who:'Integration into <code>src/llm/client.py</code>',when:'After research completes',where:'Ollama grammar parameter'},
-  {cls:'b-rose',t:'Graduated Drawdown',s:'Thorp: 0%DD→100% size',s2:'20%DD→0% (linear)',what:'Ed Thorp protocol. Recovery hysteresis: 2% improvement required before size increases.',why:'Triple Penance Rule: recovery takes 3× formation period. Graduated sizing prevents catastrophic DD.',who:'<code>src/risk/governor.py</code>',when:'Every trade. Alerts at 5/10/15%.',where:'Portfolio state tracked from equity curve'},
-  {cls:'b-kill',t:'Kill Switch',s:'CLI · Telegram · Dash',s2:'Halts all new trades',what:'Immediately stops all new position opening. Existing positions protected by Alpaca bracket orders.',why:'Ultimate safety mechanism. One command stops everything.',who:'<code>src/risk/governor.py</code>',when:'Checked every trade. Resume requires explicit command.',where:'Halt state persisted across restarts'},
-  {cls:'b-plan',t:'IS Tracking',s:'Signal price vs fill',s2:'Slippage in bps',what:'Implementation Shortfall: decision price vs actual fill. Limit-at-ask saves 0.5-2 bps.',why:'Build measurement infrastructure now. Detect systematic slippage before scaling.',who:'<code>src/shadow_trading/executor.py</code>',when:'Signal price at scan, IS on fill',where:'New columns: <code>signal_price</code>, <code>implementation_shortfall_bps</code>'},
-  {cls:'b-teal',t:'Reconciliation',s:'Alpaca ↔ DB',s2:'Orphan detection',what:'Detects discrepancies between broker positions and local DB. Catches bracket fills, crashes.',why:'DB must reflect reality for accurate P&L and training data.',who:'<code>src/shadow_trading/reconcile.py</code>',when:'On-demand. Planned: daily EOD.',where:'Discrepancies → <code>activity_log</code> + Telegram'},
-],
-train:[
-  {cls:'b-emerald',t:'Trade Outcomes',s:'P&L · MFE/MAE · Exit',s2:'Flywheel fuel',what:'Closed trade data: P&L, max favorable/adverse excursion, duration, exit reason, conviction.',why:'Real outcomes are the highest-quality training signal. Irreplaceable. The flywheel fuel.',who:'<code>src/shadow_trading/executor.py</code>',when:'Every scan cycle checks exits',where:'<code>shadow_trades</code> table'},
-  {cls:'b-amber',t:'Self-Blinded Gen',s:'Claude + ChatGPT',s2:'2-stage · No outcome leak',what:'Stage 1: model sees ONLY setup data. Stage 2: quality enhancement (still no outcome). Architectural.',why:'Instruction-based blinding fails. Self-blinding is the gold standard (treatment leakage framework).',who:'<code>src/training/data_collector.py</code>, <code>backfill.py</code>',when:'Daily from closed trades. ChatGPT batches on-demand.',where:'<code>training_examples</code> table'},
-  {cls:'b-amber',t:'Quality Scoring',s:'6-dim rubric · LLM judge',s2:'Prune bottom 15%',what:'Thesis clarity 25%, evidence 20%, risk 20%, calibration 15%, structure 10%, temporal 10%.',why:'LIMA: 1,000 curated = GPT-4. AlpaGasus: 9K filtered > 52K unfiltered. Quality > quantity.',who:'<code>src/training/quality_filter.py</code>',when:'New examples scored within 24h',where:'<code>training_examples.quality_score</code>'},
-  {cls:'b-amber',t:'Leakage Detector',s:'TF-IDF classifier',s2:'Must be ≤55%',what:'Classifier on output text with outcome labels. >55% balanced accuracy = pipeline leaking.',why:'Models leak through sentence structure, adverbs, risk count, length, framing.',who:'<code>src/training/leakage_detector.py</code>',when:'Before every retrain',where:'Results logged + Telegram alert'},
-  {cls:'b-amber',t:'Curriculum 3-Stage',s:'Structure → Evidence',s2:'→ Decision',what:'Progressive difficulty. Decreasing learning rates per stage. Validated by Trading-R1 (Sharpe 2.72).',why:'Models learn structure first, then depth, then nuance. Jumping to hard examples degrades learning.',who:'<code>src/training/curriculum.py</code>',when:'Examples classified on creation',where:'<code>training_examples.curriculum_stage</code>'},
-  {cls:'b-purple',t:'QDoRA SFT',s:'PEFT + TRL 0.24',s2:'Weekly Saturday retrain',what:'QLoRA + DoRA. Rank 16, all linear layers. Merge-and-reset LoRA strategy.',why:'DoRA beats full fine-tuning (46.6% vs 44.9%). Weekly = 90% cost savings vs nightly.',who:'<code>src/training/trainer.py</code>',when:'Saturday overnight',where:'Adapters → checkpoints → GGUF'},
-  {cls:'b-plan',t:'REINFORCE++',s:'Replaces GRPO',s2:'At 100+ closed trades',what:'RL with global normalization. Composite reward: vol-normalized P&L + rubric + calibration.',why:'GRPO overfits on <2K prompts. Alpha-R1: without RL = Sharpe -0.77. RL is not optional.',who:'TRL or alternative. Deep research #1.',when:'~June 2026 (100+ trades)',where:'RL adapter → champion-challenger → deploy'},
-  {cls:'b-amber',t:'Champion-Challenger',s:'Holdout · A/B shadow',s2:'Auto-rollback',what:'New models evaluated on 15% chronological holdout (5-day gap). Auto-rollback on regression.',why:'Prevents "better in training, worse in production" failure mode.',who:'<code>src/training/versioning.py</code>, <code>canary.py</code>, <code>ab_evaluation.py</code>',when:'After every retrain',where:'<code>model_versions</code>, <code>model_evaluations</code>'},
-  {cls:'b-indigo',t:'GGUF → Ollama',s:'llama.cpp converter',s2:'Q8_0 → halcyonlatest',what:'Merge adapter → convert GGUF → quantize Q8_0 → register Ollama → verify inference.',why:'GGUF = universal local deployment format. Q8_0 = near-lossless.',who:'<code>src/training/trainer.py</code> export',when:'After champion-challenger passes',where:'Ollama model directory'},
-  {cls:'b-indigo',t:'Postmortem Writer',s:'Post-trade review',s2:'LLM-generated lessons',what:'After close: what worked, what didn\'t, thesis vs execution, stop analysis, MFE vs realized.',why:'Highest-quality training signal. Connects prediction to outcome with reasoning.',who:'<code>src/llm/postmortem_writer.py</code>',when:'When trades close',where:'<code>recommendations</code> table'},
-  {cls:'b-teal',t:'Between-Scan Scorer',s:'~420 examples/day free',s2:'Uses idle inference GPU',what:'Scores unscored training examples via Claude during 22-min gaps between scans.',why:'Effectively free compute — GPU is already warm. 10 scoring windows/day.',who:'<code>src/scheduler/scorer.py</code>',when:'Market hours, between scans',where:'<code>training_examples.quality_score</code>'},
-],
-infra:[
-  {cls:'b-teal',t:'halcyonlab.app',s:'11 pages · Render',s2:'AuthGate · PWA',what:'React 18 dashboard. 11 pages. Password-protected. PWA installable.',why:'Accessible from anywhere. Real-time via Render Postgres.',who:'<code>frontend/src/</code> + <code>src/api/cloud_app.py</code>',when:'Always accessible. 30s refresh.',where:'Render: static + API ($7) + Postgres ($7)'},
-  {cls:'b-teal',t:'Telegram (29)',s:'Trade · P&L · Council',s2:'Regime · Data · Streaks',what:'29 notification types. Commands: /trades, /pnl, /status, /halt.',why:'Push notifications = always aware. Mobile control.',who:'<code>src/notifications/telegram.py</code> (1,318 lines)',when:'Real-time + scheduled',where:'Telegram Bot API'},
-  {cls:'b-teal',t:'CTO Report',s:'Weekly performance',s2:'Fund metrics · Trends',what:'Sharpe, Sortino, Calmar, win rate, PF, DD, equity curve, sector exposure, model health.',why:'Single document: "is the system working?" Foundation for investor reporting.',who:'<code>src/evaluation/cto_report.py</code> (731 lines)',when:'Saturday auto + on-demand',where:'Dashboard + email'},
-  {cls:'b-teal',t:'WebSocket',s:'Real-time events',s2:'React Query invalidation',what:'Pushes scan_complete, trade_opened/closed, pnl_update to dashboard instantly.',why:'Without WS, dashboard polls every 30s and misses events.',who:'<code>src/api/websocket.py</code>',when:'Always active',where:'<code>ws://localhost:8000/ws</code>'},
-  {cls:'b-teal',t:'SQLite (35 tables)',s:'WAL mode · Backups',s2:'Local primary DB',what:'35 tables. WAL for concurrent access. Daily backup.',why:'Right choice at this scale. Zero config, fast, reliable.',who:'Used by all modules',when:'Written continuously',where:'<code>ai_research_desk.sqlite3</code>'},
-  {cls:'b-teal',t:'Stat Validation',s:'PSR · DSR · MinTRL',s2:'Bootstrap · Gate eval',what:'Statistical framework: when is evidence trustworthy? MinTRL ~68 trades for SR=1.0.',why:'At 5 trades = zero significance. These tools define when scaling is justified.',who:'<code>src/evaluation/statistics.py</code>, <code>gate_evaluator.py</code>',when:'Gate auto-runs at 50 trades',where:'Health Score dashboard'},
-  {cls:'b-plan',t:'System Validator',s:'50+ automated checks',s2:'8 categories · Dashboard',what:'Validates: database, trading, training, API, collectors, notifications, scheduler, LLM.',why:'141 files = too complex for manual verification. Catches broken integrations before they affect trading.',who:'<code>src/evaluation/system_validator.py</code> (943 lines)',when:'Daily 4:30PM + on-demand',where:'<code>validation_results</code> table + dashboard + Telegram'},
-  {cls:'b-slate',t:'Hardware',s:'RTX 3060 12GB',s2:'→ 3090 24GB (Ph3)',what:'Current: 3060 12GB, 32GB RAM, Windows. Upgrade path: 3090 → dual 3090 NVLink.',why:'75% utilization target. Inference ≤30%, training ≤45%, slack ≥25%.',who:'<code>src/scheduler/vram_manager.py</code>',when:'GPU schedule: 5:15AM-6:50PM inference',where:'Ryan\'s machine, 24/7'},
-  {cls:'b-slate',t:'$64/mo',s:'Render $14 · APIs $50',s2:'→ $125/mo Phase 2',what:'Render $14 + Claude ~$20-30 + free APIs. Phase 2 adds Polygon $29 + UW $50.',why:'Architecture designed for minimal cost. $64/mo vs institutional $100K+/mo.',who:'<code>api_costs</code> table',when:'Tracked per API call',where:'Monthly summary in CTO report'},
-],
-phases:[
-  {cls:'b-teal',t:'Ph1: Bootcamp',s:'$100K paper + $100 live',s2:'1 strategy · 50-trade gate',what:'Prove the system works. Validate pullback has edge.',why:'Performance-gated, not calendar-driven.',who:'All components running autonomously.',when:'Current. ~35 trades/mo → gate at ~6wks.',where:'Alpaca paper + live'},
-  {cls:'b-plan',t:'Ph2: Micro Live',s:'$100→$1K · 2 strategies',s2:'LLC · PSR>90%',what:'Scale live. Strategy #2 (mean reversion?). Wyoming LLC.',why:'First real capital. Strategy diversification.',who:'Per-strategy LoRA adapters.',when:'Jul-Sep 2026',where:'Expanded to ~325 stocks'},
-  {cls:'b-plan',t:'Ph3: Growth',s:'$1K→$5K · 4 strategies',s2:'Options desk · SR≥1.0',what:'Mean reversion + VRP. Launch Options Desk. RTX 3090.',why:'4 uncorrelated strategies ≈ 2× portfolio Sharpe.',who:'2 desks, 4 adapters.',when:'Oct 2026-Mar 2027',where:'RTX 3090'},
-  {cls:'b-plan',t:'Ph4: Full Auto',s:'$5K→$25K · 6 strategies',s2:'Investor-ready',what:'Full autonomous. Investor-grade track record. GIPS-aligned.',why:'Prove unsupervised operation.',who:'System autonomous. Ryan = monitor.',when:'2027',where:'Possibly IB for track record'},
-  {cls:'b-plan',t:'Ph5: Scale',s:'$25K→$100K · 8 strategies',s2:'Family LP · DSR>0.95',what:'Momentum desk. Russell 1000. 3 desks, 8 strategies.',why:'SR target 1.2-1.5.',who:'Dual 3090 NVLink.',when:'2028',where:'Dedicated machine'},
-  {cls:'b-future',t:'Ph6: Fund',s:'$100K+ · Optimize',s2:'SEC registration',what:'Optimize don\'t expand. Fund formation.',why:'Institutional-grade infrastructure.',who:'First employee?',when:'2029-2030',where:'Full regulatory compliance'},
-]};
+// ═══════════════════════════════════════════
+// CENTER COLUMN: The narrative trade flow
+// ═══════════════════════════════════════════
+const C=document.getElementById('center-flow');
 
-// Desk configs
-const DESKS=[
-  {hdr:'DESK 1: EQUITY SWING — ACTIVE',hcls:'active',dcls:'',pill:'pill-1',plbl:'PHASE 1',sub:'S&P 100 · 2-15 day holds · Alpaca bracket orders',
-   strats:[
-    {cls:'b-teal',t:'Pullback',s:'LoRA r=16 · LIVE',what:'Core strategy. Pullback-in-uptrend.',why:'Most persistent equity anomaly.',who:'halcyonlatest',when:'Now',where:'Alpaca paper+live'},
-    {cls:'b-plan',t:'Mean Rev?',s:'Phase 2 · Sep LoRA',what:'1-5 day reversals. ρ ≈ −0.15 with pullback.',why:'Works when pullback fails. Regime insurance. PEAD ruled dead for large caps.',who:'Separate adapter',when:'Aug 2026',where:'Separate paper account'},
-    {cls:'b-plan',t:'TBD',s:'Phase 3',what:'Third equity strategy. Candidates: pairs, universe expansion.',why:'Further diversification.',who:'Separate adapter',when:'Phase 3',where:'TBD'},
-  ]},
-  {hdr:'DESK 2: OPTIONS VOLATILITY — PH 3-4',hcls:'plan',dcls:'planned',pill:'pill-34',plbl:'PH 3-4',sub:'LLM as volatility analyst · VRP + Term structure',
-   strats:[
-    {cls:'b-plan',t:'VRP Harvest',s:'70% desk · r=32',what:'Systematic VRP via delta-hedged strangles. Credit spreads/iron condors/covered calls are same trade.',why:'Most robust risk premium (Bakshi & Kapadia 2003).',who:'Separate adapter (different asset class)',when:'Ph 3-4',where:'Options-capable broker'},
-    {cls:'b-plan',t:'Term Structure',s:'30% desk · r=32',what:'Calendar/diagonal spreads. Different vol dimension.',why:'Partially independent from VRP level.',who:'Separate adapter',when:'Ph 4',where:'Same broker'},
-  ]},
-  {hdr:'DESK 3: EQUITY MOMENTUM — PH 5',hcls:'plan',dcls:'planned',pill:'pill-56',plbl:'PH 5-6',sub:'Russell 1000 · Trend following + Pairs',
-   strats:[
-    {cls:'b-plan',t:'Trend Following',s:'Risk-managed · r=16',what:'Barroso & Santa-Clara risk-managed momentum (SR ~0.97).',why:'Low correlation with swing. Built-in crash protection.',who:'Separate adapter',when:'Ph 5',where:'Russell 1000'},
-    {cls:'b-plan',t:'Pairs/Stat Arb',s:'Market-neutral · r=32',what:'ML pair selection (Sharpe 0.81-2.69). Requires short selling.',why:'Profitability increases in poor markets.',who:'Separate adapter + margin',when:'Ph 5',where:'Full-capability broker'},
-    {cls:'b-future',t:'Future',s:'Intraday · Event · Macro',what:'Phase 6+. Scoped not scheduled.',why:'Each desk gated by previous.',who:'Separate models',when:'Ph 6+',where:'Dedicated GPU'},
-  ]},
-];
+mkLabel('Every 30 minutes during market hours, this fires:',C);
+mk({c:'b-teal',t:'102 stocks scanned across 7 data sources',s:'Price + fundamentals + insiders + news + macro + filings + options',W:'Complete multi-source scan of S&P 100 universe every 30 minutes.',Y:'Comprehensive signal beats any single data source.',H:'<code>src/services/scan_service.py</code> → feature engine → enrichment',N:'13 scans per day, 9:30AM-4PM ET',R:'In-memory features, persisted for packets'},C,'flow-box');
 
-// Render
-['data','pipe','risk','train','infra','phases'].forEach(k=>{
-  const el=document.getElementById('r-'+({data:'data',pipe:'pipe',risk:'risk',train:'train',infra:'infra',phases:'phases'}[k]));
-  if(el)D[k].forEach(item=>mkBox(item,el));
-});
+mkArrow(C);
+mkLabel('102 → ~8 candidates',C);
 
-// Desks
-const dEl=document.getElementById('r-desks');
-DESKS.forEach(desk=>{
-  const d=document.createElement('div');d.className=`desk ${desk.dcls}`;
-  d.innerHTML=`<div class="desk-hdr ${desk.hcls}">${desk.hdr}</div><div class="desk-sub">${desk.sub}</div><div class="desk-strats" id="ds-${desk.hdr.slice(0,6)}"></div><div style="text-align:right"><span class="pill ${desk.pill}">${desk.plbl}</span></div>`;
-  dEl.appendChild(d);
-  const sc=d.querySelector('.desk-strats');
-  desk.strats.forEach(s=>mkBox(s,sc));
-});
+mk({c:'b-teal',t:'Feature engine scores each stock 0-100',s:'Regime-adaptive thresholds: only the best qualify',W:'50+ features computed. 7 regime-specific thresholds from 40 (bull) to 90 (crisis).',Y:'Auto-tightens in volatile markets, loosens in calm. Prevents over-trading.',H:'<code>src/features/engine.py</code> → <code>src/ranking/ranker.py</code>',N:'Every scan cycle',R:'Rankings → top candidates → LLM'},C,'flow-box');
+
+mkArrow(C);
+mkLabel('each candidate gets full analysis',C);
+
+mk({c:'b-indigo',t:'LLM writes institutional-quality thesis',s:'Qwen3 8B synthesizes ALL data → why now + analysis + conviction 1-10',W:'The model IS the product. Generates trade commentary from enriched features.',Y:'Conviction score drives position sizing. Commentary quality is the edge.',H:'<code>src/llm/packet_writer.py</code> → Ollama halcyonlatest',N:'Every packet-worthy ticker. 180s timeout.',R:'<code>recommendations</code> table'},C,'flow-box');
+
+mkArrow(C);
+mkLabel('every trade must pass 8 checks',C);
+
+mk({c:'b-rose',t:'Risk governor: 8 checks must ALL pass',s:'Position size · Sector cap · Drawdown · VIX · Correlation · Kill switch',W:'Emergency halt, daily loss -3%, position ≤5%, max positions, sector 22%, correlation, VIX halt, duplicate.',Y:'Last defense before capital deployed. ⚠ AUDIT: bypass bugs being fixed.',H:'<code>src/risk/governor.py</code>',N:'Every trade attempt',R:'Rejections logged'},C,'flow-box');
+
+mkArrow(C);
+mkLabel('approved → server-side bracket order',C);
+
+mk({c:'b-emerald',t:'Bracket order on Alpaca: entry + stop + target',s:'Server-side protection — survives crashes, disconnects, power outages',W:'Alpaca bracket orders include stop-loss and take-profit, managed server-side.',Y:'Trades are ALWAYS protected even if the system goes down.',H:'<code>src/shadow_trading/executor.py</code>',N:'Immediately after approval',R:'Paper $100K + Live $100'},C,'flow-box');
+
+mkArrow(C);
+mkLabel('trade runs 2-15 days',C);
+
+// Outcomes row
+const oRow=document.createElement('div');oRow.className='outcomes';
+[{c:'b-emerald',t:'Target hit',s:'WIN'},{c:'b-slate',t:'Stop hit',s:'LOSS'},{c:'b-slate',t:'Timeout',s:'CLOSE'}].forEach(i=>{mk(i,oRow)});
+C.appendChild(oRow);
+
+mkArrow(C);
+
+mk({c:'b-emerald',t:'Trade outcome recorded: P&L, MFE, MAE, duration',s:'Every outcome — win, loss, or timeout — is irreplaceable training signal',W:'P&L dollars/percent, max favorable excursion, max adverse excursion, exit reason, duration.',Y:'Real outcomes are the highest-quality data. The flywheel fuel.',H:'<code>src/shadow_trading/executor.py</code>',N:'Checked every scan cycle',R:'<code>shadow_trades</code> table'},C,'flow-box');
+
+const fDiv=document.createElement('div');fDiv.className='flywheel-arrow';fDiv.textContent='▼';C.appendChild(fDiv);
+const fLabel=document.createElement('div');fLabel.className='flywheel-label';fLabel.textContent='FEEDS THE TRAINING FLYWHEEL →';C.appendChild(fLabel);
+
+// Desks section
+mkLabel('─── TRADING DESKS ───',C,'flow-title');
+const desksDiv=document.createElement('div');desksDiv.style.cssText='display:flex;gap:4px;width:100%;max-width:380px';
+
+// Desk 1
+const d1=document.createElement('div');d1.className='desk-card';
+d1.innerHTML='<div class="desk-hdr active">Equity Swing — LIVE</div>';
+const s1=document.createElement('div');s1.className='strat-row';
+mk({c:'b-teal',t:'Pullback',s:'LIVE',W:'Core strategy: pullback-in-uptrend on S&P 100.',Y:'Most persistent equity anomaly.',H:'halcyonlatest LoRA r=16',N:'Phase 1 (now)',R:'Alpaca paper+live'},s1);
+mk({c:'b-plan',t:'Mean Rev?',s:'Ph2',W:'Short-term mean reversion. ρ≈−0.15 with pullback.',Y:'Regime insurance. Works when pullback fails.',H:'Separate LoRA adapter',N:'Aug 2026',R:'Separate paper account'},s1);
+d1.appendChild(s1);
+d1.innerHTML+='<div style="text-align:right"><span class="pill pill-1">PHASE 1</span></div>';
+desksDiv.appendChild(d1);
+
+// Desk 2
+const d2=document.createElement('div');d2.className='desk-card planned';
+d2.innerHTML='<div class="desk-hdr plan">Options Vol — Ph3-4</div>';
+const s2=document.createElement('div');s2.className='strat-row';
+mk({c:'b-plan',t:'VRP',s:'70%',W:'Systematic Volatility Risk Premium harvesting.',Y:'Most robust risk premium.',H:'Separate LoRA',N:'Ph 3-4',R:'Options broker'},s2);
+mk({c:'b-plan',t:'Term Str',s:'30%',W:'Vol term structure / calendar spreads.',Y:'Independent from VRP level.',H:'Separate LoRA',N:'Ph 4',R:'Same broker'},s2);
+d2.appendChild(s2);
+d2.innerHTML+='<div style="text-align:right"><span class="pill pill-34">PH 3-4</span></div>';
+desksDiv.appendChild(d2);
+
+// Desk 3
+const d3=document.createElement('div');d3.className='desk-card planned';
+d3.innerHTML='<div class="desk-hdr plan">Momentum — Ph5</div>';
+const s3=document.createElement('div');s3.className='strat-row';
+mk({c:'b-plan',t:'Trend',s:'',W:'Barroso & Santa-Clara risk-managed momentum.',Y:'Low correlation with swing desk.',H:'Separate LoRA',N:'Ph 5',R:'Russell 1000'},s3);
+mk({c:'b-plan',t:'Pairs',s:'',W:'ML-based pair selection. Market-neutral.',Y:'Profits in poor markets.',H:'Separate LoRA + shorts',N:'Ph 5',R:'Full broker'},s3);
+d3.appendChild(s3);
+d3.innerHTML+='<div style="text-align:right"><span class="pill pill-56">PH 5-6</span></div>';
+desksDiv.appendChild(d3);
+
+C.appendChild(desksDiv);
+
+// ═══════════════════════════════════════════
+// RIGHT COLUMN: Training flywheel + Intelligence
+// ═══════════════════════════════════════════
+const R=document.getElementById('right-col');
+[
+  {c:'b-indigo side-box',t:'Claude Sonnet API',s:'Council · Scoring · Training gen',s2:'~$20-30/mo',W:'AI Council, quality scoring (LLM-as-judge), self-blinded generation.',Y:'Independent evaluation layer. Prevents model-analyzing-itself collapse.',H:'<code>src/training/claude_client.py</code>',N:'Council 8:30AM. Scoring overnight.',R:'<code>api_costs</code>, <code>council_sessions</code>'},
+  {c:'b-indigo side-box',t:'ChatGPT (multi-teacher)',s:'Manual blinded generation',W:'Second teacher for training data diversity.',Y:'Different biases = more robust. ChatGPT generates, Claude evaluates.',H:'Manual workflow + import scripts',N:'Ryan generates batches of 20-50',R:'<code>training_examples</code> table'},
+  {c:'b-amber side-box',t:'Self-Blinded Generation',s:'2-stage · No outcome leak · Architectural',W:'Model sees ONLY setup data, never outcome. Multi-teacher diversity.',Y:'Instruction-based blinding fails. This is architectural — model CAN\'T leak.',H:'<code>src/training/data_collector.py</code>',N:'Daily from closed trades',R:'<code>training_examples</code>'},
+  {c:'b-amber side-box',t:'Quality Scoring (6 dimensions)',s:'Thesis · Evidence · Risk · Calibration · Structure · Temporal',W:'LLM-as-judge scores 0-5 on 6 dimensions. Bottom 15% pruned.',Y:'LIMA: 1,000 curated = GPT-4. Quality crushes quantity.',H:'<code>src/training/quality_filter.py</code>',N:'Within 24h of creation',R:'<code>quality_score</code> column'},
+  {c:'b-rose side-box',t:'Leakage Detector',s:'TF-IDF classifier · Must be ≤55%',W:'Trains classifier on output text with outcome labels.',Y:'Catches subtle leakage through sentence structure, framing, length.',H:'<code>src/training/leakage_detector.py</code>',N:'Before every retrain',R:'Results logged + Telegram alert'},
+  {c:'b-amber side-box',t:'3-Stage Curriculum',s:'Structure → Evidence → Decision',W:'Progressive difficulty validated by Trading-R1 (Sharpe 2.72).',Y:'Models learn format first, then depth, then judgment.',H:'<code>src/training/curriculum.py</code>',N:'Classified on creation',R:'<code>curriculum_stage</code> column'},
+  {c:'b-purple side-box',t:'QDoRA SFT (Saturday retrain)',s:'PEFT + TRL 0.24 · Merge-and-reset LoRA',W:'QLoRA + DoRA. Rank 16, all linear layers. Weekly retrain.',Y:'DoRA beats full fine-tuning. Weekly = 90% cost savings.',H:'<code>src/training/trainer.py</code>',N:'Saturday overnight',R:'Checkpoints → GGUF'},
+  {c:'b-plan side-box',t:'REINFORCE++ (at 100+ trades)',s:'Replaces GRPO · Global normalization',W:'RL stage with composite reward. GRPO overfits on small prompt sets.',Y:'Without RL: Sharpe -0.77. With RL: dramatic improvement.',H:'TRL or alternative library',N:'~June 2026',R:'RL adapter → champion-challenger'},
+  {c:'b-amber side-box',t:'Champion-Challenger',s:'Holdout eval · Auto-rollback',W:'New model must beat old on 15% holdout. Otherwise auto-rollback.',Y:'Prevents regression. No bad models reach production.',H:'<code>src/training/canary.py</code>, <code>ab_evaluation.py</code>',N:'After every retrain',R:'<code>model_versions</code> table'},
+  {c:'b-indigo side-box',t:'GGUF → Ollama deploy',s:'llama.cpp · Q8_0 → halcyonlatest',s2:'↺ FLYWHEEL: better model → better next trade',W:'Merge adapter → GGUF → Q8_0 → register Ollama → verify.',Y:'The loop closes. New model deployed. Next scan is smarter.',H:'<code>src/training/trainer.py</code> export',N:'After challenger passes',R:'Ollama model directory'},
+  {c:'b-indigo side-box',t:'AI Council (5 agents)',s:'Vote-first · Sizing · Tilts · Risk posture',W:'Tactical, Strategic, Red Team, Innovation, Macro.',Y:'5 independent analytical lenses. Earns authority via accuracy.',H:'<code>src/council/</code>',N:'Daily 8:30AM ($0.50)',R:'<code>council_sessions</code>'},
+  {c:'b-plan side-box',t:'System Validator (50+ checks)',s:'DB · Trading · Training · API · LLM',W:'Automated validation across 8 categories.',Y:'141 files = too complex for manual. Catches drift before it hurts.',H:'<code>src/evaluation/system_validator.py</code>',N:'Daily 4:30PM + on-demand',R:'Dashboard + Telegram on failure'},
+].forEach(i=>mk(i,R,'side-box'));
+
+// PHASES
+const P=document.getElementById('phases');
+[
+  {c:'b-teal',t:'Ph1: Bootcamp',s:'$100K paper · 1 strat · 50 trades',W:'Prove the system works.',Y:'Performance-gated.',H:'All autonomous.',N:'Current (~6 weeks to gate)',R:'Alpaca'},
+  {c:'b-plan',t:'Ph2: Micro Live',s:'$100→$1K · 2 strat · LLC',W:'Scale live. Strategy #2.',Y:'First real capital.',H:'Per-strategy LoRA.',N:'Jul-Sep 2026',R:'~325 stocks'},
+  {c:'b-plan',t:'Ph3: Growth',s:'$1K→$5K · 4 strat · Options',W:'Options desk. RTX 3090.',Y:'4 uncorr ≈ 2× Sharpe.',H:'2 desks, 4 adapters.',N:'Oct 2026-Mar 2027',R:'3090'},
+  {c:'b-plan',t:'Ph4: Full Auto',s:'$5K→$25K · 6 strat · Track record',W:'Investor-ready.',Y:'Unsupervised operation.',H:'Ryan = monitor.',N:'2027',R:'IB?'},
+  {c:'b-plan',t:'Ph5: Scale',s:'$25K→$100K · 8 strat · Family LP',W:'3 desks. Russell 1000.',Y:'SR 1.2-1.5.',H:'Dual 3090.',N:'2028',R:'Dedicated'},
+  {c:'b-future',t:'Ph6: Fund',s:'$100K+ · SEC reg',W:'Fund formation.',Y:'Institutional-grade.',H:'Employee?',N:'2029-30',R:'Full compliance'},
+].forEach(i=>mk(i,P));
 </script>
 </body>
 </html>
