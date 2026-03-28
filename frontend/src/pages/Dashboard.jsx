@@ -79,16 +79,19 @@ export default function Dashboard() {
 
   // D2: Fix shadow equity — use account endpoint which correctly computes starting_capital + closed_pnl
   const startingCapital = configData?.risk?.starting_capital || 100000
-  const equity = accountData?.equity || (startingCapital + (accountData?.closed_pnl || 0))
+  const rawEquity = accountData?.equity
+  const equity = (rawEquity && rawEquity > 0) ? rawEquity : (startingCapital + (accountData?.closed_pnl || 0))
   const equityDelta = equity - startingCapital
 
   // Build cumulative P&L chart data
   const chartData = (closedData?.trades || [])
     .filter(t => t.pnl_dollars != null)
     .reverse()
-    .reduce((acc, t) => {
+    .reduce((acc, t, i) => {
       const prev = acc.length > 0 ? acc[acc.length - 1].cumPnl : 0
-      acc.push({ date: (t.created_at || '').slice(5, 10), cumPnl: prev + (t.pnl_dollars || 0) })
+      const exitDate = t.actual_exit_time || t.updated_at || t.created_at || ''
+      const dateLabel = exitDate.slice(5, 10) || `T${i + 1}`
+      acc.push({ date: dateLabel, cumPnl: Math.round((prev + (t.pnl_dollars || 0)) * 100) / 100, trade: t.ticker })
       return acc
     }, [])
 

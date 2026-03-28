@@ -33,8 +33,7 @@ SYNC_TABLES: dict[str, dict] = {
         "pk": "recommendation_id",
     },
     "model_versions": {
-        "mode": "incremental",
-        "time_col": "created_at",
+        "mode": "full",
         "pk": "version_id",
     },
     "metric_snapshots": {

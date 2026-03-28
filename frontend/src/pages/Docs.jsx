@@ -57,6 +57,31 @@ function renderMarkdown(md) {
     if (inList && line.trim() === '') { html.push('</ul>'); inList = false; continue }
     if (inList && !line.match(/^\s/)) { html.push('</ul>'); inList = false }
 
+    // Table support: lines starting with |
+    if (line.trim().startsWith('|') && line.trim().endsWith('|')) {
+      const cells = line.split('|').slice(1, -1).map(c => c.trim())
+      // Skip separator rows (|---|---|)
+      if (cells.every(c => c.match(/^[-:]+$/))) continue
+      // Detect if this is a header row (first table row before separator)
+      const nextLine = i + 1 < lines.length ? lines[i + 1] : ''
+      const isHeader = nextLine.trim().startsWith('|') && nextLine.split('|').slice(1, -1).every(c => c.trim().match(/^[-:]+$/))
+      const tag = isHeader ? 'th' : 'td'
+      const style = isHeader
+        ? 'padding:0.5rem 0.75rem;text-align:left;font-weight:500;color:var(--slate-200);border-bottom:2px solid var(--slate-500)'
+        : 'padding:0.5rem 0.75rem;color:var(--slate-300);border-bottom:1px solid var(--slate-700)'
+      const rowHtml = cells.map(c => `<${tag} style="${style}">${inline(c)}</${tag}>`).join('')
+      // Wrap in scrollable div for mobile
+      if (isHeader || (i === 0 || !lines[i - 1]?.trim().startsWith('|'))) {
+        html.push('<div style="overflow-x:auto;margin:0.75rem 0"><table style="width:100%;border-collapse:collapse;font-size:0.8125rem">')
+      }
+      html.push(`<tr>${rowHtml}</tr>`)
+      const nextNonSep = i + (isHeader ? 2 : 1)
+      if (nextNonSep >= lines.length || !lines[nextNonSep]?.trim().startsWith('|')) {
+        html.push('</table></div>')
+      }
+      continue
+    }
+
     if (line.match(/^---+$/)) {
       html.push(`<hr style="border-color:var(--slate-600);margin:1.5rem 0" />`)
       continue
@@ -130,11 +155,14 @@ export default function Docs() {
   }
 
   return (
-    <div className="flex gap-6 max-w-5xl mx-auto">
-      <nav className="w-60 shrink-0">
-        <h2 className="text-sm font-medium uppercase tracking-wide mb-3" style={{ color: 'var(--slate-400)' }}>
-          Documentation {docList ? `(${docList.length})` : ''}
-        </h2>
+    <div className="max-w-5xl mx-auto">
+      {/* Mobile: toggle between doc list and content */}
+      <div className="flex flex-col md:flex-row gap-4 md:gap-6">
+        {/* Sidebar — full width on mobile, fixed 240px on desktop */}
+        <nav className={`w-full md:w-60 md:shrink-0 ${activeDoc && docList?.length > 0 ? 'hidden md:block' : ''}`}>
+          <h2 className="text-sm font-medium uppercase tracking-wide mb-3" style={{ color: 'var(--slate-400)' }}>
+            Documentation {docList ? `(${docList.length})` : ''}
+          </h2>
 
         {/* Search bar */}
         <div className="relative mb-4">
@@ -193,18 +221,29 @@ export default function Docs() {
       </nav>
 
       <div className="flex-1 min-w-0">
+        {activeDoc && (
+          <button
+            onClick={() => setActiveDoc(null)}
+            className="md:hidden mb-3 text-sm px-3 py-1.5 rounded-lg"
+            style={{ background: 'var(--slate-700)', color: 'var(--teal-400)', border: '1px solid var(--slate-600)' }}
+          >
+            ← Back to docs
+          </button>
+        )}
         {docLoading ? (
           <LoadingSpinner />
         ) : doc ? (
-          <div className="rounded-lg p-6" style={{ background: 'var(--slate-700)', border: '1px solid var(--slate-600)' }}>
+          <div className="rounded-lg p-4 md:p-6" style={{ background: 'var(--slate-700)', border: '1px solid var(--slate-600)' }}>
             <div
               dangerouslySetInnerHTML={{ __html: renderMarkdown(doc.content) }}
+              style={{ overflowWrap: 'break-word', wordBreak: 'break-word' }}
             />
           </div>
         ) : (
           <div className="text-center py-12" style={{ color: 'var(--slate-400)' }}>Select a document</div>
         )}
       </div>
+    </div>
     </div>
   )
 }

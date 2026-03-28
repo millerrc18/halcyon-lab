@@ -128,9 +128,9 @@ export default function ActivityFeed() {
             </button>
           )}
           <div className="flex items-center gap-1.5">
-            <div className="w-2 h-2 rounded-full" style={{ background: connected ? 'var(--success)' : IS_CLOUD ? 'var(--info)' : 'var(--danger)' }} />
+            <div className="w-2 h-2 rounded-full" style={{ background: connected ? 'var(--success)' : (IS_CLOUD || events.length > 0) ? 'var(--info)' : 'var(--slate-500)' }} />
             <span className="text-xs" style={{ color: 'var(--slate-400)' }}>
-              {connected ? 'Live' : IS_CLOUD ? 'Polling' : 'Disconnected'}
+              {connected ? 'Live' : IS_CLOUD ? 'Polling' : events.length > 0 ? 'Polling' : 'Idle'}
             </span>
           </div>
         </div>
