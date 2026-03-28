@@ -34,8 +34,8 @@ def _clear_running():
 def _run_scan():
     try:
         broadcast_sync("action_started", {"action": "scan"})
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("[ACTIONS] broadcast scan action_started failed: %s", e)
     try:
         from src.config import load_config
         from src.services.scan_service import run_scan
@@ -46,14 +46,14 @@ def _run_scan():
                 "tickers_scanned": result.get("tickers_scanned", 0),
                 "packets": len(result.get("packet_worthy", [])),
             })
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("[ACTIONS] broadcast scan_complete failed: %s", e)
     except Exception as e:
         logger.error("Action scan failed: %s", e)
         try:
             broadcast_sync("action_error", {"action": "scan", "error": str(e)})
-        except Exception:
-            pass
+        except Exception as e2:
+            logger.warning("[ACTIONS] broadcast scan action_error failed: %s", e2)
     finally:
         _clear_running()
 
@@ -61,22 +61,22 @@ def _run_scan():
 def _run_cto_report():
     try:
         broadcast_sync("action_started", {"action": "cto-report"})
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("[ACTIONS] broadcast cto-report action_started failed: %s", e)
     try:
         from src.evaluation.cto_report import generate_cto_report
         report = generate_cto_report(days=7)
         try:
             broadcast_sync("action_complete", {"action": "cto-report",
                                                "trades_closed": report.get("trade_summary", {}).get("trades_closed", 0)})
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("[ACTIONS] broadcast cto-report action_complete failed: %s", e)
     except Exception as e:
         logger.error("Action cto-report failed: %s", e)
         try:
             broadcast_sync("action_error", {"action": "cto-report", "error": str(e)})
-        except Exception:
-            pass
+        except Exception as e2:
+            logger.warning("[ACTIONS] broadcast cto-report action_error failed: %s", e2)
     finally:
         _clear_running()
 
@@ -84,21 +84,21 @@ def _run_cto_report():
 def _run_collect_training():
     try:
         broadcast_sync("action_started", {"action": "collect-training"})
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("[ACTIONS] broadcast collect-training action_started failed: %s", e)
     try:
         from src.training.data_collector import collect_training_examples_from_closed_trades
         count = collect_training_examples_from_closed_trades()
         try:
             broadcast_sync("training_collection", {"examples_collected": count})
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("[ACTIONS] broadcast training_collection failed: %s", e)
     except Exception as e:
         logger.error("Action collect-training failed: %s", e)
         try:
             broadcast_sync("action_error", {"action": "collect-training", "error": str(e)})
-        except Exception:
-            pass
+        except Exception as e2:
+            logger.warning("[ACTIONS] broadcast collect-training action_error failed: %s", e2)
     finally:
         _clear_running()
 
@@ -106,8 +106,8 @@ def _run_collect_training():
 def _run_train_pipeline():
     try:
         broadcast_sync("training_started", {"action": "train-pipeline"})
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("[ACTIONS] broadcast train-pipeline training_started failed: %s", e)
     try:
         from src.training.quality_filter import score_all_unscored
         from src.training.leakage_detector import check_outcome_leakage
@@ -127,14 +127,14 @@ def _run_train_pipeline():
                 })
             else:
                 broadcast_sync("action_error", {"action": "train-pipeline", "error": "Training returned no result"})
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("[ACTIONS] broadcast train-pipeline result failed: %s", e)
     except Exception as e:
         logger.error("Action train-pipeline failed: %s", e)
         try:
             broadcast_sync("action_error", {"action": "train-pipeline", "error": str(e)})
-        except Exception:
-            pass
+        except Exception as e2:
+            logger.warning("[ACTIONS] broadcast train-pipeline action_error failed: %s", e2)
     finally:
         _clear_running()
 
@@ -142,22 +142,22 @@ def _run_train_pipeline():
 def _run_score():
     try:
         broadcast_sync("action_started", {"action": "score"})
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("[ACTIONS] broadcast score action_started failed: %s", e)
     try:
         from src.training.quality_filter import score_all_unscored
         result = score_all_unscored()
         try:
             broadcast_sync("action_complete", {"action": "score",
                                                "scored": result.get("scored", 0)})
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("[ACTIONS] broadcast score action_complete failed: %s", e)
     except Exception as e:
         logger.error("Action score failed: %s", e)
         try:
             broadcast_sync("action_error", {"action": "score", "error": str(e)})
-        except Exception:
-            pass
+        except Exception as e2:
+            logger.warning("[ACTIONS] broadcast score action_error failed: %s", e2)
     finally:
         _clear_running()
 
@@ -165,8 +165,8 @@ def _run_score():
 def _run_collect_data():
     try:
         broadcast_sync("action_started", {"action": "collect-data"})
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("[ACTIONS] broadcast collect-data action_started failed: %s", e)
     try:
         from src.data_collection.options_collector import collect_options_chains
         from src.data_collection.options_metrics import compute_options_metrics
@@ -191,14 +191,14 @@ def _run_collect_data():
                 "contracts": results["options"].get("contracts_stored", 0),
                 "tickers": results["options"].get("tickers_collected", 0),
             })
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("[ACTIONS] broadcast collect-data action_complete failed: %s", e)
     except Exception as e:
         logger.error("Action collect-data failed: %s", e)
         try:
             broadcast_sync("action_error", {"action": "collect-data", "error": str(e)})
-        except Exception:
-            pass
+        except Exception as e2:
+            logger.warning("[ACTIONS] broadcast collect-data action_error failed: %s", e2)
     finally:
         _clear_running()
 

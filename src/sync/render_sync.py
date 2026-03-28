@@ -229,7 +229,7 @@ def _fetch_incremental_rows(
                     (since,),
                 )
             else:
-                cursor = conn.execute(f"SELECT * FROM {table_name} ORDER BY {time_col}")
+                cursor = conn.execute(f"SELECT * FROM {table_name} ORDER BY {time_col} LIMIT 10000")
             rows = cursor.fetchall()
             if not rows:
                 return [], []
@@ -286,7 +286,11 @@ def _fetch_council_votes_for_new_sessions(
                     (since,),
                 )
             else:
-                cursor = conn.execute("SELECT * FROM council_votes")
+                cursor = conn.execute(
+                    "SELECT v.* FROM council_votes v "
+                    "JOIN council_sessions s ON v.session_id = s.session_id "
+                    "ORDER BY s.created_at DESC LIMIT 5000"
+                )
             rows = cursor.fetchall()
             if not rows:
                 return [], []

@@ -672,6 +672,43 @@ def cmd_train_pipeline(args):
 
     print("\n=== HALCYON TRAINING PIPELINE ===\n")
 
+    # Step 1: Score unscored examples
+    print("[1/5] Scoring unscored training examples...")
+    result = score_all_unscored()
+    scored = result.get("scored", 0)
+    print(f"  Scored {scored} examples")
+
+    # Step 2: Check for outcome leakage
+    print("\n[2/5] Running outcome leakage test...")
+    leakage = check_outcome_leakage()
+    if leakage.get("is_leaking"):
+        print(f"  LEAKING — balanced accuracy {leakage['balanced_accuracy']:.1%}")
+        if not getattr(args, "force", False):
+            print("  ABORT: Fix leakage before training. Use --force to override.")
+            return
+        print("  --force: Proceeding despite leakage warning")
+    else:
+        ba = leakage.get("balanced_accuracy")
+        status = leakage.get("status", "CLEAN")
+        print(f"  {status} — balanced accuracy {ba:.1%}" if ba else f"  {status}")
+
+    # Step 3: Classify examples into curriculum stages
+    print("\n[3/5] Classifying training examples...")
+    classify_result = classify_all_examples()
+    print(f"  Classified {classify_result.get('classified', 0)} examples")
+
+    # Step 4: Export training data (handled inside run_fine_tune)
+    print("\n[4/5] Exporting training data...")
+
+    # Step 5: Fine-tune
+    print("\n[5/5] Starting fine-tuning...")
+    ft_result = run_fine_tune()
+    if ft_result:
+        print(f"\n  Model registered: {ft_result.get('version_name', 'halcyon-latest')}")
+        print("  TRAINING PIPELINE COMPLETE")
+    else:
+        print("\n  Training failed. Check logs.")
+
 
 def cmd_evaluate_gate(args):
     """Run the 50-trade gate evaluation."""
@@ -709,43 +746,6 @@ def cmd_performance_report(args):
         print(text)
     except Exception as e:
         print(f"Error generating report: {e}")
-
-    # Step 1: Score unscored examples
-    print("[1/5] Scoring unscored training examples...")
-    result = score_all_unscored()
-    scored = result.get("scored", 0)
-    print(f"  Scored {scored} examples")
-
-    # Step 2: Check for outcome leakage
-    print("\n[2/5] Running outcome leakage test...")
-    leakage = check_outcome_leakage()
-    if leakage.get("is_leaking"):
-        print(f"  LEAKING — balanced accuracy {leakage['balanced_accuracy']:.1%}")
-        if not args.force:
-            print("  ABORT: Fix leakage before training. Use --force to override.")
-            return
-        print("  --force: Proceeding despite leakage warning")
-    else:
-        ba = leakage.get("balanced_accuracy")
-        status = leakage.get("status", "CLEAN")
-        print(f"  {status} — balanced accuracy {ba:.1%}" if ba else f"  {status}")
-
-    # Step 3: Classify examples into curriculum stages
-    print("\n[3/5] Classifying training examples...")
-    classify_result = classify_all_examples()
-    print(f"  Classified {classify_result.get('classified', 0)} examples")
-
-    # Step 4: Export training data (handled inside run_fine_tune)
-    print("\n[4/5] Exporting training data...")
-
-    # Step 5: Fine-tune
-    print("\n[5/5] Starting fine-tuning...")
-    ft_result = run_fine_tune()
-    if ft_result:
-        print(f"\n  Model registered: {ft_result.get('version_name', 'halcyon-latest')}")
-        print("  TRAINING PIPELINE COMPLETE")
-    else:
-        print("\n  Training failed. Check logs.")
 
 
 def cmd_collect_data(args):

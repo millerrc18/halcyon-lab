@@ -58,9 +58,10 @@ def open_shadow_trade(
             logger.warning("[VALIDATE] Trade rejected for %s: %s", packet.ticker, reason)
             return None
     except ImportError:
-        pass
+        pass  # Validator module not installed, continue without
     except Exception as e:
-        logger.debug("[VALIDATE] Validation check failed: %s — continuing", e)
+        logger.error("[VALIDATE] Validation check failed for %s: %s — REJECTING trade", packet.ticker, e)
+        return None  # Trade rejected — never proceed on validation failure
 
     # Risk governor check
     try:
@@ -81,7 +82,8 @@ def open_shadow_trade(
     except ImportError:
         pass  # Risk module not available, continue without
     except Exception as e:
-        logger.warning("[RISK] Governor check failed: %s — continuing", e)
+        logger.error("[RISK] Governor check failed for %s: %s — REJECTING trade", packet.ticker, e)
+        return None  # Trade rejected — never proceed on risk check failure
 
     # Position limit check (bootcamp overrides)
     bootcamp_cfg = config.get("bootcamp", {})
@@ -116,7 +118,6 @@ def open_shadow_trade(
     try:
         from src.risk.governor import drawdown_adjusted_risk
         starting_capital = config.get("risk", {}).get("starting_capital", 100000)
-        closed_trades = get_open_shadow_trades(db_path)  # reuse existing helper
         # Compute peak equity and current drawdown from closed trades
         with sqlite3.connect(db_path) as _conn:
             _row = _conn.execute(
@@ -140,14 +141,14 @@ def open_shadow_trade(
             if adjusted <= 0:
                 logger.warning("[RISK] Drawdown %.1f%% — trading halted (Thorp protocol)", current_dd_pct)
                 try:
-                    from src.notifications.telegram import send_telegram_message
-                    send_telegram_message(
+                    from src.notifications.telegram import send_telegram
+                    send_telegram(
                         f"🔴 DRAWDOWN HALT: {current_dd_pct:.1f}%\n"
                         f"Trading halted per Thorp protocol (≥20% DD).\n"
                         f"Recovery needed: +{current_dd_pct / (100 - current_dd_pct) * 100:.1f}%"
                     )
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.warning("[RISK] Drawdown halt Telegram notification failed: %s", e)
                 return None
             # Scale allocation proportionally
             scale_factor = adjusted / base_risk if base_risk > 0 else 1.0
@@ -166,21 +167,21 @@ def open_shadow_trade(
                             (alert_key, f"%{int(threshold)}%")
                         ).fetchone()
                         if not _alert_row:
-                            from src.notifications.telegram import send_telegram_message
+                            from src.notifications.telegram import send_telegram
                             from src.utils.activity_logger import log_activity
                             recovery_pct = current_dd_pct / (100 - current_dd_pct) * 100
-                            send_telegram_message(
+                            send_telegram(
                                 f"⚠️ DRAWDOWN ALERT: {current_dd_pct:.1f}%\n"
                                 f"Position sizing at {scale_factor * 100:.0f}% of normal.\n"
                                 f"Risk per trade: {adjusted:.3f} (base: {base_risk:.3f})\n"
                                 f"Recovery needed: +{recovery_pct:.1f}%"
                             )
                             log_activity(alert_key, f"Drawdown {current_dd_pct:.1f}% crossed {int(threshold)}% threshold")
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.warning("[RISK] Drawdown alert notification failed: %s", e)
                     break  # Only alert at highest crossed threshold
     except Exception as e:
-        logger.debug("[RISK] Drawdown check failed: %s — continuing with full size", e)
+        logger.warning("[RISK] Drawdown check failed: %s — continuing with full size", e)
 
     planned_shares = max(1, int(packet.position_sizing.allocation_dollars / entry_price)) if entry_price > 0 else 1
     planned_allocation = packet.position_sizing.allocation_dollars
@@ -372,14 +373,25 @@ def check_and_manage_open_trades(
             try:
                 from src.shadow_trading.alpaca_adapter import get_order_status
                 order_status = get_order_status(trade["alpaca_order_id"])
-                if order_status.get("status") in ("filled", "partially_filled"):
-                    # Bracket order exited — determine which leg fired
+                parent_status = order_status.get("status", "")
+                # Check parent order status
+                if parent_status in ("filled", "partially_filled"):
                     exit_price = order_status.get("filled_avg_price")
                     if exit_price:
                         current_price = exit_price
                         bracket_exit = True
-            except Exception:
-                pass  # Fall through to polling logic
+                # Also check child/leg order statuses (stop-loss or take-profit may have fired)
+                legs = order_status.get("legs", [])
+                for leg in legs:
+                    leg_status = leg.get("status", "")
+                    if leg_status in ("filled", "partially_filled"):
+                        leg_price = leg.get("filled_avg_price")
+                        if leg_price:
+                            current_price = leg_price
+                            bracket_exit = True
+                            break
+            except Exception as e:
+                logger.debug("[SHADOW] Bracket order status check failed for %s: %s — using polling", ticker, e)
 
         # Check exit conditions
         exit_reason = None
@@ -505,10 +517,10 @@ def check_and_manage_open_trades(
                         from src.notifications.telegram import notify_trade_closed, is_telegram_enabled
                         if is_telegram_enabled():
                             notify_trade_closed(ticker, pnl_dollars, pnl_pct, exit_reason, days_open, source="live")
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.warning("[LIVE] Telegram notify_trade_closed failed for %s: %s", ticker, e)
                 except Exception as e:
-                    logger.warning("[LIVE] Failed to close live position for %s: %s", ticker, e)
+                    logger.error("[LIVE] Failed to close live position for %s: %s", ticker, e)
 
             # Telegram notification (paper trades)
             if trade.get("source") != "live":
@@ -516,8 +528,8 @@ def check_and_manage_open_trades(
                     from src.notifications.telegram import notify_trade_closed, is_telegram_enabled
                     if is_telegram_enabled():
                         notify_trade_closed(ticker, pnl_dollars, pnl_pct, exit_reason, days_open)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.warning("[SHADOW] Telegram notify_trade_closed failed for %s: %s", ticker, e)
 
             # 1F. Check for trade close milestones
             _check_close_milestones(db_path)

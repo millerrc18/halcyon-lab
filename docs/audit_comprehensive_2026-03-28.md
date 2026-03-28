@@ -1,12 +1,15 @@
 # Comprehensive Repo Audit — March 28, 2026
 
+> **Status: Reliability Sprint completed 2026-03-28. All critical and high-priority issues FIXED.**
+
 ## Summary
-- Files audited: 141 Python (.py) + 17 React (.jsx) + 44 documentation (.md)
+- Files audited: 142 Python (.py) + 17 React (.jsx) + 44 documentation (.md)
 - Issues found: 38 (3 critical, 8 high, 15 medium, 12 low)
-- Dead code: 6 orphaned modules, 12 uncalled Telegram functions, 2 unused config keys
-- Broken wiring: 11 frontend→backend route mismatches (local app only), 1 critical CLI collision
+- **FIXED in reliability sprint:** All 3 critical, all 8 high, 10 medium issues
+- Dead code: 6 orphaned modules (4 wired, 1 deleted, 1 consolidated), 12 uncalled Telegram functions (all wired)
+- Broken wiring: 11 frontend→backend route mismatches (DEFERRED — cloud_app covers these), 1 critical CLI collision (FIXED)
 - Test coverage gaps: ~30 src modules with no dedicated test file; 10 critical untested paths
-- Documentation drift: 7 discrepancies between docs and actual counts
+- Documentation drift: 7 discrepancies (all FIXED — AGENTS.md counts updated)
 
 ---
 

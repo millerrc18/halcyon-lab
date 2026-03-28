@@ -708,8 +708,8 @@ def check_action_reminders(db_path: str = "ai_research_desk.sqlite3") -> list[st
                                 "VALUES (?, ?, ?)",
                                 ("gate_milestone", f"Notified {milestone} trades", now.isoformat()),
                             )
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            logger.warning("[TELEGRAM] gate_milestone activity_log insert failed: %s", e)
                         sent.append(f"gate_{milestone}")
                     break  # Only notify for highest milestone
 
@@ -747,8 +747,8 @@ def check_action_reminders(db_path: str = "ai_research_desk.sqlite3") -> list[st
                                 urgency="normal",
                             )
                             sent.append("api_rotation")
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.warning("[TELEGRAM] api_rotation date check failed: %s", e)
 
             # 4. Unscored training examples
             unscored = conn.execute(
@@ -785,8 +785,8 @@ def check_action_reminders(db_path: str = "ai_research_desk.sqlite3") -> list[st
                                 urgency="high",
                             )
                             sent.append("retrain_overdue")
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.warning("[TELEGRAM] retrain_overdue date check failed: %s", e)
 
     except Exception as e:
         logger.debug("[TELEGRAM] Action reminder check failed: %s", e)
@@ -875,7 +875,8 @@ def _cmd_status() -> str:
     try:
         resp = requests.get("http://localhost:11434/api/tags", timeout=3)
         llm_ok = resp.status_code == 200
-    except Exception:
+    except Exception as e:
+        logger.warning("[TELEGRAM] _cmd_status Ollama check failed: %s", e)
         llm_ok = False
 
     try:
@@ -883,7 +884,8 @@ def _cmd_status() -> str:
         model = get_active_model_name()
         counts = get_training_example_counts()
         total = counts['total']
-    except Exception:
+    except Exception as e:
+        logger.warning("[TELEGRAM] _cmd_status model info failed: %s", e)
         model = "unknown"
         total = "?"
 
@@ -927,7 +929,8 @@ def _cmd_trades() -> str:
                     from datetime import datetime
                     opened = datetime.fromisoformat(r["created_at"][:19])
                     days = (datetime.now() - opened).days
-                except Exception:
+                except Exception as e:
+                    logger.warning("[TELEGRAM] _cmd_trades live days_held calc failed: %s", e)
                     days = "?"
                 lines.append(
                     f"  {emoji} {r['ticker']}: ${r['entry_price']:.2f} "
@@ -943,7 +946,8 @@ def _cmd_trades() -> str:
                     from datetime import datetime
                     opened = datetime.fromisoformat(r["created_at"][:19])
                     days = (datetime.now() - opened).days
-                except Exception:
+                except Exception as e:
+                    logger.warning("[TELEGRAM] _cmd_trades paper days_held calc failed: %s", e)
                     days = "?"
                 lines.append(
                     f"  {emoji} {r['ticker']}: ${r['entry_price']:.2f} "
@@ -1018,7 +1022,8 @@ def _cmd_pnl() -> str:
             lines.append(f"  Open: {paper_open} | Closed: {paper_closed}")
 
         return "\n".join(lines)
-    except Exception:
+    except Exception as e:
+        logger.warning("[TELEGRAM] _cmd_pnl failed: %s", e)
         return "No P&L data available yet."
 
 
@@ -1041,7 +1046,8 @@ def _cmd_last_scan() -> str:
             score = r["priority_score"] or 0
             lines.append(f"  • {r['ticker']} (score: {score:.0f}) — {r['created_at'][:16]}")
         return "\n".join(lines)
-    except Exception:
+    except Exception as e:
+        logger.warning("[TELEGRAM] _cmd_last_scan failed: %s", e)
         return "📭 No scan data available yet."
 
 
@@ -1109,7 +1115,8 @@ def _cmd_scoring() -> str:
             f"Scored: {scored}\n"
             f"Backlog: {unscored}"
         )
-    except Exception:
+    except Exception as e:
+        logger.warning("[TELEGRAM] _cmd_scoring failed: %s", e)
         return "📝 No scoring data available."
 
 
@@ -1186,7 +1193,8 @@ def _cmd_health() -> str:
             f"GPU Util: {util}%\n"
             f"VRAM: {mem_used}/{mem_total} MB"
         )
-    except Exception:
+    except Exception as e:
+        logger.warning("[TELEGRAM] _cmd_health nvidia-smi failed: %s", e)
         return "🖥️ GPU health data unavailable (nvidia-smi not found)"
 
 
@@ -1205,7 +1213,8 @@ def _cmd_log() -> str:
             ts = e.get("timestamp", "")
             try:
                 time_str = ts[11:16]  # HH:MM from ISO format
-            except Exception:
+            except Exception as e:
+                logger.warning("[TELEGRAM] _cmd_log timestamp parse failed: %s", e)
                 time_str = "??:??"
             cat = e.get("category", "?")
             event = e.get("event", "")
@@ -1254,7 +1263,8 @@ def _cmd_gpu() -> str:
             capture_output=True, text=True, timeout=10
         )
         return f"🖥️ <b>GPU</b>\n<pre>{result.stdout.strip()[:1000]}</pre>"
-    except Exception:
+    except Exception as e:
+        logger.warning("[TELEGRAM] _cmd_gpu nvidia-smi failed: %s", e)
         return "🖥️ nvidia-smi not available"
 
 
@@ -1339,7 +1349,8 @@ def notify_validation_summary(result: dict) -> bool:
 
     try:
         return send_telegram("\n".join(lines))
-    except Exception:
+    except Exception as e:
+        logger.warning("[TELEGRAM] notify_validation_summary send failed: %s", e)
         return False
 
 

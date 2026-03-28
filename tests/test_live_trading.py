@@ -142,10 +142,12 @@ class TestPaperSourceTagging:
         mock_price.return_value = 50.0
 
         # Mock Alpaca to fail so trade is recorded without Alpaca
-        with patch("src.shadow_trading.alpaca_adapter.place_bracket_order", side_effect=Exception("test")):
-            with patch("src.shadow_trading.alpaca_adapter.place_paper_entry", side_effect=Exception("test")):
-                from src.shadow_trading.executor import open_shadow_trade
-                trade_id = open_shadow_trade("rec-1", mock_packet, mock_features, tmp_db)
+        # Mock LLM validator to pass (since safety fix now rejects trades on validator error)
+        with patch("src.llm.validator.validate_llm_output", return_value=(True, "")):
+            with patch("src.shadow_trading.alpaca_adapter.place_bracket_order", side_effect=Exception("test")):
+                with patch("src.shadow_trading.alpaca_adapter.place_paper_entry", side_effect=Exception("test")):
+                    from src.shadow_trading.executor import open_shadow_trade
+                    trade_id = open_shadow_trade("rec-1", mock_packet, mock_features, tmp_db)
 
         assert trade_id is not None
 
@@ -566,13 +568,14 @@ class TestDualExecution:
             "filled_at": None, "created_at": None,
         }
 
-        # First: paper trade
-        with patch("src.shadow_trading.alpaca_adapter.place_bracket_order",
-                    side_effect=Exception("test")):
-            with patch("src.shadow_trading.alpaca_adapter.place_paper_entry",
+        # First: paper trade (mock validator since safety fix rejects on error)
+        with patch("src.llm.validator.validate_llm_output", return_value=(True, "")):
+            with patch("src.shadow_trading.alpaca_adapter.place_bracket_order",
                         side_effect=Exception("test")):
-                from src.shadow_trading.executor import open_shadow_trade
-                paper_id = open_shadow_trade("rec-1", mock_packet, mock_features, tmp_db)
+                with patch("src.shadow_trading.alpaca_adapter.place_paper_entry",
+                            side_effect=Exception("test")):
+                    from src.shadow_trading.executor import open_shadow_trade
+                    paper_id = open_shadow_trade("rec-1", mock_packet, mock_features, tmp_db)
 
         # Then: live trade (mock open_trades to include the paper trade)
         mock_open_trades.return_value = [

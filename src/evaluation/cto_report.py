@@ -157,7 +157,11 @@ def _compute_trade_summary(closed: list, open_trades: list, all_trades: list) ->
     avg_loser = sum(t.get("pnl_pct", 0) or 0 for t in losers) / len(losers) if losers else 0
 
     total_pnl = sum(t.get("pnl_dollars", 0) or 0 for t in closed)
-    expectancy = total_pnl / len(closed) if closed else 0
+    try:
+        from src.evaluation.metrics import expectancy as calc_expectancy
+        expectancy = calc_expectancy(t.get("pnl_dollars", 0) or 0 for t in closed)
+    except Exception:
+        expectancy = total_pnl / len(closed) if closed else 0
 
     max_win = max(closed, key=lambda t: t.get("pnl_pct", 0) or 0) if closed else None
     max_loss = min(closed, key=lambda t: t.get("pnl_pct", 0) or 0) if closed else None

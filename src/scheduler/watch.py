@@ -112,6 +112,7 @@ class WatchLoop:
 
         # Collector failure tracking: {collector_name: consecutive_failure_count}
         self._collector_failures: dict[str, int] = {}
+        self._scan_number = 0
 
     def _reset_daily_state(self):
         """Reset daily flags at midnight ET."""
@@ -159,6 +160,7 @@ class WatchLoop:
         self._digest_evening_done = False
         self._action_reminders_done = False
         self._daily_validation_done = False
+        self._scan_number = 0
 
     def _is_market_open(self, now: datetime) -> bool:
         """Check if market is currently open (weekday, between open and close)."""
@@ -313,7 +315,8 @@ class WatchLoop:
                 print(" Telegram: connected ✓")
             else:
                 print(" Telegram: not configured")
-        except Exception:
+        except Exception as e:
+            logger.warning("[WATCH] Telegram startup notification failed: %s", e)
             print(" Telegram: not configured")
 
     def _run_morning_watchlist(self):
@@ -374,8 +377,8 @@ class WatchLoop:
                 wl_count = len(candidates.get("watchlist", []))
                 notify_watchlist(pw_tickers[:5], len(pw_tickers),
                                  watchlist_count=wl_count)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("[WATCH] notify_watchlist failed: %s", e)
 
     def _run_scan(self):
         """Execute a market-hours scan cycle."""
@@ -393,8 +396,8 @@ class WatchLoop:
         print("[WATCH] Running market scan...")
         try:
             broadcast_sync("scan_started", {"time": datetime.now(ET).isoformat()})
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("[WATCH] broadcast scan_started failed: %s", e)
         universe = get_sp100_universe()
         ohlcv = fetch_ohlcv(universe)
         spy = fetch_spy_benchmark()
@@ -430,8 +433,8 @@ class WatchLoop:
             try:
                 broadcast_sync("scan_complete", {"tickers_scanned": len(universe),
                                                  "packets": 0})
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("[WATCH] broadcast scan_complete (empty) failed: %s", e)
             return
 
         print(f"[WATCH] Found {len(packet_worthy)} packet-worthy names.")
@@ -485,8 +488,8 @@ class WatchLoop:
             try:
                 broadcast_sync("trade_opened", {"ticker": ticker, "side": "BUY",
                                                 "score": candidate["score"]})
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("[WATCH] broadcast trade_opened failed: %s", e)
 
             # Telegram notification
             try:
@@ -498,8 +501,8 @@ class WatchLoop:
                         candidate["score"], ps.shares,
                         setup_type=feat.get("setup_type"),
                         setup_confidence=feat.get("setup_confidence"))
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("[WATCH] notify_trade_opened failed: %s", e)
 
             if self.email_mode == "full_stream":
                 subject = f"[TRADE DESK] Action Packet - {ticker}"
@@ -524,8 +527,66 @@ class WatchLoop:
         try:
             broadcast_sync("scan_complete", {"tickers_scanned": len(universe),
                                              "packets": len(packet_worthy)})
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("[WATCH] broadcast scan_complete failed: %s", e)
+
+        # ── Telegram: notify_scan_complete ──
+        try:
+            from src.notifications.telegram import notify_scan_complete, is_telegram_enabled
+            if is_telegram_enabled():
+                trades_closed = len(actions) if 'actions' in dir() else 0
+                notify_scan_complete(
+                    packets_count=len(packet_worthy),
+                    trades_opened=len(packet_worthy),
+                    trades_closed=trades_closed,
+                )
+        except Exception as e:
+            logger.warning("[WATCH] notify_scan_complete failed: %s", e)
+
+        # ── Telegram: notify_scan_result (every scan) ──
+        try:
+            from src.notifications.telegram import notify_scan_result, is_telegram_enabled
+            if is_telegram_enabled():
+                # Increment a scan counter for the day
+                if not hasattr(self, '_scan_number'):
+                    self._scan_number = 0
+                self._scan_number += 1
+                notify_scan_result(
+                    scan_number=self._scan_number,
+                    total_scanned=len(universe),
+                    packet_worthy=len(packet_worthy),
+                    watchlist=len(candidates.get("watchlist", [])),
+                )
+        except Exception as e:
+            logger.warning("[WATCH] notify_scan_result failed: %s", e)
+
+        # ── Telegram: notify_first_scan_summary (first scan of the day only) ──
+        if not self._first_scan_done:
+            self._first_scan_done = True
+            try:
+                from src.notifications.telegram import notify_first_scan_summary, is_telegram_enabled
+                if is_telegram_enabled():
+                    top_setups = [
+                        (c["ticker"], c["score"]) for c in packet_worthy[:3]
+                    ]
+                    setup_type_counts: dict[str, int] = {}
+                    for c in packet_worthy:
+                        st = c.get("features", {}).get("setup_type", "unknown")
+                        setup_type_counts[st] = setup_type_counts.get(st, 0) + 1
+                    notify_first_scan_summary(
+                        total_scanned=len(universe),
+                        packet_worthy=len(packet_worthy),
+                        watchlist=len(candidates.get("watchlist", [])),
+                        trades_opened_paper=len(packet_worthy),
+                        trades_opened_live=0,
+                        top_setups=top_setups,
+                        setup_type_counts=setup_type_counts,
+                        llm_success=len(packet_worthy),
+                        llm_total=len(packet_worthy),
+                        llm_fallback=0,
+                    )
+            except Exception as e:
+                logger.warning("[WATCH] notify_first_scan_summary failed: %s", e)
 
     def _run_eod_recap(self):
         """Execute the EOD recap pipeline."""
@@ -684,13 +745,13 @@ class WatchLoop:
                 for col, typ in slippage_cols:
                     try:
                         conn.execute(f"ALTER TABLE shadow_trades ADD COLUMN {col} {typ}")
-                    except Exception:
-                        pass  # Column already exists
+                    except Exception as e:
+                        logger.debug("[WATCH] ALTER TABLE shadow_trades ADD %s (likely exists): %s", col, e)
                 for col, typ in edgar_nlp_cols:
                     try:
                         conn.execute(f"ALTER TABLE edgar_filings ADD COLUMN {col} {typ}")
-                    except Exception:
-                        pass  # Column already exists
+                    except Exception as e:
+                        logger.debug("[WATCH] ALTER TABLE edgar_filings ADD %s (likely exists): %s", col, e)
             logger.info("[WATCH] All SQLite tables verified/created")
 
             # Populate research docs from markdown files
@@ -820,6 +881,34 @@ class WatchLoop:
                     if not self._eod_report_done:
                         self._safe_run("EOD Telegram report", self._send_eod_report)
                         self._eod_report_done = True
+                        # ── Telegram: notify_daily_summary (after eod report) ──
+                        try:
+                            from src.notifications.telegram import notify_daily_summary, is_telegram_enabled
+                            if is_telegram_enabled():
+                                import sqlite3
+                                with sqlite3.connect("ai_research_desk.sqlite3") as _conn:
+                                    _conn.row_factory = sqlite3.Row
+                                    _today = datetime.now(ET).strftime("%Y-%m-%d")
+                                    _open = _conn.execute(
+                                        "SELECT COUNT(*) FROM shadow_trades WHERE status='open'"
+                                    ).fetchone()[0]
+                                    _closed_today = _conn.execute(
+                                        "SELECT COUNT(*) FROM shadow_trades WHERE status='closed' "
+                                        "AND actual_exit_time LIKE ?", (f"{_today}%",)
+                                    ).fetchone()[0]
+                                    _pnl_row = _conn.execute(
+                                        "SELECT COALESCE(SUM(pnl_dollars),0) FROM shadow_trades "
+                                        "WHERE status='closed' AND actual_exit_time LIKE ?",
+                                        (f"{_today}%",)
+                                    ).fetchone()
+                                    _total_pnl = _pnl_row[0] if _pnl_row else 0.0
+                                notify_daily_summary(
+                                    total_pnl=_total_pnl,
+                                    open_trades=_open,
+                                    closed_today=_closed_today,
+                                )
+                        except Exception as e:
+                            logger.warning("[WATCH] notify_daily_summary failed: %s", e)
 
                 # 4. Daily audit (4:15 PM ET)
                 elif (hour == 16 and now.minute >= 15 and now.minute < 30
@@ -836,8 +925,8 @@ class WatchLoop:
                                     "SELECT COUNT(*) FROM training_examples WHERE quality_score IS NULL"
                                 ).fetchone()[0]
                             notify_scoring_summary(self._daily_scored, backlog)
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.warning("[WATCH] notify_scoring_summary failed: %s", e)
 
                 # 4b. Daily system validation (4:30 PM ET)
                 elif (hour == 16 and now.minute >= 30 and now.minute < 45
@@ -997,6 +1086,21 @@ class WatchLoop:
                         self._premarket_candidates_done = True
                         ran = True
 
+                        # ── Telegram: notify_premarket_complete (all premarket tasks done) ──
+                        if (self._premarket_features_done and self._premarket_training_done
+                                and self._premarket_news_done):
+                            try:
+                                from src.notifications.telegram import notify_premarket_complete, is_telegram_enabled
+                                if is_telegram_enabled():
+                                    notify_premarket_complete(
+                                        features_done=self._premarket_features_done,
+                                        training_gen=0,  # count not tracked at this level
+                                        news_scored=0,
+                                        candidates=0,
+                                    )
+                            except Exception as e:
+                                logger.warning("[WATCH] notify_premarket_complete failed: %s", e)
+
                     if not ran:
                         print(f"[WATCH] {time_str} ET -- overnight mode")
 
@@ -1040,8 +1144,8 @@ class WatchLoop:
                         for cmd in commands:
                             response = handle_command(cmd["command"], cmd["args"])
                             send_telegram(response)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.warning("[WATCH] Telegram command polling failed: %s", e)
 
                 # Email digest schedule (sends 4 daily digests in digest mode)
                 self._check_digest_schedule()
@@ -1104,8 +1208,8 @@ class WatchLoop:
                 try:
                     from src.notifications.telegram import send_telegram_message
                     send_telegram_message(f"⚠️ CUSUM ALARM\n{alarm_msg}\nDetails: {change.get('detail', '')}")
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.warning("[WATCH] CUSUM Telegram alert failed: %s", e)
         except Exception as e:
             logger.debug("[AUDIT] CUSUM check failed: %s", e)
 
@@ -1119,8 +1223,8 @@ class WatchLoop:
                 try:
                     from src.notifications.telegram import send_telegram_message
                     send_telegram_message(f"🔴 LEAKAGE ALERT\n{leak_msg}")
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.warning("[WATCH] Leakage Telegram alert failed: %s", e)
         except ImportError:
             pass
         except Exception as e:
@@ -1142,6 +1246,17 @@ class WatchLoop:
             result = run_fine_tune()
             if result:
                 print(f"[WATCH] Training complete: {result['version_name']}")
+                # ── Telegram: notify_model_event ──
+                try:
+                    from src.notifications.telegram import notify_model_event, is_telegram_enabled
+                    if is_telegram_enabled():
+                        notify_model_event(
+                            event="TRAINING COMPLETE",
+                            model_name=result.get("version_name", "unknown"),
+                            detail=f"Reason: {reason}",
+                        )
+                except Exception as e:
+                    logger.warning("[WATCH] notify_model_event failed: %s", e)
             else:
                 print("[WATCH] Training failed. Check logs.")
         else:
@@ -1159,6 +1274,30 @@ class WatchLoop:
         subject = "[TRADE DESK] Weekly Training Report"
         send_email(subject, report)
         print("[WATCH] Training report email sent.")
+
+        # ── Telegram: notify_retrain_report ──
+        try:
+            from src.notifications.telegram import notify_retrain_report, is_telegram_enabled
+            from src.training.versioning import get_active_model_name, get_training_example_counts
+            if is_telegram_enabled():
+                model_name = get_active_model_name()
+                counts = get_training_example_counts()
+                notify_retrain_report(
+                    model_name=model_name,
+                    training_examples=counts.get("total", 0),
+                    prev_examples=counts.get("total", 0),
+                    new_this_week=counts.get("total", 0),
+                    new_paper=0,
+                    new_live=0,
+                    canary_status="STABLE",
+                    perplexity=0.0,
+                    prev_perplexity=0.0,
+                    distinct2=0.0,
+                    prev_distinct2=0.0,
+                    champion_challenger="N/A",
+                )
+        except Exception as e:
+            logger.warning("[WATCH] notify_retrain_report failed: %s", e)
 
         # Weekly deep audit
         try:
@@ -1186,6 +1325,28 @@ class WatchLoop:
 
     # ── Overnight Schedule Methods ────────────────────────────────────
 
+    def _get_overnight_logger(self):
+        """Get OvernightPipeline instance for task logging to overnight_run_log."""
+        if not hasattr(self, '_overnight_pipeline'):
+            try:
+                from src.scheduler.overnight import OvernightPipeline
+                self._overnight_pipeline = OvernightPipeline()
+            except Exception as e:
+                logger.debug("[WATCH] OvernightPipeline init failed: %s", e)
+                self._overnight_pipeline = None
+        return self._overnight_pipeline
+
+    def _log_overnight_task(self, task_name: str, status: str,
+                            started_at: str, finished_at: str | None = None,
+                            result: str | None = None, error: str | None = None):
+        """Log overnight task result via OvernightPipeline's run log."""
+        try:
+            pipeline = self._get_overnight_logger()
+            if pipeline:
+                pipeline._log_task(task_name, status, started_at, finished_at, result, error)
+        except Exception as e:
+            logger.debug("[WATCH] Failed to log overnight task: %s", e)
+
     def _run_post_close_capture(self):
         """5:30 PM ET — Capture final closing prices, update MFE/MAE on open positions."""
         from src.api.websocket import broadcast_sync
@@ -1195,8 +1356,8 @@ class WatchLoop:
 
         try:
             broadcast_sync("overnight_task", {"task": "post_close_capture", "status": "started"})
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("[WATCH] broadcast overnight_task failed: %s", e)
 
         logger.info("[OVERNIGHT] Running post-close capture...")
         print("[WATCH] Running post-close capture...")
@@ -1245,12 +1406,15 @@ class WatchLoop:
             logger.warning("[OVERNIGHT] SPY close unavailable")
 
         print(f"[WATCH] Post-close capture complete: {count} tickers, {updated} MFE/MAE updates")
+        self._log_overnight_task("post_close_capture", "completed",
+                                 datetime.now(ET).isoformat(), datetime.now(ET).isoformat(),
+                                 result=f"tickers={count}, mfe_mae={updated}")
 
         try:
             broadcast_sync("overnight_task", {"task": "post_close_capture", "status": "complete",
                                               "tickers_updated": count, "mfe_mae_updated": updated})
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("[WATCH] broadcast overnight_task failed: %s", e)
 
     def _run_overnight_training_collection(self):
         """6:00 PM ET — Collect training examples from today's closed trades."""
@@ -1259,19 +1423,34 @@ class WatchLoop:
 
         try:
             broadcast_sync("overnight_task", {"task": "training_collection", "status": "started"})
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("[WATCH] broadcast overnight_task failed: %s", e)
 
         logger.info("[OVERNIGHT] Running training data collection...")
         print("[WATCH] Running overnight training data collection...")
         count = collect_training_examples_from_closed_trades()
         print(f"[WATCH] Training collection: {count} new examples")
+        self._log_overnight_task("training_collection", "completed",
+                                 datetime.now(ET).isoformat(), datetime.now(ET).isoformat(),
+                                 result=f"examples={count}")
 
         try:
             broadcast_sync("overnight_task", {"task": "training_collection", "status": "complete",
                                               "examples_collected": count})
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("[WATCH] broadcast overnight_task failed: %s", e)
+
+        # ── Telegram: notify_overnight_training_complete ──
+        try:
+            from src.notifications.telegram import notify_overnight_training_complete, is_telegram_enabled
+            if is_telegram_enabled():
+                notify_overnight_training_complete(
+                    tasks_completed=1,
+                    tasks_total=1,
+                    details={"training_collection": {"success": True}},
+                )
+        except Exception as e:
+            logger.warning("[WATCH] notify_overnight_training_complete failed: %s", e)
 
     def _run_news_ingestion(self):
         """10:00 PM ET — Full universe news pull and caching."""
@@ -1280,8 +1459,8 @@ class WatchLoop:
 
         try:
             broadcast_sync("overnight_task", {"task": "news_ingestion", "status": "started"})
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("[WATCH] broadcast overnight_task failed: %s", e)
 
         logger.info("[OVERNIGHT] Running news ingestion...")
         print("[WATCH] Running news ingestion...")
@@ -1303,8 +1482,8 @@ class WatchLoop:
         try:
             broadcast_sync("overnight_task", {"task": "news_ingestion", "status": "complete",
                                               "tickers_scanned": len(universe), "articles_cached": articles_cached})
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("[WATCH] broadcast overnight_task failed: %s", e)
 
     def _run_enrichment_precache(self):
         """11:00 PM ET — Pre-fetch fundamentals, insider data, macro for all tickers."""
@@ -1314,8 +1493,8 @@ class WatchLoop:
 
         try:
             broadcast_sync("overnight_task", {"task": "enrichment_precache", "status": "started"})
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("[WATCH] broadcast overnight_task failed: %s", e)
 
         logger.info("[OVERNIGHT] Running enrichment pre-cache...")
         print("[WATCH] Running enrichment pre-cache...")
@@ -1335,8 +1514,8 @@ class WatchLoop:
         try:
             broadcast_sync("overnight_task", {"task": "enrichment_precache", "status": "complete",
                                               "tickers_enriched": count})
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("[WATCH] broadcast overnight_task failed: %s", e)
 
     def _run_pre_market_refresh(self):
         """6:00 AM ET — Quick pre-market data check before morning watchlist."""
@@ -1345,8 +1524,8 @@ class WatchLoop:
 
         try:
             broadcast_sync("overnight_task", {"task": "pre_market_refresh", "status": "started"})
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("[WATCH] broadcast overnight_task failed: %s", e)
 
         logger.info("[OVERNIGHT] Running pre-market refresh...")
         print("[WATCH] Running pre-market refresh...")
@@ -1363,8 +1542,8 @@ class WatchLoop:
 
         try:
             broadcast_sync("overnight_task", {"task": "pre_market_refresh", "status": "complete"})
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("[WATCH] broadcast overnight_task failed: %s", e)
 
     def _run_data_collection(self):
         """9:30 PM ET — Comprehensive market data collection."""
@@ -1379,8 +1558,8 @@ class WatchLoop:
 
         try:
             broadcast_sync("overnight_task", {"task": "data_collection", "status": "started"})
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("[WATCH] broadcast overnight_task failed: %s", e)
 
         logger.info("[OVERNIGHT] Running comprehensive data collection...")
         print("[WATCH] Running comprehensive data collection...")
@@ -1427,8 +1606,8 @@ class WatchLoop:
                     from src.notifications.telegram import notify_earnings_warning, is_telegram_enabled
                     if is_telegram_enabled():
                         notify_earnings_warning(upcoming)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.warning("[WATCH] notify_earnings_warning failed: %s", e)
         except Exception as e:
             logger.debug("[WATCH] Earnings fetch failed: %s", e)
             results["earnings"] = {"error": str(e)}
@@ -1500,8 +1679,8 @@ class WatchLoop:
         try:
             from src.utils.activity_logger import log_activity, DATA_COLLECTION
             log_activity(DATA_COLLECTION, f"Overnight collection: {len(results)} collectors", results)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("[WATCH] log_activity failed: %s", e)
 
         # 1J. Track collector failures and alert at 3+ consecutive
         try:
@@ -1526,13 +1705,13 @@ class WatchLoop:
                             )
                     else:
                         self._collector_failures[name] = 0  # Reset on success
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("[WATCH] notify_collection_failure failed: %s", e)
 
         # H3. Notify new research papers via Telegram
         if research_results.get("total_new", 0) > 0:
             try:
-                from src.notifications.telegram import send_telegram, is_telegram_enabled
+                from src.notifications.telegram import notify_research_papers, is_telegram_enabled
                 if is_telegram_enabled():
                     import sqlite3 as _sq
                     with _sq.connect("ai_research_desk.sqlite3") as _cn:
@@ -1541,28 +1720,27 @@ class WatchLoop:
                         ).fetchone()
                     top_title = top[0] if top else "Unknown"
                     top_score = top[1] if top else 0
-                    send_telegram(
-                        f"<b>NEW RESEARCH PAPERS</b>\n\n"
-                        f"Papers found: {research_results['total_new']}\n"
-                        f"Top paper: {top_title}\n"
-                        f"Relevance: {top_score:.2f}"
+                    notify_research_papers(
+                        total_new=research_results["total_new"],
+                        top_paper=top_title,
+                        top_score=top_score,
                     )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("[WATCH] notify_research_papers failed: %s", e)
 
         # Telegram overnight summary
         try:
             from src.notifications.telegram import notify_overnight_complete, is_telegram_enabled
             if is_telegram_enabled():
                 notify_overnight_complete(results)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("[WATCH] notify_overnight_complete failed: %s", e)
 
         try:
             broadcast_sync("overnight_task", {"task": "data_collection", "status": "complete",
                                               "results": summary})
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("[WATCH] broadcast overnight_task failed: %s", e)
 
     def _minutes_until_next_scan(self, now: datetime) -> float:
         """Calculate minutes until next scan is due."""
@@ -1590,16 +1768,16 @@ class WatchLoop:
                 from src.notifications.telegram import notify_vram_handoff, is_telegram_enabled
                 if is_telegram_enabled():
                     notify_vram_handoff("training", True)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("[WATCH] notify_vram_handoff failed: %s", e)
         else:
             print("[WATCH] VRAM handoff FAILED — staying in inference mode")
             try:
                 from src.notifications.telegram import notify_vram_handoff, is_telegram_enabled
                 if is_telegram_enabled():
                     notify_vram_handoff("training", False, "Staying in inference mode")
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("[WATCH] notify_vram_handoff failed: %s", e)
 
     def _run_morning_handoff(self):
         """5:15 AM ET — Kill training subprocess, reload Ollama."""
@@ -1622,16 +1800,16 @@ class WatchLoop:
                 from src.notifications.telegram import notify_vram_handoff, is_telegram_enabled
                 if is_telegram_enabled():
                     notify_vram_handoff("inference", True)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("[WATCH] notify_vram_handoff failed: %s", e)
         else:
             print("[WATCH] Morning handoff FAILED — attempting Ollama restart")
             try:
                 from src.notifications.telegram import notify_vram_handoff, is_telegram_enabled
                 if is_telegram_enabled():
                     notify_vram_handoff("inference", False, "Attempting restart")
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("[WATCH] notify_vram_handoff failed: %s", e)
             # Fallback: try reload anyway
             stop_flag.unlink(missing_ok=True)
             try:
@@ -1667,8 +1845,8 @@ class WatchLoop:
                         msg += " ⚠️ CONTESTED"
                     msg += f"\nCost: ${cost:.2f} | Rounds: {rounds}"
                     send_telegram(msg)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("[WATCH] send_telegram failed: %s", e)
         except Exception as e:
             logger.error("[WATCH] Council session failed: %s", e)
             print(f"[WATCH] Council session failed: {e}")
@@ -2269,19 +2447,32 @@ class WatchLoop:
         actionable = result.get("actionable_count", 0)
         print(f"[WATCH] Research synthesis: {papers_count} papers reviewed, {actionable} actionable")
 
-        # Send Telegram digest
+        # ── Telegram: notify_research_papers (new papers discovered) ──
         try:
-            from src.notifications.telegram import send_telegram, is_telegram_enabled
+            from src.notifications.telegram import notify_research_papers, is_telegram_enabled
+            if is_telegram_enabled() and papers_count > 0:
+                top_paper = result.get("top_paper_title", "Unknown")
+                top_score = result.get("top_paper_score", 0.0)
+                notify_research_papers(
+                    total_new=papers_count,
+                    top_paper=top_paper,
+                    top_score=top_score,
+                )
+        except Exception as e:
+            logger.warning("[WATCH] notify_research_papers failed: %s", e)
+
+        # ── Telegram: notify_research_digest (synthesis complete) ──
+        try:
+            from src.notifications.telegram import notify_research_digest, is_telegram_enabled
             if is_telegram_enabled():
                 digest = result.get("digest_summary", "No digest generated")
-                send_telegram(
-                    f"<b>WEEKLY RESEARCH DIGEST</b>\n\n"
-                    f"Papers reviewed: {papers_count}\n"
-                    f"Actionable: {actionable}\n\n"
-                    f"{digest[:500]}"
+                notify_research_digest(
+                    papers_count=papers_count,
+                    actionable_count=actionable,
+                    digest_summary=digest,
                 )
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("[WATCH] notify_research_digest failed: %s", e)
 
     def _save_daily_metric_snapshot(self):
         """Save daily metric snapshot at EOD for MetricTrend chart."""
@@ -2336,5 +2527,18 @@ class WatchLoop:
                 "[METRICS] Daily snapshot saved: %d trades, %.1f%% win rate",
                 len(pnls), snapshot["win_rate"] * 100,
             )
+
+            # ── Telegram: notify_schedule_health (daily metric check) ──
+            try:
+                from src.notifications.telegram import notify_schedule_health, is_telegram_enabled
+                if is_telegram_enabled():
+                    notify_schedule_health(
+                        gpu_util=0.0,  # Not tracked at this level
+                        scan_delay_max=0.0,
+                        handoff_ok=True,
+                        temp_max=0,
+                    )
+            except Exception as e:
+                logger.warning("[WATCH] notify_schedule_health failed: %s", e)
         except Exception as e:
             logger.debug("[METRICS] Daily snapshot failed: %s", e)

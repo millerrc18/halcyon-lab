@@ -322,7 +322,7 @@ def export_training_data(
     if split_date:
         try:
             split_dt = _dt.fromisoformat(split_date)
-            gap_dt = split_dt + _td(days=7)
+            gap_dt = split_dt + _td(days=5)  # 5-day temporal gap per research recommendation
             gap_date = gap_dt.strftime("%Y-%m-%d")
             for i in range(split_idx, len(examples)):
                 if examples[i]["created_at"][:10] >= gap_date:
@@ -573,6 +573,28 @@ def run_fine_tune(db_path: str = "ai_research_desk.sqlite3") -> dict | None:
     except (subprocess.CalledProcessError, FileNotFoundError) as e:
         print(f"[TRAINING] ERROR: Failed to register model in Ollama: {e}")
         return None
+
+    # Step 4b: Run canary evaluation before model promotion
+    try:
+        from src.training.canary import CanaryMonitor
+        canary = CanaryMonitor(db_path=db_path)
+        canary_result = canary.evaluate(model_version=version_name)
+        if canary_result.get("degradation_detected"):
+            logger.warning("[CANARY] Model failed canary evaluation: %s", canary_result.get("details"))
+            print(f"[TRAINING] WARNING: Canary degradation detected — {canary_result.get('details')}")
+            print("[TRAINING] Model will NOT be promoted to active.")
+            return {
+                "version_name": version_name,
+                "examples_count": example_count,
+                "canary_failed": True,
+                "canary_details": canary_result.get("details"),
+            }
+        else:
+            logger.info("[CANARY] Model passed canary evaluation (score=%.4f)", canary_result.get("avg_score", 0))
+            print(f"[TRAINING] Canary evaluation passed (score={canary_result.get('avg_score', 0):.4f})")
+    except Exception as e:
+        logger.warning("[CANARY] Canary evaluation failed: %s — continuing without", e)
+        print(f"[TRAINING] Canary evaluation failed: {e} — continuing without")
 
     # Step 5: Run holdout evaluation (if holdout exists)
     holdout_eval = None

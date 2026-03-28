@@ -59,6 +59,25 @@ def run_scan(config: dict, dry_run: bool = False, send_email_flag: bool = False,
     except Exception as e:
         logger.warning("[SCAN] Data enrichment failed: %s — continuing without enrichment", e)
 
+    # Data integrity validation — filter out tickers with invalid features
+    try:
+        from src.data_integrity import validate_features, validate_universe
+        validated_universe = validate_universe(list(features.keys()))
+        invalid_tickers = []
+        for ticker in list(features.keys()):
+            if ticker not in validated_universe:
+                logger.warning("[INTEGRITY] Ticker %s removed by universe validation", ticker)
+                invalid_tickers.append(ticker)
+            elif not validate_features(ticker, features[ticker]):
+                invalid_tickers.append(ticker)
+        for ticker in invalid_tickers:
+            features.pop(ticker, None)
+        if invalid_tickers:
+            logger.warning("[INTEGRITY] Removed %d tickers with invalid data: %s",
+                           len(invalid_tickers), invalid_tickers)
+    except Exception as e:
+        logger.warning("[INTEGRITY] Data integrity check failed: %s", e)
+
     ranked = rank_universe(features)
     candidates = get_top_candidates(ranked)
 

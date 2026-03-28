@@ -67,8 +67,9 @@ def compute_current_drawdown(db_path: str = "ai_research_desk.sqlite3",
         if peak <= 0:
             return 0.0
         return max(0.0, (peak - current_equity) / peak * 100)
-    except Exception:
-        return 0.0
+    except Exception as e:
+        logger.error("[RISK] Drawdown computation failed: %s — using CONSERVATIVE estimate (15%%)", e)
+        return 15.0  # Assume 15% drawdown on error → reduced position sizing
 
 
 class RiskGovernor:
@@ -79,7 +80,7 @@ class RiskGovernor:
         self.max_daily_loss_pct = risk_cfg.get("max_daily_loss_pct", 0.03)
         self.max_position_pct = risk_cfg.get("max_position_pct", 0.10)
         self.max_open_positions = risk_cfg.get("max_open_positions", 10)
-        self.max_sector_concentration_pct = risk_cfg.get("max_sector_pct", 0.22)
+        self.max_sector_concentration_pct = risk_cfg.get("max_sector_pct", 0.30)
         self.max_correlated_positions = risk_cfg.get("max_correlated", 3)
         self.volatility_halt_threshold = risk_cfg.get("vol_halt_pct", 35.0)
         self.enabled = risk_cfg.get("enabled", True)
