@@ -1,5 +1,38 @@
 # Changelog
 
+## 2026-03-28 — Reliability Sprint + Research-Informed Features
+
+### Critical Safety Fixes
+- Risk governor REJECTS trades on exception (was: approve anyway)
+- Drawdown returns 15% conservative estimate on error (was: 0%)
+- `train-pipeline` CLI runs full 5-step pipeline (was: empty stub)
+- LLM validator REJECTS trades on exception (was: continue)
+- Bracket order checks child/leg statuses (was: parent only)
+
+### Wiring & Integration
+- `data_integrity.py` → scan pipeline (feature validation pre-ranking)
+- `canary.py` → trainer (post-retrain evaluation gate)
+- `metrics.py` → CTO report (shared calculations)
+- All 12 Telegram notifications wired into watch.py
+- 44+ bare `except: pass` → logged at WARNING+
+- `overnight.py` consolidated (deleted), `broker.py` deleted
+
+### New Features
+- **Traffic Light regime:** VIX(20/30) + 200-DMA(3%) + credit spread(0.5σ/1.5σ) → sizing multiplier. 5-day persistence filter.
+- **PEAD enrichment:** 5 earnings signals in pullback prompt (conditional on proximity ≤30 days)
+- **Implementation Shortfall:** Signal price capture, IS computation on fill, rolling 20-trade alert
+- **HSHS live:** 5-dimension health score from database, wired into CTO report + council + API
+- **System validator:** 50+ checks, Validation dashboard page
+- Independent live trade monitoring (source_filter parameter)
+
+### Research & Architecture
+- 6 new research documents (35 total), all strategy decisions confirmed
+- Master blueprint v2, Halcyon Framework v2 updated
+- Council redesign architecture finalized (vote-first, value tracking)
+- 24 deep research prompts generated
+
+---
+
 ## 2026-03-27 — Test Gap Closure (Priority 1 — Critical Money Path)
 
 ### New Test Files (6)
