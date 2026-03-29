@@ -6,6 +6,16 @@
 > Every CREATE operation provides complete file contents.
 > Do NOT paraphrase, interpret, or abbreviate. Execute verbatim.
 >
+> **STEP ZERO — CODEBASE REVIEW (before any code changes):**
+> You have a large context window. Use it. Before writing a single line of code,
+> read the following files IN FULL (not summaries, not grep — cat the entire file).
+> Build a complete mental model of the scan pipeline flow, the risk governor
+> checks, the enrichment chain, the watch loop orchestration, and the shadow
+> trade lifecycle. Every integration point in this sprint connects to these files.
+> If you find that the code has changed since this sprint was written (because
+> another sprint landed first), ADAPT the operations to match the current code.
+> The intent of each operation is more important than the exact text match.
+>
 > **Pre-read these files IN FULL before any code changes (mandatory):**
 > ```
 > cat AGENTS.md
@@ -1014,65 +1024,22 @@ In the section where the Alpaca fill price is received (after `actual_entry_pric
 ---
 
 # ══════════════════════════════════════════════════════════════
-# PART 4: AI COUNCIL REDESIGN — VOTE-FIRST PROTOCOL
+# PART 4: AI COUNCIL REDESIGN — EXCLUDED FROM THIS SPRINT
 # ══════════════════════════════════════════════════════════════
 
-This is the most complex part. CC must read the existing council files IN FULL:
-```bash
-cat src/council/agents.py
-cat src/council/protocol.py
-cat src/council/engine.py
-```
+> **DO NOT implement council changes in this sprint.**
+>
+> The council redesign (vote-first protocol, structured JSON, 5 new agents,
+> parameter auto-application, calibration tracking) is being designed and
+> implemented separately through a collaborative architecture session.
+> The changes to `src/council/agents.py`, `src/council/protocol.py`, and
+> `src/council/engine.py` will be provided as a separate commit.
+>
+> **DO NOT modify any files in `src/council/`.**
+>
+> However, DO add the `council_calibrations` table to `_ensure_all_tables()`
+> in watch.py so the schema is ready when the council redesign lands:
 
-Then make the following changes:
-
-## OPERATION 4.1: Rewrite agent definitions
-
-**MODIFY FILE `src/council/agents.py`:**
-
-Replace the ENTIRE file. The new version must:
-1. Define 5 agents: tactical_operator, strategic_architect, red_team, innovation_engine, macro_navigator
-2. Each system prompt requires JSON output (not prose) with this schema:
-   ```json
-   {"agent": "...", "direction": "bullish|neutral|bearish", "confidence": 0.0-1.0,
-    "position_sizing_recommendation": 0.25-1.5, "cash_reserve_recommendation_pct": 10-50,
-    "scan_aggressiveness": "conservative|normal|aggressive",
-    "sector_tilts": {"prefer": [], "avoid": []},
-    "key_reasoning": "one paragraph max", "key_risk": "one sentence",
-    "falsifiable_prediction": "specific claim with date"}
-   ```
-3. Each `gather_*_data()` function queries REAL data from SQLite — follow the exact pattern of the existing data functions but update the queries:
-   - tactical: VIX, term structure, Traffic Light, recent scans, open positions, recent P&L
-   - strategic: phase gate progress, capital levels, HSHS score, model health, trade count vs targets
-   - red_team: drawdown, sector concentration, correlation, model health, alpha decay indicators
-   - innovation: training data trends, fallback rate, quality scores, research digest
-   - macro: FRED data (34 series), regime history, sector rotation, credit conditions
-
-**DO NOT write placeholder data functions.** Every gather function must query actual tables that exist in the database. Read `src/scheduler/watch.py` `_ensure_all_tables()` to see all available tables.
-
-## OPERATION 4.2: Rewrite protocol to vote-first
-
-**MODIFY FILE `src/council/protocol.py`:**
-
-Key changes:
-1. `run_round_1()` — parse each agent response as JSON via `json.loads()`. If parse fails, log the raw response and use `_default_response()`.
-2. Add `aggregate_votes(assessments, session_type)` function implementing confidence-weighted voting with domain weights per session type.
-3. `run_round_2()` — only called if `aggregate_votes()` returns `round2_needed: True` (less than 3/5 consensus). Track direction flips (sycophancy detection).
-4. Remove `run_round_3()` from daily sessions.
-
-## OPERATION 4.3: Update council engine
-
-**MODIFY FILE `src/council/engine.py`:**
-
-Key changes:
-1. Add `result_json TEXT` column to `council_sessions` table (safe ALTER)
-2. Add `council_calibrations` table (CREATE TABLE IF NOT EXISTS)
-3. In `run_session()`: call `aggregate_votes()` after Round 1. Only proceed to Round 2 if `round2_needed`. Store full structured JSON in `result_json` column.
-4. Session cost should reflect actual rounds (1 or 2, not always 3).
-
-## OPERATION 4.4: Add calibration table and auto-verification
-
-**Add to `_ensure_all_tables()` in watch.py:**
 ```sql
 CREATE TABLE IF NOT EXISTS council_calibrations (
     calibration_id TEXT PRIMARY KEY,
@@ -1087,23 +1054,12 @@ CREATE TABLE IF NOT EXISTS council_calibrations (
 );
 ```
 
-**Add daily verification job in watch.py** (at 4:30 PM, after validation):
+Also add safe ALTER to council_sessions for the future result_json column:
 ```python
-# Auto-verify council calibrations
 try:
-    import sqlite3
-    with sqlite3.connect("ai_research_desk.sqlite3") as _conn:
-        _pending = _conn.execute(
-            "SELECT calibration_id, prediction, verification_date FROM council_calibrations "
-            "WHERE actual_outcome IS NULL AND verification_date <= ?",
-            (datetime.now(ET).strftime("%Y-%m-%d"),)
-        ).fetchall()
-        for _cal in _pending:
-            # Simple auto-verification: check if SPY-related predictions can be verified
-            # More complex predictions require manual verification
-            pass  # Placeholder — implement SPY direction verification
-except Exception as e:
-    logger.warning("[WATCH] Calibration verification failed: %s", e)
+    conn.execute("ALTER TABLE council_sessions ADD COLUMN result_json TEXT")
+except sqlite3.OperationalError:
+    pass  # Column already exists
 ```
 
 ---
@@ -1236,7 +1192,7 @@ After completing all operations, verify each item:
 - [ ] `python -c "from src.evaluation.hshs_live import compute_hshs; print(compute_hshs())"` — returns dict with hshs score
 - [ ] `python -c "from src.features.traffic_light import compute_traffic_light; import pandas as pd; print('OK')"` — imports without error
 - [ ] `python -c "from src.data_enrichment.earnings_signals import compute_earnings_signals; print('OK')"` — imports without error
-- [ ] All 1,049+ tests pass
+- [ ] All 1,049+ tests pass (plus new tests added by this sprint)
 - [ ] `npm run build` succeeds
 - [ ] CHANGELOG.md has entries for both sprints
 - [ ] AGENTS.md counts match code reality
@@ -1244,8 +1200,13 @@ After completing all operations, verify each item:
 - [ ] `overnight.py` deleted
 - [ ] `broker.py` remains deleted (from prior sprint)
 - [ ] Traffic Light `traffic_light_state` table created on first scan
-- [ ] Council calibrations table created
-- [ ] shadow_trades has signal_price and implementation_shortfall_bps columns
+- [ ] Council calibrations table created in `_ensure_all_tables()`
+- [ ] council_sessions has `result_json` column (safe ALTER applied)
+- [ ] shadow_trades has `signal_price` and `implementation_shortfall_bps` columns
+- [ ] `src/council/agents.py` is UNCHANGED (council redesign handled separately)
+- [ ] `src/council/protocol.py` is UNCHANGED
+- [ ] `src/council/engine.py` is UNCHANGED
+- [ ] Validation page exists at `/validation` route and renders
 
 ---
 
