@@ -630,8 +630,8 @@ def open_live_trade(
                         f"Live equity ${live_equity:.2f} below 50% of starting ${starting_capital:.2f}. "
                         f"Live trading halted.",
                     )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("[LIVE] Capital guard Telegram alert failed: %s", e)
             return None
     except Exception as e:
         logger.warning("[LIVE] Could not check live account: %s — skipping", e)
@@ -666,8 +666,8 @@ def open_live_trade(
                         f"Live daily P&L ${daily_live_pnl:.2f} exceeds -5% of ${starting_capital:.2f}. "
                         f"No more live trades today.",
                     )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("[LIVE] Daily loss Telegram alert failed: %s", e)
             return None
     except Exception as e:
         logger.debug("[LIVE] Daily loss check failed: %s", e)
@@ -682,8 +682,8 @@ def open_live_trade(
         if len(open_live_trades) >= max_positions:
             logger.info("[LIVE] At live position limit (%d), skipping", max_positions)
             return None
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("[LIVE] Position limit check failed: %s — continuing", e)
 
     # Duplicate check (live-specific)
     ticker = packet.ticker
@@ -695,8 +695,8 @@ def open_live_trade(
         if any(t["ticker"] == ticker for t in open_live_trades):
             logger.info("[LIVE] Already have live trade for %s, skipping", ticker)
             return None
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("[LIVE] Duplicate check failed: %s — continuing", e)
 
     # Use live-specific risk parameters
     live_risk = live_cfg.get("risk", {})
@@ -800,8 +800,8 @@ def open_live_trade(
                 setup_confidence=features.get("setup_confidence"),
                 source="live",
             )
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("[LIVE] Telegram notify_trade_opened failed: %s", e)
 
     # 1F. Check for live trade open milestones
     _check_open_milestones(db_path, source="live")
@@ -1062,8 +1062,8 @@ def _check_sector_exposure(db_path: str = "ai_research_desk.sqlite3") -> None:
                     import yfinance as yf
                     info = yf.Ticker(ticker).info
                     sector = info.get("sector", "Unknown")
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug("[EXPOSURE] yfinance sector lookup failed for %s: %s", ticker, e)
                 sectors.setdefault(sector, []).append(ticker)
 
         total_positions = len(open_trades)
@@ -1088,8 +1088,8 @@ def _get_current_price_safe(ticker: str) -> float | None:
         price = get_current_price(ticker)
         if price:
             return price
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("[PRICE] Alpaca price fetch failed for %s: %s", ticker, e)
 
     # Fallback to yfinance
     try:
@@ -1097,7 +1097,7 @@ def _get_current_price_safe(ticker: str) -> float | None:
         data = fetch_ohlcv([ticker], period="5d")
         if ticker in data and not data[ticker].empty:
             return float(data[ticker]["Close"].iloc[-1])
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("[PRICE] yfinance price fetch failed for %s: %s", ticker, e)
 
     return None

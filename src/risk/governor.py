@@ -162,8 +162,8 @@ class RiskGovernor:
             bootcamp = full_cfg.get("bootcamp", {})
             if bootcamp.get("enabled", False):
                 effective_limit = bootcamp.get("max_positions", 50)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("[RISK] Bootcamp config check failed: %s — using default limit", e)
         positions_ok = open_count < effective_limit
         checks.append({
             "name": "max_positions",
