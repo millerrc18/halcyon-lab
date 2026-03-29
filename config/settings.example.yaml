@@ -16,8 +16,13 @@ email:
   password: your-app-password-here
   from_address: your-assistant-email@gmail.com
   to_address: your.work@email.com
-  cc_addresses:                                # Optional: CC additional emails
+  cc_addresses: # Optional: CC additional emails
     - your.personal@email.com
+  digest_times:
+    premarket: "07:30" # Portfolio status, overnight events
+    midday: "12:00" # Morning trades, P&L, risk alerts
+    eod: "16:15" # Full day recap, cumulative stats
+    evening: "20:00" # Training data, model quality, costs
 
 alpaca:
   api_key: YOUR_PAPER_API_KEY
@@ -25,16 +30,16 @@ alpaca:
   base_url: https://paper-api.alpaca.markets
 
 risk:
-  starting_capital: 100000    # Should match your paper/live trading account
+  starting_capital: 100000 # Should match your paper/live trading account
   planned_risk_pct_min: 0.005
   planned_risk_pct_max: 0.01
   max_open_positions: 10
 
 shadow_trading:
-  enabled: false  # Set to true to enable paper trading
+  enabled: false # Set to true to enable paper trading
   max_positions: 10
   default_order_type: market
-  timeout_days: 15  # Auto-close after this many days
+  timeout_days: 15 # Auto-close after this many days
 
 # ── Live Trading (Dual Execution) ────────────────────────────────
 # When enabled, qualifying setups execute on BOTH paper and live
@@ -47,15 +52,15 @@ live_trading:
   enabled: false
   api_key: "your-live-alpaca-api-key"
   secret_key: "your-live-alpaca-secret-key"
-  starting_capital: 100       # USD starting capital for live account
-  max_open_positions: 2       # Conservative limit for live trading
+  starting_capital: 100 # USD starting capital for live account
+  max_open_positions: 2 # Conservative limit for live trading
   risk:
-    planned_risk_pct_max: 0.02    # 2% max risk per trade
-    stop_atr_multiplier: 1.0      # ATR multiplier for stop placement
-    target_atr_multiplier: 2.0    # ATR multiplier for target placement
-    timeout_days: 7               # Auto-close live trades after N days
-  min_score: null             # Optional: minimum priority score for live trades
-  max_price: null             # Optional: maximum stock price for live trades
+    planned_risk_pct_max: 0.02 # 2% max risk per trade
+    stop_atr_multiplier: 1.0 # ATR multiplier for stop placement
+    target_atr_multiplier: 2.0 # ATR multiplier for target placement
+    timeout_days: 7 # Auto-close live trades after N days
+  min_score: null # Optional: minimum priority score for live trades
+  max_price: null # Optional: maximum stock price for live trades
 
 automation:
   morning_watchlist_hour_et: 8
@@ -85,54 +90,45 @@ api:
 training:
   enabled: true
   anthropic_api_key: "your-anthropic-api-key-here"
-  claude_model: "claude-sonnet-4-20250514"  # Used by scoring + training gen. Sonnet recommended.
-  auto_train_threshold: 50       # Fine-tune when N new examples accumulate
-  auto_train_time_days: 7        # Or fine-tune if N days since last train
-  auto_train_min_examples: 20    # Min new examples for time-based trigger
-  auto_rollback_expectancy_drop: 0.20   # Rollback if expectancy drops >20%
-  auto_rollback_winrate_drop: 0.10      # Rollback if win rate drops >10%
+  claude_model: "claude-sonnet-4-20250514" # Used by scoring + training gen. Sonnet recommended.
+  auto_train_threshold: 50 # Fine-tune when N new examples accumulate
+  auto_train_time_days: 7 # Or fine-tune if N days since last train
+  auto_train_min_examples: 20 # Min new examples for time-based trigger
+  auto_rollback_expectancy_drop: 0.20 # Rollback if expectancy drops >20%
+  auto_rollback_winrate_drop: 0.10 # Rollback if win rate drops >10%
 
 data_enrichment:
   enabled: true
-  finnhub_api_key: "your-finnhub-api-key"   # Free at finnhub.io
-  fred_api_key: "your-fred-api-key"         # Free at fred.stlouisfed.org
-  cache_hours: 24                            # Cache fundamental/macro data
+  finnhub_api_key: "your-finnhub-api-key" # Free at finnhub.io
+  fred_api_key: "your-fred-api-key" # Free at fred.stlouisfed.org
+  cache_hours: 24 # Cache fundamental/macro data
   insider_lookback_days: 90
-  include_news_in_backfill: true         # Include Finnhub news in historical backfill
+  include_news_in_backfill: true # Include Finnhub news in historical backfill
 
 risk_governor:
   enabled: true
-  max_daily_loss_pct: 0.03       # Halt all trading if portfolio drops 3% in a day
-  max_position_pct: 0.10          # No single position > 10% of equity
-  max_open_positions: 10          # Maximum simultaneous positions
-  max_sector_pct: 0.30            # No sector > 30% of portfolio
-  max_correlated: 3               # Max positions in same sector
-  vol_halt_pct: 35.0              # Halt new longs if VIX proxy > 35%
+  max_daily_loss_pct: 0.03 # Halt all trading if portfolio drops 3% in a day
+  max_position_pct: 0.10 # No single position > 10% of equity
+  max_open_positions: 10 # Maximum simultaneous positions
+  max_sector_pct: 0.30 # No sector > 30% of portfolio
+  max_correlated: 3 # Max positions in same sector
+  vol_halt_pct: 35.0 # Halt new longs if VIX proxy > 35%
 
 regime_adaptive:
-  enabled: true  # Auto-adjust qualification thresholds by market regime
+  enabled: true # Auto-adjust qualification thresholds by market regime
 
 bootcamp:
   enabled: false
-  phase: 1                          # 1 = data collection, 2 = optimization, 3 = ML/LLM learning
+  phase: 1 # 1 = data collection, 2 = optimization, 3 = ML/LLM learning
   # Override thresholds for high-volume data collection
-  qualification_threshold: 40       # Normal: 70 — lowered to capture more trades
-  watchlist_threshold: 25           # Normal: 45 — lowered for broader watchlist
+  qualification_threshold: 40 # Normal: 70 — lowered to capture more trades
+  watchlist_threshold: 25 # Normal: 45 — lowered for broader watchlist
   # Override position limits
-  max_positions: 50                 # No practical limit during bootcamp
+  max_positions: 50 # No practical limit during bootcamp
   # Email preferences
-  email_mode: full_stream           # full_stream / daily_summary / digest / silent
-  max_packets_per_scan: 8           # Cap packets per scan to fit in 30-min window
-  scan_interval_minutes: 30         # How often to re-scan during market hours
-
-# ── Email Digest Schedule (when email_mode: digest) ──────────────
-# Four daily emails at fixed times (ET). Risk alerts still send immediately.
-email:
-  digest_times:
-    premarket: "07:30"               # Portfolio status, overnight events
-    midday: "12:00"                  # Morning trades, P&L, risk alerts
-    eod: "16:15"                     # Full day recap, cumulative stats
-    evening: "20:00"                 # Training data, model quality, costs
+  email_mode: full_stream # full_stream / daily_summary / digest / silent
+  max_packets_per_scan: 8 # Cap packets per scan to fit in 30-min window
+  scan_interval_minutes: 30 # How often to re-scan during market hours
 
 # ── Telegram Notifications ───────────────────────────────────────
 # Real-time push alerts for trade opens/closes, earnings warnings,
@@ -165,3 +161,10 @@ council:
   daily_minute_et: 30
   rounds: 3
   temperature: 0.8
+
+# ── Execution Configuration ─────────────────────────────────────
+# Controls how bracket orders are placed for shadow/live trades.
+# ─────────────────────────────────────────────────────────────────
+execution:
+  order_type: limit                # "market" or "limit"
+  limit_timeout_seconds: 300       # Cancel unfilled limit orders after N seconds

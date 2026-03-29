@@ -78,6 +78,16 @@ class TestEscalation:
         halt_file = str(tmp_path / "halt")
         monkeypatch.setattr(gov_module, "_HALT_FILE", halt_file)
 
+        # Create a DB with 50+ closed trades so we exit bootcamp mode
+        db_path = str(tmp_path / "test.sqlite3")
+        import sqlite3
+        conn = sqlite3.connect(db_path)
+        conn.execute("CREATE TABLE shadow_trades (trade_id TEXT, status TEXT)")
+        for i in range(55):
+            conn.execute("INSERT INTO shadow_trades VALUES (?, 'closed')", (f"t{i}",))
+        conn.commit()
+        conn.close()
+
         # Mock email to prevent actual sending
         with patch("src.email.notifier.send_email", return_value=True):
             audit = {
@@ -88,7 +98,7 @@ class TestEscalation:
                     "recommendation": "Halt immediately",
                 }],
             }
-            actions = check_escalation(audit)
+            actions = check_escalation(audit, db_path=db_path)
 
         assert any(a["action"] == "halt_trading" for a in actions)
         assert Path(halt_file).exists()

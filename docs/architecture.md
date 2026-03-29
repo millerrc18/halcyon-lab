@@ -1,4 +1,4 @@
-<!-- Counts verified 2026-03-26: 30 DB tables, 48 API routes, 126 Python files, 23,800+ LOC. -->
+<!-- Counts verified 2026-03-28: 35 DB tables, 109 API routes, 141 Python files, 1064 tests. -->
 # Halcyon Lab — System Architecture
 
 ## System Pipeline
@@ -31,7 +31,7 @@
 └─────────────────────────────────────────────────────────┘
 ```
 
-## Database Schema (30 tables)
+## Database Schema (35 tables)
 
 ### Core Trading
 - **recommendations** — Trade recommendations with scores, thesis, outcomes
@@ -70,11 +70,20 @@
 - **fed_communications** — FOMC statements, minutes, Beige Book, speeches
 - **setup_signals** — Setup classifier results per ticker per scan
 
+### Research Intelligence
+- **research_papers** — Collected ML/finance research papers with abstracts
+- **research_digests** — AI-generated summaries of research paper batches
+- **research_docs** — Internal research documents (strategy, infrastructure, branding)
+
+### Scanning & Signals
+- **scan_metrics** — Per-scan cycle performance metrics (duration, ticker counts)
+- **validation_results** — System validation dashboard results
+
 ### AI Council
 - **council_sessions** — Council deliberation session metadata and consensus
 - **council_votes** — Individual agent votes per round per session
 
-## API Routes (58+)
+## API Routes (109 — 49 local + 60 cloud)
 
 ### System & Status
 | Route | Method | Description |
@@ -305,7 +314,7 @@ Incremental             Latest-only
      (cloud dashboard)
 ```
 
-**Synced tables:** shadow_trades, recommendations, model_versions, metric_snapshots, audit_reports, schedule_metrics (incremental mode, keyed on updated_at or created_at).
+**Synced tables (25+):** shadow_trades, recommendations, model_versions, metric_snapshots, audit_reports, schedule_metrics, earnings_calendar, options_metrics, vix_term_structure, macro_snapshots, council_sessions, council_votes, insider_transactions, short_interest, analyst_estimates, fed_communications, edgar_filings, api_costs, training_examples, activity_log, setup_signals, quality_drift_metrics, canary_evaluations, research_papers, research_digests, scan_metrics, research_docs, validation_results. Modes: incremental (keyed on updated_at/created_at), latest_only (snapshot replacement), or full (complete re-sync).
 
 Failures are logged and retried next cycle. The sync thread never crashes the main process.
 
