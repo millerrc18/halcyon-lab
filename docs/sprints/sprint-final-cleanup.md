@@ -1,393 +1,319 @@
-# Sprint: Final Cleanup & Verification — Close Every Gap
-# PRIORITY: Ryan needs to go to bed. Fix everything, verify everything.
+# Sprint: Final Cleanup — Everything Verified Before Bed
+# Every broken thing fixed, every older feature verified, every gap closed.
 
-> **This is a cleanup sprint, not a feature sprint.**
-> Only acceptable changes: fix bugs, update docs, add missing config, verify wiring.
-> NO new features. NO refactoring.
+> **CRITICAL ITEMS (will break if not fixed):**
+> 1. test_council.py — 15 tests reference DELETED functions, WILL FAIL
+> 2. Render sync — cloud dashboard BLIND to all new tables/columns
+> 3. Logger — no file rotation, crash evidence LOST
+> 4. Council.jsx — old agent names in dissent detection
 >
-> **Pre-read:**
+> **Pre-read (mandatory, IN FULL):**
 > ```
 > cat AGENTS.md
-> cat CHANGELOG.md
 > cat src/council/agents.py
 > cat src/council/protocol.py
 > cat src/council/engine.py
 > cat src/council/value_tracker.py
 > cat src/scheduler/watch.py
+> cat src/sync/render_sync.py
 > cat src/notifications/telegram.py
 > cat src/main.py
+> cat src/features/traffic_light.py
+> cat src/data_enrichment/earnings_signals.py
+> cat src/evaluation/hshs_live.py
+> cat src/evaluation/system_validator.py
+> cat src/shadow_trading/executor.py
+> cat src/risk/governor.py
+> cat src/services/scan_service.py
+> cat src/features/engine.py
+> cat src/ranking/ranker.py
+> cat src/packets/template.py
+> cat src/training/trainer.py
+> cat src/email/notifier.py
 > cat config/settings.example.yaml
 > cat docs/architecture.md
 > cat docs/roadmap.md
+> cat tests/test_council.py
+> cat frontend/src/pages/Council.jsx
+> cat frontend/src/App.jsx
+> cat frontend/src/api.js
 > ```
 >
-> **Run before starting:** `python -m pytest tests/ -x -q`
+> **Run `python -m pytest tests/ -x -q` first. Council tests WILL fail. That's expected.**
 
 ---
 
 # ══════════════════════════════════════════════════════════════
-# PART 1: DOCUMENTATION (must match code reality)
+# PART 0: CRITICAL FIXES (do these first)
 # ══════════════════════════════════════════════════════════════
 
-## 1.1 Update AGENTS.md counts
+## 0A. Rewrite tests/test_council.py for v2
 
-Run these commands and put EXACT numbers on line 1:
-```bash
-echo "Python files:" && find src -name "*.py" ! -path "*__pycache__*" ! -name "*backup*" | wc -l
-echo "Test files:" && find tests -name "*.py" | wc -l
-echo "Tests:" && find tests -name "*.py" -exec grep -c "def test_" {} + 2>/dev/null | awk -F: '{s+=$2}END{print s}'
-echo "CLI commands:" && grep -c "add_parser" src/main.py
-echo "DB tables:" && python3 -c "
-import sqlite3; conn = sqlite3.connect('ai_research_desk.sqlite3')
-from src.journal.store import initialize_database; initialize_database()
-from src.council.engine import init_council_tables; init_council_tables()
-tables = conn.execute(\"SELECT COUNT(*) FROM sqlite_master WHERE type='table'\").fetchone()[0]
-print(tables)
-" 2>/dev/null || echo "Run on live system"
-echo "Notifications:" && grep -c "^def notify_" src/notifications/telegram.py
-echo "Research docs:" && ls docs/research/*.md | wc -l
+The existing test file references deleted functions and old schema. Read the NEW
+agents.py, protocol.py, engine.py, and value_tracker.py IN FULL before rewriting.
+
+**Deleted functions that tests reference:**
+- `gather_risk_officer_data` → now `gather_risk_data`
+- `gather_alpha_strategist_data` → now `gather_tactical_data`
+- `gather_data_scientist_data` → now `gather_innovation_data`
+- `gather_regime_analyst_data` → now `gather_macro_data`
+- `gather_devils_advocate_data` → DELETED (all agents run independently)
+- `run_round_3` → DELETED (max 2 rounds)
+
+**Schema changes tests must reflect:**
+- `position` (defensive/neutral/offensive) → `direction` (bullish/neutral/bearish)
+- `confidence` (1-10 int) → `confidence` (0.0-1.0 float)
+- `vote` (reduce/hold/increase/selective) → mapped via backward compat
+- Data functions return STRING not dict
+
+**Required test coverage:**
+```python
+# agents.py
+- All 5 gather functions return non-empty strings on populated DB
+- All 5 gather functions return fallback string on empty/broken DB
+- All 5 gather functions never raise exceptions
+- AGENT_NAMES has exactly 5 entries
+- AGENT_DATA_FUNCTIONS has exactly 5 entries
+- _query_db helper works
+
+# protocol.py
+- _parse_agent_response: valid JSON → correct fields
+- _parse_agent_response: code-fenced JSON → strips fences
+- _parse_agent_response: JSON buried in prose → extracted
+- _parse_agent_response: old schema (position, confidence 1-10) → auto-converted
+- _parse_agent_response: garbage → _default_response with _parse_failed
+- aggregate_votes: 5 bullish → consensus_reached=True, round2_needed=False
+- aggregate_votes: 2-2-1 → consensus_reached=False, round2_needed=True
+- aggregate_votes: 3-2 → consensus_reached=True
+- apply_rate_limiters: >25% daily change → clipped
+- apply_rate_limiters: within bounds → not clipped
+- tally_votes backward compat: returns old format with _v2 key
+
+# engine.py
+- init_council_tables creates all tables (council_sessions, votes, calibrations, debug_log)
+- New columns exist (result_json, direction, confidence_float, assessment_json)
+
+# value_tracker.py
+- log_parameter_change stores entry and closes previous window
+- compute_attribution: sizing multiplier counterfactual correct
+- get_rolling_value_summary: counts consecutive negative weeks
+- get_current_parameters: returns defaults on empty DB
 ```
 
-## 1.2 Update docs/architecture.md
+## 0B. Render sync for new tables
 
-This file is stale (last updated March 27, pre-both-sprints). Add sections for:
+Read `src/sync/render_sync.py` in full. Add ALL new tables to the sync list:
+- `traffic_light_state`
+- `council_calibrations`
+- `council_debug_log`
+- `council_parameter_log`
+- `council_parameter_state`
+- `validation_results`
 
-**New modules (add to module inventory):**
-- `src/features/traffic_light.py` — Traffic Light regime overlay (VIX 20/30 + 200-DMA 3% + credit spread 0.5σ/1.5σ → sizing multiplier)
-- `src/data_enrichment/earnings_signals.py` — PEAD enrichment (5 signals: proximity, surprise, concordance, revision velocity, recommendation inconsistency)
-- `src/evaluation/hshs_live.py` — Live HSHS computation from database state (5 dimensions)
-- `src/evaluation/system_validator.py` — System validation (50+ checks, 8 categories)
-- `src/council/agents.py` — REWRITTEN: 5 analytical-lens agents (tactical_operator, strategic_architect, red_team, innovation_engine, macro_navigator)
-- `src/council/protocol.py` — REWRITTEN: Vote-first Modified Delphi, conditional Round 2, rate limiters
-- `src/council/engine.py` — REWRITTEN: 1-2 round flow, result_json storage, calibration, value tracking
-- `src/council/value_tracker.py` — NEW: Counterfactual P&L computation, per-agent tracking
+Also ensure new COLUMNS on existing tables are synced:
+- `shadow_trades.signal_price`, `shadow_trades.implementation_shortfall_bps`
+- `council_sessions.result_json`
+- `council_votes.direction`, `council_votes.confidence_float`, `council_votes.assessment_json`
 
-**Deleted modules:**
-- `src/scheduler/overnight.py` — consolidated into watch.py
-- `src/shadow_trading/broker.py` — unused abstraction
+Update `scripts/render_migrate.py` with CREATE TABLE + ALTER TABLE for Postgres.
 
-**New database tables:**
-- `traffic_light_state` — regime persistence tracking
-- `council_calibrations` — falsifiable prediction tracking
-- `council_debug_log` — full prompt/response replay
-- `council_parameter_log` — parameter change attribution
-- `council_parameter_state` — current active parameters
-- `user_notes` — dashboard notes (schema ready, page pending)
-- `validation_results` — system validator output
+## 0C. File logging with rotation
 
-**New columns:**
-- `shadow_trades.signal_price` — captured at scan time for IS tracking
-- `shadow_trades.implementation_shortfall_bps` — computed on fill
-- `council_sessions.result_json` — full structured session output
-- `council_votes.direction` — new schema (bullish/neutral/bearish)
-- `council_votes.confidence_float` — 0.0-1.0 scale
-- `council_votes.assessment_json` — complete agent assessment blob
-
-**New API endpoints:**
-- `GET /api/health/hshs` — live HSHS score
-- `GET /api/system/validation` — system validator results
-
-**Data flow changes:**
-- Scan pipeline: now computes Traffic Light ONCE per scan, injects into all tickers
-- Enrichment: now includes PEAD earnings signals per ticker (conditional on proximity ≤30 days)
-- Governor: now accepts traffic_light_multiplier parameter, applies before all other checks
-- Executor: now captures signal_price and computes IS on fill
-- Council: vote-first protocol, 1-2 rounds, parameter auto-application with rate limiters
-
-## 1.3 Update docs/roadmap.md
-
-Add confirmed decisions:
-- Strategy #1: Pullback (LIVE)
-- Strategy #2: Mean Reversion (Phase 2, Connors RSI(2), ρ = −0.35)
-- Strategy #3: Evolved PEAD (Phase 3, composite earnings info system)
-- RL: Dr. GRPO (loss_type="dr_grpo" in TRL GRPOTrainer), skip DPO
-- Breakout = pullback feature, not separate strategy
-- Traffic Light: built and deployed ✓
-- Council v2: built and deployed ✓
-- IS tracking: built and deployed ✓
-- PEAD enrichment: built and deployed ✓
-- HSHS live: built and deployed ✓
-
----
-
-# ══════════════════════════════════════════════════════════════
-# PART 2: LOGGING & OBSERVABILITY
-# ══════════════════════════════════════════════════════════════
-
-## 2.1 Configure file logging in watch.py
-
-Find where logging is configured in watch.py (may be in `__init__` or at module level).
-Add a RotatingFileHandler so logs persist to disk:
-
+In `src/scheduler/watch.py`, add RotatingFileHandler:
 ```python
-import logging
 from logging.handlers import RotatingFileHandler
+from pathlib import Path
 
-# Add at the start of the WatchDog.__init__ or the module-level setup:
 log_dir = Path("logs")
 log_dir.mkdir(exist_ok=True)
-
-file_handler = RotatingFileHandler(
-    log_dir / "halcyon.log",
-    maxBytes=10 * 1024 * 1024,  # 10 MB per file
-    backupCount=7,               # Keep 7 rotated files (7 days at ~10MB/day)
-)
-file_handler.setLevel(logging.INFO)
-file_handler.setFormatter(logging.Formatter(
-    "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-))
-
-# Add to root logger so ALL modules write to the file
-logging.getLogger().addHandler(file_handler)
-```
-
-Also ensure the root logger level is INFO (not WARNING):
-```python
+fh = RotatingFileHandler(log_dir / "halcyon.log", maxBytes=10_000_000, backupCount=7)
+fh.setLevel(logging.INFO)
+fh.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s"))
+logging.getLogger().addHandler(fh)
 logging.getLogger().setLevel(logging.INFO)
 ```
 
-Add `logs/` to `.gitignore` if not already there.
+Add `logs/` to `.gitignore`.
 
-## 2.2 Verify terminal output for key operations
+## 0D. Fix Council.jsx
 
-Run a dry scan and verify you see:
-```bash
-python -m src.main scan --dry-run --verbose 2>&1 | head -50
+1. Replace `devils_advocate` dissent detection:
+```jsx
+// OLD: agent.role === 'devils_advocate' || agent.is_dissenter || agent.is_devils_advocate
+// NEW: agent.is_dissenter || agent.direction !== consensusDirection
 ```
 
-Verify output includes lines for:
-- Universe loaded
+2. Add new agent label/emoji mappings (tactical_operator→⚡, strategic_architect→🏗️,
+   red_team→🔴, innovation_engine→💡, macro_navigator→🌍)
+
+3. Replace `position` display with `direction` (bullish/neutral/bearish)
+
+4. Remove any `round3` references
+
+5. `npm run build` must succeed
+
+---
+
+# ══════════════════════════════════════════════════════════════
+# PART 1: VERIFY OLDER UNTOUCHED FEATURES
+# ══════════════════════════════════════════════════════════════
+
+These components were NOT touched by either sprint. Verify they still work.
+
+## 1A. Feature engine
+
+```python
+from src.features.engine import compute_all_features
+print("Feature engine imports OK ✓")
+# Verify it references regime.py, earnings.py correctly
+```
+
+```bash
+grep "from src" src/features/engine.py | head -10
+# Verify no imports of deleted modules
+```
+
+## 1B. Ranking pipeline
+
+```python
+from src.ranking.ranker import rank_universe, get_top_candidates
+print("Ranking imports OK ✓")
+```
+
+## 1C. Position sizing / packets
+
+```python
+from src.packets.template import build_packet_from_features, render_packet
+print("Packet builder imports OK ✓")
+```
+
+## 1D. Email notifications
+
+```python
+from src.email.notifier import send_email
+print("Email notifier imports OK ✓")
+```
+
+## 1E. AuthGate (cloud authentication)
+
+```bash
+grep "AuthGate" frontend/src/App.jsx
+# Verify it's still wrapping the routes
+```
+
+## 1F. Alpaca adapter
+
+```python
+from src.shadow_trading.alpaca_adapter import get_current_price, submit_bracket_order
+print("Alpaca adapter imports OK ✓")
+```
+
+## 1G. Saturday retrain pipeline
+
+```python
+from src.training.trainer import run_training_pipeline
+print("Training pipeline imports OK ✓")
+```
+
+```bash
+python -m src.main train-pipeline --help
+# Must show help text, not crash
+```
+
+## 1H. CTO report
+
+```python
+from src.evaluation.cto_report import generate_cto_report
+print("CTO report imports OK ✓")
+```
+
+## 1I. Setup classifier
+
+```python
+from src.features.setup_classifier import classify_setup
+print("Setup classifier imports OK ✓")
+```
+
+## 1J. Data integrity
+
+```python
+from src.data_integrity import validate_features
+print("Data integrity imports OK ✓")
+```
+
+## 1K. Full dry-run scan
+
+```bash
+python -m src.main scan --verbose --dry-run 2>&1 | tee /tmp/scan_verify.log
+```
+
+**Verify in output:**
+- Universe loads (90+ tickers)
 - Features computed
-- Enrichment (fundamentals, insiders, news, macro, earnings)
-- Traffic Light (score, multiplier, regime)
-- Ranking
-- Packet-worthy candidates
-
-Run a council session and verify output:
-```bash
-python -m src.main council 2>&1 | head -30
-```
-
-Verify output includes:
-- "Running AI Council session"
-- Agent assessments with direction and confidence
-- Consensus result
-- Cost
+- Enrichment runs (fundamentals, insiders, news, macro, PEAD earnings)
+- Traffic Light computed (score, multiplier, regime)
+- Ranking produces candidates
+- LLM commentary generated (NOT 100% fallback)
+- Signal prices captured
+- No crashes, no unhandled exceptions
 
 ---
 
 # ══════════════════════════════════════════════════════════════
-# PART 3: CONFIG UPDATES
+# PART 2: DOCUMENTATION
 # ══════════════════════════════════════════════════════════════
 
-## 3.1 Add execution config to settings.example.yaml
+## 2A. docs/architecture.md — full rewrite
 
-Find the `shadow_trading:` section in `config/settings.example.yaml`. After it, add:
+Add all new modules, deleted modules, new tables, new columns, new API endpoints,
+data flow changes. See section 1.2 of previous sprint draft for complete list.
 
-```yaml
-# ── Execution Configuration ─────────────────────────────────
-execution:
-  order_type: "market"           # "market" or "limit_at_ask"
-  limit_timeout_seconds: 300     # Cancel unfilled limits after 5 minutes
-```
+## 2B. docs/roadmap.md — confirmed strategy decisions
+
+Add: Strategy #2 = Mean Reversion (Phase 2), Strategy #3 = Evolved PEAD (Phase 3),
+RL = Dr. GRPO, Traffic Light built ✓, Council v2 deployed ✓.
+
+## 2C. AGENTS.md — exact counts
+
+Run count commands and update line 1 to match reality.
+
+## 2D. config/settings.example.yaml
+
+Add execution config section (order_type, limit_timeout_seconds).
 
 ---
 
 # ══════════════════════════════════════════════════════════════
-# PART 4: COUNCIL V2 VERIFICATION
+# PART 3: FINAL GATE
 # ══════════════════════════════════════════════════════════════
 
-## 4.1 Verify import chain
-
-```python
-# This must succeed without error:
-from src.council.agents import AGENT_NAMES, AGENT_PROMPTS, AGENT_DATA_FUNCTIONS
-from src.council.protocol import aggregate_votes, tally_votes, apply_rate_limiters, PARAMETER_DEFAULTS
-from src.council.engine import CouncilEngine, init_council_tables
-from src.council.value_tracker import compute_attribution, get_rolling_value_summary
-
-print(f"Agents: {AGENT_NAMES}")
-print(f"Data functions: {list(AGENT_DATA_FUNCTIONS.keys())}")
-print(f"Defaults: {PARAMETER_DEFAULTS}")
-print("All council imports OK ✓")
-```
-
-## 4.2 Verify database tables created
-
-```python
-from src.council.engine import init_council_tables
-from src.council.value_tracker import init_value_tables
-
-init_council_tables()
-init_value_tables()
-
-import sqlite3
-conn = sqlite3.connect("ai_research_desk.sqlite3")
-tables = [r[0] for r in conn.execute(
-    "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'council%'"
-).fetchall()]
-print(f"Council tables: {tables}")
-
-# Must include: council_sessions, council_votes, council_calibrations, council_debug_log
-# Must include: council_parameter_log, council_parameter_state
-
-# Verify new columns
-cols = [r[1] for r in conn.execute("PRAGMA table_info(council_votes)").fetchall()]
-assert "direction" in cols, "MISSING: council_votes.direction"
-assert "confidence_float" in cols, "MISSING: council_votes.confidence_float"
-assert "assessment_json" in cols, "MISSING: council_votes.assessment_json"
-
-cols = [r[1] for r in conn.execute("PRAGMA table_info(council_sessions)").fetchall()]
-assert "result_json" in cols, "MISSING: council_sessions.result_json"
-
-print("All council tables and columns verified ✓")
-```
-
-## 4.3 Fix council tests
-
-The old council tests reference deleted agent names (risk_officer, alpha_strategist, etc.).
-Update `tests/test_council*.py` to use new agent names:
-
-- `risk_officer` → `red_team`
-- `alpha_strategist` → `tactical_operator`
-- `data_scientist` → `innovation_engine`
-- `regime_analyst` → `macro_navigator`
-- `devils_advocate` → (removed, no replacement — update tests to use 5 agents)
-
-Also update any tests that expect:
-- `position` field → now `direction` (bullish/neutral/bearish)
-- `confidence` as 1-10 integer → now `confidence` as 0.0-1.0 float
-- `vote` as reduce/hold/increase → now mapped via backward compat
-- 3 rounds always → now 1-2 rounds (conditional)
-
-Run tests after fixing:
 ```bash
-python -m pytest tests/test_council*.py -v
-```
-
-## 4.4 Verify no references to old agent names in active code
-
-```bash
-grep -rn "risk_officer\|alpha_strategist\|data_scientist\|regime_analyst\|devils_advocate" \
-    src/ --include="*.py" | grep -v backup | grep -v __pycache__ | grep -v "v1_backup"
-```
-
-**Must return ZERO results.** If any found, fix them.
-
----
-
-# ══════════════════════════════════════════════════════════════
-# PART 5: DATA COLLECTION VERIFICATION
-# ══════════════════════════════════════════════════════════════
-
-## 5.1 Verify all overnight collectors
-
-```python
-import sqlite3
-from datetime import datetime, timedelta
-
-conn = sqlite3.connect("ai_research_desk.sqlite3")
-cutoff = (datetime.utcnow() - timedelta(days=3)).isoformat()
-
-collectors = [
-    ("macro_snapshots", "date"),
-    ("insider_transactions", "created_at"),
-    ("edgar_filings", "created_at"),
-    ("short_interest", "created_at"),
-    ("options_chains", "created_at"),
-    ("vix_term_structure", "date"),
-    ("earnings_calendar", "created_at"),
-    ("sector_rotation", "created_at"),
-    ("economic_calendar", "created_at"),
-    ("analyst_estimates", "created_at"),
-]
-
-for table, col in collectors:
-    try:
-        total = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
-        recent = conn.execute(f"SELECT COUNT(*) FROM {table} WHERE {col} > ?", (cutoff,)).fetchone()[0]
-        status = "✓" if total > 0 else "⚠️ EMPTY"
-        print(f"  {table}: {total} total, {recent} recent {status}")
-    except Exception as e:
-        print(f"  {table}: ❌ {e}")
-```
-
-## 5.2 Verify all API endpoints
-
-```bash
-echo "API endpoints in cloud_app.py:"
-grep -c "@app.get\|@app.post\|@app.put\|@app.delete" src/api/cloud_app.py
+echo "=== FINAL GATE ===" 
+python -m pytest tests/ -v --tb=short 2>&1 | tail -15
+cd frontend && npm run build 2>&1 | tail -3 && cd ..
 echo ""
-echo "Council-specific endpoints:"
-grep "@app.*council\|@app.*hshs\|@app.*validation\|@app.*health" src/api/cloud_app.py
-```
-
----
-
-# ══════════════════════════════════════════════════════════════
-# PART 6: FINAL VERIFICATION
-# ══════════════════════════════════════════════════════════════
-
-## 6.1 All tests pass
-
-```bash
-python -m pytest tests/ -v --tb=short 2>&1 | tee /tmp/final_test.log
-echo ""
-tail -10 /tmp/final_test.log
-```
-
-**ZERO failures.**
-
-## 6.2 Frontend builds
-
-```bash
-cd frontend && npm run build 2>&1 | tail -5 && cd ..
-```
-
-## 6.3 No orphaned imports
-
-```bash
-echo "Imports of deleted modules:"
-grep -rn "from src.scheduler.overnight\|from src.shadow_trading.broker" src/ tests/ --include="*.py" | grep -v __pycache__
+echo "Orphaned imports:"
+grep -rn "from src.scheduler.overnight\|from src.shadow_trading.broker\|protocol_v2\|agents_v2" src/ tests/ --include="*.py" | grep -v backup | grep -v __pycache__
 echo "(must be empty)"
-
 echo ""
-echo "Imports of old council v2 files:"
-grep -rn "protocol_v2\|agents_v2\|engine_v2" src/ --include="*.py" | grep -v backup | grep -v __pycache__
-echo "(must be empty)"
+echo "Old agent names in active code:"  
+grep -rn "risk_officer\|alpha_strategist\|data_scientist\|regime_analyst\|devils_advocate" src/ frontend/src/ tests/ --include="*.py" --include="*.jsx" | grep -v backup | grep -v __pycache__ | grep -v node_modules | grep -v "is_devils_advocate\|# " 
+echo "(must be empty or only schema column references)"
 ```
 
-## 6.4 Commit and push
-
-```bash
-git add -A
-git status
-git commit -m "cleanup: final verification — docs, logging, config, council tests, data verification
-
-- AGENTS.md counts verified and corrected
-- docs/architecture.md updated with all new modules, tables, columns, endpoints
-- docs/roadmap.md updated with confirmed strategy decisions
-- File logging with rotation added to watch.py (logs/halcyon.log, 10MB × 7)
-- config/settings.example.yaml: execution config added
-- Council tests updated for v2 agent names and schema
-- Zero old agent references in active code
-- All data collection tables verified
-- All tests pass, frontend builds"
-
-git push origin main
-```
+ALL tests pass. Frontend builds. No orphaned imports. No old agent names.
 
 ---
 
-# Sprint Documentation Checklist
+# Sprint Documentation Checklist (docs/sprint-checklist.md)
 
 ### Tier 1 (MANDATORY):
-- [ ] AGENTS.md counts match code
-- [ ] docs/architecture.md updated
-- [ ] docs/roadmap.md updated
-- [ ] Council tests pass
-- [ ] Zero orphaned imports
+- [ ] AGENTS.md counts match
+- [ ] CHANGELOG.md — cleanup sprint entry
+- [ ] docs/architecture.md — full update
 - [ ] All tests pass
 - [ ] Frontend builds
 - [ ] File logging configured
+- [ ] Render sync updated
+- [ ] Council.jsx updated
+- [ ] Council tests rewritten and passing
