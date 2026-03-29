@@ -1112,6 +1112,188 @@ Ensure `/api/system/validation` exists in `cloud_app.py`. If not, add it followi
 ---
 
 # ══════════════════════════════════════════════════════════════
+# PART 5B: NOTES PAGE (Cloud Dashboard)
+# ══════════════════════════════════════════════════════════════
+
+Ryan needs a simple notes tab on the cloud dashboard (halcyonlab.app) for
+taking notes throughout the day. Persistent storage via the database.
+
+## OPERATION 5B.1: Create notes table
+
+**Add to `_ensure_all_tables()` in `src/scheduler/watch.py`:**
+```sql
+CREATE TABLE IF NOT EXISTS user_notes (
+    note_id TEXT PRIMARY KEY,
+    title TEXT,
+    content TEXT NOT NULL,
+    tags TEXT,
+    pinned INTEGER DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+```
+
+Also add to `src/journal/store.py` `initialize_database()`.
+
+## OPERATION 5B.2: Create API endpoints
+
+**Add to `src/api/cloud_app.py`:**
+
+```python
+@app.get("/api/notes", dependencies=[Depends(verify_auth)])
+def get_notes(limit: int = 50):
+    """Get recent notes, pinned first."""
+    try:
+        rows = _query(
+            "SELECT note_id, title, content, tags, pinned, created_at, updated_at "
+            "FROM user_notes ORDER BY pinned DESC, updated_at DESC LIMIT ?",
+            (limit,),
+        )
+        return {"notes": rows}
+    except Exception as e:
+        logger.error("[API] Notes fetch failed: %s", e)
+        return {"notes": [], "error": str(e)}
+
+
+@app.post("/api/notes", dependencies=[Depends(verify_auth)])
+def create_note(payload: dict):
+    """Create a new note."""
+    import uuid
+    from datetime import datetime
+    note_id = str(uuid.uuid4())
+    now = datetime.utcnow().isoformat()
+    title = payload.get("title", "")
+    content = payload.get("content", "")
+    tags = payload.get("tags", "")
+    try:
+        _execute(
+            "INSERT INTO user_notes (note_id, title, content, tags, pinned, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, 0, ?, ?)",
+            (note_id, title, content, tags, now, now),
+        )
+        return {"note_id": note_id, "created_at": now}
+    except Exception as e:
+        logger.error("[API] Note create failed: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/api/notes/{note_id}", dependencies=[Depends(verify_auth)])
+def update_note(note_id: str, payload: dict):
+    """Update an existing note."""
+    from datetime import datetime
+    now = datetime.utcnow().isoformat()
+    fields = []
+    values = []
+    for key in ("title", "content", "tags", "pinned"):
+        if key in payload:
+            fields.append(f"{key} = ?")
+            values.append(payload[key])
+    if not fields:
+        return {"error": "No fields to update"}
+    fields.append("updated_at = ?")
+    values.append(now)
+    values.append(note_id)
+    try:
+        _execute(f"UPDATE user_notes SET {', '.join(fields)} WHERE note_id = ?", tuple(values))
+        return {"updated": True, "updated_at": now}
+    except Exception as e:
+        logger.error("[API] Note update failed: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/notes/{note_id}", dependencies=[Depends(verify_auth)])
+def delete_note(note_id: str):
+    """Delete a note."""
+    try:
+        _execute("DELETE FROM user_notes WHERE note_id = ?", (note_id,))
+        return {"deleted": True}
+    except Exception as e:
+        logger.error("[API] Note delete failed: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+```
+
+Also add `user_notes` to the Render sync table list in `src/sync/render_sync.py` so notes
+sync from local to cloud AND from cloud back to local (bidirectional — notes created on the
+cloud dashboard should sync back).
+
+**Add to `scripts/render_migrate.py`:**
+```sql
+CREATE TABLE IF NOT EXISTS user_notes (
+    note_id TEXT PRIMARY KEY,
+    title TEXT,
+    content TEXT NOT NULL,
+    tags TEXT,
+    pinned INTEGER DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+```
+
+## OPERATION 5B.3: Create frontend Notes page
+
+**CREATE FILE `frontend/src/pages/Notes.jsx`:**
+
+Build a React page that:
+1. Fetches notes from `/api/notes` on load
+2. Shows a list of notes on the left (or top on mobile), with pinned notes first
+3. Shows a note editor on the right (or bottom on mobile)
+4. "New Note" button creates a blank note
+5. Auto-saves on blur or after 2 seconds of inactivity (debounced)
+6. Each note has: title (editable), content (textarea or rich text), tags (comma-separated), pin toggle
+7. Delete button with confirmation
+8. Search/filter by tag or text content
+9. Timestamps shown (created, last updated)
+10. Mobile-friendly layout
+
+**Style:** Match the existing dashboard dark theme (slate-800, slate-900 backgrounds, teal accents).
+Use the same card pattern as other pages. Content area should use a monospace font for readability
+(like JetBrains Mono — already imported in the dashboard).
+
+**The textarea should be generous in size** — this is a note-taking tool, not a form field.
+Minimum 300px height, resize vertically.
+
+## OPERATION 5B.4: Add route, navigation, and API functions
+
+**MODIFY `frontend/src/App.jsx`:**
+```jsx
+import Notes from './pages/Notes'
+// Add route:
+<Route path="/notes" element={<Notes />} />
+```
+
+**MODIFY `frontend/src/components/Layout.jsx`:**
+Add "Notes" to the navigation menu with a 📝 icon.
+
+**MODIFY `frontend/src/api.js`:**
+```javascript
+export async function fetchNotes(limit = 50) {
+  return fetchApi(`/notes?limit=${limit}`)
+}
+
+export async function createNote(payload) {
+  return fetchApi('/notes', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function updateNote(noteId, payload) {
+  return fetchApi(`/notes/${noteId}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function deleteNote(noteId) {
+  return fetchApi(`/notes/${noteId}`, {
+    method: 'DELETE',
+  })
+}
+```
+
+---
+
+# ══════════════════════════════════════════════════════════════
 # PART 6: DOCUMENTATION (MANDATORY — DO NOT SKIP)
 # ══════════════════════════════════════════════════════════════
 

@@ -1662,3 +1662,291 @@ class TestRateLimiters:
 - `value_tracker.py`: counterfactual computation + rolling summary = ~250 lines
 - `engine.py`: modifications to run_session() = ~150 lines of changes
 - Tests: ~120 lines across 2 test files
+
+---
+
+## ADDITIONAL: Debug Log Table
+
+For full observability — the actual prompt text sent to each agent and the raw
+API response before JSON parsing. Enables replaying exactly what each agent saw.
+
+**Add to `src/council/engine.py` schema:**
+
+```sql
+CREATE TABLE IF NOT EXISTS council_debug_log (
+    debug_id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL,
+    agent_name TEXT NOT NULL,
+    round INTEGER NOT NULL,
+    system_prompt_hash TEXT,
+    user_message TEXT,
+    raw_response TEXT,
+    parsed_successfully INTEGER DEFAULT 0,
+    parse_error TEXT,
+    response_tokens INTEGER,
+    latency_ms INTEGER,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (session_id) REFERENCES council_sessions(session_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_debug_log_session
+    ON council_debug_log(session_id);
+```
+
+**In `protocol.py` `_call_claude()`**, capture timing and raw response:
+
+```python
+def _call_claude(system_prompt: str, user_message: str) -> tuple[str | None, dict]:
+    """Call Claude API. Returns (raw_response, debug_info).
+    
+    debug_info: {"latency_ms": int, "response_tokens": int, "raw": str}
+    """
+    import time
+    debug = {"latency_ms": 0, "response_tokens": 0, "raw": None}
+    
+    try:
+        import anthropic
+        client = anthropic.Anthropic()
+        start = time.monotonic()
+        response = client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=800,
+            system=system_prompt,
+            messages=[{"role": "user", "content": user_message}],
+        )
+        elapsed = (time.monotonic() - start) * 1000
+        raw = response.content[0].text if response.content else None
+        debug["latency_ms"] = int(elapsed)
+        debug["response_tokens"] = response.usage.output_tokens if response.usage else 0
+        debug["raw"] = raw
+        return raw, debug
+    except Exception as e:
+        logger.error("[COUNCIL] Claude API call failed: %s", e)
+        debug["raw"] = str(e)
+        return None, debug
+```
+
+**In `run_round_1()`**, store debug log for each agent:
+
+```python
+    raw, debug = _call_claude(system_prompt, user_message)
+    parsed = _parse_agent_response(raw, agent_name)
+    
+    # Store debug log
+    try:
+        import hashlib
+        with sqlite3.connect(db_path) as conn:
+            conn.execute(
+                "INSERT INTO council_debug_log "
+                "(debug_id, session_id, agent_name, round, system_prompt_hash, "
+                "user_message, raw_response, parsed_successfully, parse_error, "
+                "response_tokens, latency_ms, created_at) "
+                "VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (str(uuid.uuid4()), session_id, agent_name,
+                 hashlib.md5(system_prompt.encode()).hexdigest()[:12],
+                 user_message, debug.get("raw", ""),
+                 0 if parsed.get("_parse_failed") else 1,
+                 parsed.get("key_reasoning", "") if parsed.get("_parse_failed") else None,
+                 debug.get("response_tokens", 0),
+                 debug.get("latency_ms", 0),
+                 datetime.now(ET).isoformat()),
+            )
+    except Exception as e:
+        logger.warning("[COUNCIL] Debug log insert failed: %s", e)
+```
+
+Note: `run_round_1()` needs the `session_id` passed in for debug logging. Update signature:
+
+```python
+def run_round_1(
+    shared_context: str,
+    session_id: str | None = None,  # NEW: for debug logging
+    db_path: str = "ai_research_desk.sqlite3",
+) -> list[dict]:
+```
+
+---
+
+## ADDITIONAL: Strategic / On-Demand Sessions
+
+The council can deliberate on any business-level question — hardware purchases,
+new desk proposals, scaling decisions, fund formation timing.
+
+**In `engine.py` `run_session()`**, add `custom_question` parameter:
+
+```python
+    def run_session(
+        self,
+        session_type: str = "daily",
+        trigger_reason: str | None = None,
+        custom_question: str | None = None,  # NEW: for strategic sessions
+    ) -> dict:
+```
+
+Pass through to `run_round_1()`:
+
+```python
+        round1 = run_round_1(
+            shared_context,
+            session_id=session_id,
+            db_path=self.db_path,
+            custom_question=custom_question,
+        )
+```
+
+**In `protocol.py` `run_round_1()`**, use custom question if provided:
+
+```python
+def run_round_1(
+    shared_context: str,
+    session_id: str | None = None,
+    db_path: str = "ai_research_desk.sqlite3",
+    custom_question: str | None = None,  # NEW
+) -> list[dict]:
+    ...
+    for agent_name, system_prompt in AGENT_PROMPTS.items():
+        data_fn = AGENT_DATA_FUNCTIONS.get(agent_name)
+        agent_data = data_fn(db_path) if data_fn else "No specialist data."
+
+        if custom_question:
+            user_message = f"""STRATEGIC QUESTION FROM FOUNDER:
+{custom_question}
+
+SHARED MARKET CONTEXT:
+{shared_context}
+
+YOUR SPECIALIST DATA:
+{agent_data}
+
+Analyze this question through your specific analytical framework.
+Direction meaning: "bullish" = proceed/yes, "neutral" = wait/unclear, "bearish" = don't/no.
+Produce your assessment as a JSON object. No preamble."""
+        else:
+            user_message = f"""SHARED MARKET CONTEXT:
+{shared_context}
+
+YOUR SPECIALIST DATA:
+{agent_data}
+
+Produce your assessment as a JSON object. No preamble, no markdown fences."""
+```
+
+**In `src/main.py`**, add CLI support:
+
+Find the council subparser setup and add:
+```python
+council_parser.add_argument(
+    "--question", "-q", type=str, default=None,
+    help="Custom strategic question for the council (triggers strategic session)")
+```
+
+In the council command handler:
+```python
+    session_type = args.type if hasattr(args, 'type') else "daily"
+    custom_question = getattr(args, "question", None)
+    if custom_question:
+        session_type = "strategic"
+    
+    engine = CouncilEngine()
+    result = engine.run_session(
+        session_type=session_type,
+        trigger_reason=custom_question or f"Scheduled {session_type}",
+        custom_question=custom_question,
+    )
+```
+
+Usage:
+```bash
+python -m src.main council --question "Should we buy the RTX 3090 now or wait?"
+python -m src.main council --question "Is it time to start building the mean reversion adapter?"
+python -m src.main council --type weekly
+```
+
+**Telegram command** (add to `src/notifications/telegram.py`):
+
+```python
+# In the command handler section:
+if text.startswith("/council "):
+    question = text[len("/council "):].strip()
+    if question:
+        from src.council.engine import CouncilEngine
+        engine = CouncilEngine()
+        result = engine.run_session(
+            session_type="strategic",
+            trigger_reason=question,
+            custom_question=question,
+        )
+        # Format summary for Telegram
+        votes = result.get("votes", {})
+        direction = votes.get("direction", "?")
+        score = votes.get("aggregated_score", 0)
+        consensus = votes.get("consensus_type", "?")
+        cost = result.get("session_meta", {}).get("cost_usd", 0)
+        
+        emoji = {"bullish": "🟢", "neutral": "⚪", "bearish": "🔴"}.get(direction, "❓")
+        
+        summary = f"{emoji} Council: {direction.upper()} ({consensus})\n"
+        summary += f"Score: {score:+.2f} | Cost: ${cost:.2f}\n\n"
+        
+        for a in result.get("agent_assessments", []):
+            a_emoji = {"bullish": "🟢", "neutral": "⚪", "bearish": "🔴"}.get(a.get("direction"), "❓")
+            summary += f"{a_emoji} {a['agent']}: {a.get('key_reasoning', '')[:80]}...\n"
+        
+        send_telegram(summary)
+```
+
+---
+
+## DASHBOARD VISUAL SPEC (for Council.jsx update)
+
+The council dashboard page should display:
+
+**1. Current State Banner (always visible at top)**
+- Traffic Light indicator (3 colored dots)
+- Council direction with color (🟢 Bullish / ⚪ Neutral / 🔴 Bearish)
+- Active parameter adjustments (sizing ×0.85, cash 20%, scan normal)
+- Last session timestamp and cost
+
+**2. Agent Vote Cards (5 cards in a row, main visual element)**
+Each card:
+- Agent name and icon at top
+- Direction indicator: green/gray/red left border AND background tint
+- Confidence bar (0-100% width, colored by direction)
+- Key reasoning (1 paragraph, truncated with expand)
+- Key risk (1 line, red text)
+- Parameter recommendation chips (e.g., "sizing: 0.85", "cash: 20%")
+- Dissent border: if agent disagrees with consensus, orange dashed border
+
+**3. Consensus Badge (below cards)**
+- "5-0 Unanimous ✅" / "4-1 Strong" / "3-2 Split ⚠️" / "No Consensus ❌"
+- Aggregated score number
+- Round indicator: "Resolved in Round 1" or "Required Round 2"
+- Sycophancy flags if any (which agents flipped)
+
+**4. Parameter Changes Table**
+| Parameter | Before | Council | Applied | Rate Limited? |
+|---|---|---|---|---|
+| Position Sizing | 1.0 | 0.85 | 0.85 | No |
+
+**5. Value Attribution Section**
+- Rolling 30-day value added (dollars, with trend line)
+- Per-agent breakdown: which agents' recommendations created/destroyed value
+- Authority status badge: "Full" / "Alert (8 weeks negative)" / "Reduced"
+
+**6. Calibration Scorecard**
+- Per-agent prediction accuracy (verified predictions / total)
+- Confidence calibration: are agents' stated confidences aligned with outcomes?
+- Best/worst predictor highlighted
+
+**7. Session History (expandable list)**
+- Date, type, direction, consensus, cost
+- Click to expand: full agent assessments, parameter changes, predictions
+
+**8. Strategic Session Input (if applicable)**
+- Text field: "Ask the council a question"
+- Submit button triggers strategic session
+- Results appear inline in the session history
+
+All components use Tailwind classes matching existing dashboard dark theme.
+Use Recharts for the value attribution trend line.
+Use the same card/expandable pattern from existing Council.jsx.
