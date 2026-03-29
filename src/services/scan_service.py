@@ -59,6 +59,28 @@ def run_scan(config: dict, dry_run: bool = False, send_email_flag: bool = False,
     except Exception as e:
         logger.warning("[SCAN] Data enrichment failed: %s — continuing without enrichment", e)
 
+    # Traffic Light regime overlay
+    traffic_light = {"sizing_multiplier": 1.0, "total_score": -1, "regime_label": "unknown"}
+    try:
+        from src.features.traffic_light import compute_traffic_light
+        vix_value = None
+        for _t, _f in features.items():
+            if "vix_proxy" in _f:
+                vix_value = _f["vix_proxy"]
+                break
+        traffic_light = compute_traffic_light(spy, vix=vix_value)
+        for _t in features:
+            features[_t]["traffic_light"] = traffic_light
+            features[_t]["traffic_light_multiplier"] = traffic_light.get("sizing_multiplier", 1.0)
+        logger.info("[SCAN] Traffic Light: score=%d mult=%.1f regime=%s",
+                    traffic_light.get("total_score", -1),
+                    traffic_light.get("sizing_multiplier", 1.0),
+                    traffic_light.get("regime_label", "unknown"))
+    except Exception as e:
+        logger.warning("[SCAN] Traffic Light failed: %s — using default", e)
+        for _t in features:
+            features[_t]["traffic_light_multiplier"] = 1.0
+
     # Data integrity validation — filter out tickers with invalid features
     try:
         from src.data_integrity import validate_features, validate_universe
@@ -96,6 +118,9 @@ def run_scan(config: dict, dry_run: bool = False, send_email_flag: bool = False,
         ticker = candidate["ticker"]
         feat = candidate["features"]
         feat["_score"] = candidate["score"]
+
+        # Capture signal price for IS tracking
+        feat["signal_price"] = float(feat.get("current_price", 0))
 
         packet = build_packet_from_features(ticker, feat, config)
         packet = enhance_packet_with_llm(packet, feat, config)

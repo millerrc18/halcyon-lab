@@ -149,6 +149,18 @@ def build_shared_context(db_path: str) -> str:
         logger.warning("[COUNCIL] Failed to query open shadow trades: %s", e)
 
     try:
+        from src.evaluation.hshs_live import compute_hshs
+        hshs = compute_hshs()
+        parts.append(f"System Health (HSHS): {hshs.get('hshs', 0):.1f}/100 "
+                     f"(P={hshs['dimensions'].get('performance', 0):.0f} "
+                     f"M={hshs['dimensions'].get('model_quality', 0):.0f} "
+                     f"D={hshs['dimensions'].get('data_asset', 0):.0f} "
+                     f"F={hshs['dimensions'].get('flywheel_velocity', 0):.0f} "
+                     f"C={hshs['dimensions'].get('defensibility', 0):.0f})")
+    except Exception as e:
+        logger.warning("[COUNCIL] HSHS query failed: %s", e)
+
+    try:
         vix = _query_db(
             "SELECT vix_close FROM vix_daily ORDER BY date DESC LIMIT 1",
             db_path=db_path,

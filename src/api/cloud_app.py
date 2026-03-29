@@ -523,6 +523,18 @@ def get_doc(doc_id: str):
         }
 
 
+@app.get("/api/health/hshs", dependencies=[Depends(verify_auth)])
+def health_hshs():
+    """Compute and return the live Halcyon System Health Score."""
+    try:
+        from src.evaluation.hshs_live import compute_hshs
+        return compute_hshs()
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error("[API] HSHS computation failed: %s", e)
+        return {"hshs": 0, "dimensions": {}, "error": str(e)}
+
+
 @app.get("/api/council/latest", dependencies=[Depends(verify_auth)])
 def council_latest():
     """Latest council session with votes."""

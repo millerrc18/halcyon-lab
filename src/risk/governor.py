@@ -86,7 +86,8 @@ class RiskGovernor:
         self.enabled = risk_cfg.get("enabled", True)
 
     def check_trade(self, ticker: str, allocation_dollars: float,
-                    features: dict, portfolio: dict) -> dict:
+                    features: dict, portfolio: dict,
+                    traffic_light_multiplier: float = 1.0) -> dict:
         """Evaluate whether a proposed trade passes all risk checks.
 
         Args:
@@ -102,6 +103,18 @@ class RiskGovernor:
 
         if not self.enabled:
             return {"approved": True, "checks": [{"name": "governor_disabled", "passed": True, "detail": "Risk governor disabled"}]}
+
+        # 0. Traffic Light sizing
+        if traffic_light_multiplier < 1.0:
+            original_alloc = allocation_dollars
+            allocation_dollars = allocation_dollars * traffic_light_multiplier
+            checks.append({
+                "name": "traffic_light",
+                "passed": True,
+                "detail": f"Traffic Light x{traffic_light_multiplier:.1f}: ${original_alloc:.0f} -> ${allocation_dollars:.0f}",
+            })
+            logger.info("[RISK] Traffic Light: x%.1f on %s ($%.0f -> $%.0f)",
+                        traffic_light_multiplier, ticker, original_alloc, allocation_dollars)
 
         # 1. Emergency halt
         halted = _is_halted()
