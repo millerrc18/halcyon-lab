@@ -107,6 +107,18 @@ def enrich_features(features: dict[str, dict], config: dict) -> dict[str, dict]:
             feat["news_sentiment"] = "no_news"
             logger.debug("[ENRICHMENT] News failed for %s: %s", ticker, e)
 
+        # Earnings signals (PEAD enrichment)
+        try:
+            from src.data_enrichment.earnings_signals import compute_earnings_signals
+            earnings = compute_earnings_signals(ticker)
+            feat["earnings_signals"] = earnings
+            if earnings.get("include_in_prompt"):
+                logger.debug("[ENRICHMENT] Earnings context for %s (proximity: %s days, strength: %s)",
+                             ticker, earnings.get("earnings_proximity_days"), earnings.get("earnings_signal_strength"))
+        except Exception as e:
+            feat["earnings_signals"] = {"include_in_prompt": False}
+            logger.debug("[ENRICHMENT] Earnings signals failed for %s: %s", ticker, e)
+
         enriched_count += 1
 
     logger.info(

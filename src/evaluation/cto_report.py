@@ -13,6 +13,16 @@ logger = logging.getLogger(__name__)
 ET = ZoneInfo("America/New_York")
 
 
+def _compute_hshs() -> dict:
+    """Compute HSHS score for inclusion in CTO report."""
+    try:
+        from src.evaluation.hshs_live import compute_hshs
+        return compute_hshs()
+    except Exception as e:
+        logger.warning("[CTO] HSHS computation failed: %s", e)
+        return {"hshs": 0, "error": str(e)}
+
+
 def generate_cto_report(days: int = 7, db_path: str = "ai_research_desk.sqlite3") -> dict:
     """Generate a comprehensive structured performance report for CTO analysis.
 
@@ -144,6 +154,7 @@ def generate_cto_report(days: int = 7, db_path: str = "ai_research_desk.sqlite3"
         "training_status": training_status,
         "confidence_calibration": confidence_calibration,
         "fund_metrics": fund_metrics,
+        "hshs": _compute_hshs(),
     }
 
 

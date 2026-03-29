@@ -100,4 +100,5 @@ export const api = {
   // System Validation
   getValidation: () => fetchApi('/system/validation'),
   runValidation: () => fetchApi('/system/validation?fresh=true'),
+  getHSHS: () => fetchApi('/health/hshs'),
 }

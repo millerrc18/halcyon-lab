@@ -173,6 +173,16 @@ def initialize_database(db_path: str = "ai_research_desk.sqlite3") -> None:
         """)
         conn.commit()
 
+        # Implementation Shortfall columns
+        for _alter in [
+            "ALTER TABLE shadow_trades ADD COLUMN signal_price REAL",
+            "ALTER TABLE shadow_trades ADD COLUMN implementation_shortfall_bps REAL",
+        ]:
+            try:
+                conn.execute(_alter)
+            except sqlite3.OperationalError:
+                pass  # Column already exists
+
 
 def log_recommendation(
     packet: TradePacket,
