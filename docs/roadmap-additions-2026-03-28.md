@@ -93,3 +93,22 @@
 | Qwen3 Fine-Tuning SOTA | Ready | When convenient — may surface quick wins |
 | Strategy #2 Implementation (mean reversion) | Ready | After 50-trade gate (fill in actual performance data) |
 | Alpha Decay Monitoring | Ready | Phase 2 entry |
+
+## Council Redesign TODOs (from architecture session March 28)
+
+### Phase 1 (this sprint):
+- [ ] Rewrite agents.py with 5 new analytical-lens agents
+- [ ] Rewrite protocol.py with vote-first, conditional Round 2
+- [ ] Update engine.py with structured JSON storage, 1-2 round flow
+- [ ] Create value_tracker.py for counterfactual P&L computation
+- [ ] Create council_parameter_log + council_calibrations tables
+- [ ] Per-agent value tracking from day 1
+- [ ] Daily + weekly session types
+- [ ] Rate limiters on parameter auto-application
+- [ ] Update Council.jsx with new display (vote cards, value attribution, calibration)
+
+### Phase 2 (after 50-trade gate):
+- [ ] Add ticker-level agent recommendations (watch/avoid specific stocks)
+- [ ] Monthly planning sessions (requires 3 months calibration data)
+- [ ] Agent authority weighting based on calibration accuracy (ECE-based)
+- [ ] Auto-tighten council bounds if value-added negative 12+ weeks
