@@ -77,7 +77,7 @@ def get_current_parameters(db_path: str = DB_PATH) -> dict:
 
     Falls back to defaults if no state stored.
     """
-    from src.council.protocol_v2 import PARAMETER_DEFAULTS
+    from src.council.protocol import PARAMETER_DEFAULTS
 
     params = PARAMETER_DEFAULTS.copy()
     try:

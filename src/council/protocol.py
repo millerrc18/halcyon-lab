@@ -1,370 +1,645 @@
-"""Modified Delphi protocol for the AI Council.
+"""Council protocol — vote-first Modified Delphi.
 
-Implements a three-round deliberation process:
-  Round 1: Independent assessment (each agent gets its data + shared context).
-  Round 2: Cross-examination (each agent sees all Round 1 outputs).
-  Round 3: Final vote with confidence weighting.
+Round 1: All 5 agents assess independently (always runs).
+Aggregate: Confidence-weighted voting with domain weights.
+Round 2: Only if <3/5 consensus. Agents see others' views. (conditional)
+
+Research: AI_Council_Redesign_v2__Architecture_and_Implementation.md
+NeurIPS 2025: majority voting > multi-agent debate for factual tasks.
+
+ISSUE FIXES APPLIED:
+- #1: Uses generate_training_example() from claude_client (not raw anthropic)
+- #3: tally_votes() replaced with aggregate_votes() using new direction schema
+- #4: Weekly cumulative rate limiter implemented
+- #5: Value attribution limited to position_sizing_multiplier
+- #8: JSON fallback parsing with find("{") / rfind("}")
+- #9: Red Team prompt corrected for independent Round 1 assessment
+- #10: Debug logging wraps existing client with timing capture
 """
 
 import json
 import logging
-from typing import Any
-
-from src.council.agents import (
-    AGENT_DATA_FUNCTIONS,
-    AGENT_NAMES,
-    AGENT_PROMPTS,
-    gather_devils_advocate_data,
-)
+import sqlite3
+import time
+import uuid
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 logger = logging.getLogger(__name__)
 
+ET = ZoneInfo("America/New_York")
 
-def _call_claude(
-    system_prompt: str,
-    user_prompt: str,
-    temperature: float = 0.8,
-) -> str | None:
-    """Call the Claude API via the shared training client.
+# ── Domain weights by session type ────────────────────────────────
+DOMAIN_WEIGHTS = {
+    "daily": {
+        "tactical_operator": 1.2,
+        "strategic_architect": 0.8,
+        "red_team": 1.0,
+        "innovation_engine": 0.6,
+        "macro_navigator": 0.9,
+    },
+    "weekly": {
+        "tactical_operator": 0.8,
+        "strategic_architect": 1.3,
+        "red_team": 1.0,
+        "innovation_engine": 1.0,
+        "macro_navigator": 1.2,
+    },
+    "monthly": {
+        "tactical_operator": 0.6,
+        "strategic_architect": 1.5,
+        "red_team": 1.0,
+        "innovation_engine": 1.2,
+        "macro_navigator": 1.3,
+    },
+    "strategic": {
+        "tactical_operator": 0.7,
+        "strategic_architect": 1.4,
+        "red_team": 1.0,
+        "innovation_engine": 1.1,
+        "macro_navigator": 1.0,
+    },
+}
 
-    Uses purpose="council" for cost tracking and model routing.
+# ── Decision thresholds (hardcoded per architecture decision #2) ──
+# To modify: edit this dict. DO NOT move to settings.yaml.
+# Rationale: these are empirical thresholds derived from research that
+# should not be tweaked casually. If changing is needed, edit here —
+# all thresholds are co-located in this single constant.
+DECISION_THRESHOLDS = {
+    "strong_bullish": 0.5,
+    "lean_bullish": 0.2,
+    "neutral_low": -0.2,
+    "lean_bearish": -0.5,
+}
+
+# ── Rate limiters for parameter auto-application ──────────────────
+RATE_LIMITS = {
+    "max_daily_change_pct": 0.25,
+    "max_weekly_change_pct": 0.50,
+    "min_confidence_to_apply": 0.40,
+    "emergency_reset_streak": 3,
+}
+
+# ── Parameter bounds (hard limits — council CANNOT exceed) ────────
+PARAMETER_BOUNDS = {
+    "position_sizing_multiplier": (0.25, 1.5),
+    "cash_reserve_target_pct": (10, 50),
+}
+
+PARAMETER_DEFAULTS = {
+    "position_sizing_multiplier": 1.0,
+    "cash_reserve_target_pct": 15,
+    "scan_aggressiveness": "normal",
+}
+
+DIRECTION_MAP = {"bullish": 1.0, "neutral": 0.0, "bearish": -1.0}
+
+
+# ── API call wrapper ──────────────────────────────────────────────
+# FIX #1: Uses existing claude_client for API key, model routing, cost tracking
+# FIX #10: Wraps with timing for debug log
+
+def _call_claude(system_prompt: str, user_prompt: str) -> tuple[str | None, dict]:
+    """Call Claude via the shared training client with timing.
+
+    Uses generate_training_example() which handles:
+    - API key from config
+    - Model selection via purpose="council"
+    - Cost logging to api_costs table
+
+    Returns:
+        (response_text, debug_info) where debug_info has latency_ms and raw text.
     """
-    from src.training.claude_client import generate_training_example
+    debug = {"latency_ms": 0, "raw": None}
 
-    return generate_training_example(
-        system_prompt=system_prompt,
-        user_prompt=user_prompt,
-        purpose="council",
-    )
+    start = time.monotonic()
+    try:
+        from src.training.claude_client import generate_training_example
+        raw = generate_training_example(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            purpose="council",
+        )
+        elapsed = (time.monotonic() - start) * 1000
+        debug["latency_ms"] = int(elapsed)
+        debug["raw"] = raw
+        return raw, debug
+    except Exception as e:
+        elapsed = (time.monotonic() - start) * 1000
+        debug["latency_ms"] = int(elapsed)
+        debug["raw"] = str(e)
+        logger.error("[COUNCIL] Claude API call failed: %s", e)
+        return None, debug
 
+
+# ── Response parsing ──────────────────────────────────────────────
+# FIX #8: Keeps the existing fallback parsing (find "{" / rfind "}")
 
 def _parse_agent_response(raw: str | None, agent_name: str) -> dict:
-    """Parse a raw agent response string into a structured dict.
+    """Parse structured JSON from agent response.
 
-    Attempts JSON extraction; falls back to a default cautious response
-    if the LLM output cannot be parsed.
+    Handles: clean JSON, markdown-fenced JSON, JSON embedded in prose.
+    Returns default response on any parse failure (logged, never silent).
     """
     if raw is None:
-        return _default_response(agent_name, reason="API call returned None")
+        logger.warning("[COUNCIL] Empty response from %s", agent_name)
+        return _default_response(agent_name, "API call returned None")
 
-    # Strip markdown code fences if present
+    # Strip markdown code fences
     text = raw.strip()
     if text.startswith("```"):
         lines = text.split("\n")
         lines = [l for l in lines if not l.strip().startswith("```")]
-        text = "\n".join(lines)
+        text = "\n".join(lines).strip()
 
+    # Try direct JSON parse
+    data = None
     try:
         data = json.loads(text)
     except json.JSONDecodeError:
-        # Try to find JSON object in the text
+        # Fallback: find JSON object in text (existing pattern from old protocol.py)
         start = text.find("{")
         end = text.rfind("}") + 1
         if start != -1 and end > start:
             try:
                 data = json.loads(text[start:end])
             except json.JSONDecodeError:
-                return _default_response(
-                    agent_name, reason="Could not parse JSON from response"
-                )
-        else:
-            return _default_response(
-                agent_name, reason="No JSON object found in response"
-            )
+                pass
 
-    # Validate and normalize required fields -- always enforce the caller's
-    # agent_name so the downstream storage logic can rely on it.
+    if data is None:
+        logger.warning("[COUNCIL] JSON parse failed for %s. Raw: %s", agent_name, raw[:300])
+        return _default_response(agent_name, "Could not parse JSON from response")
+
+    # Validate and normalize
     data["agent"] = agent_name
-    data.setdefault("position", "neutral")
-    data.setdefault("confidence", 5)
-    data.setdefault("recommendation", "")
-    data.setdefault("key_data_points", [])
-    data.setdefault("risk_flags", [])
-    data.setdefault("vote", "hold_steady")
 
-    # Clamp confidence to 1-10
-    data["confidence"] = max(1, min(10, int(data["confidence"])))
+    # Direction (new schema)
+    valid_directions = {"bullish", "neutral", "bearish"}
+    if data.get("direction") not in valid_directions:
+        # Try to map old "position" field if present
+        position_map = {"offensive": "bullish", "defensive": "bearish", "neutral": "neutral"}
+        old_pos = data.get("position", "neutral")
+        data["direction"] = position_map.get(old_pos, "neutral")
 
-    # Validate vote value
-    valid_votes = {
-        "reduce_exposure",
-        "hold_steady",
-        "increase_exposure",
-        "selective_buying",
-    }
-    if data["vote"] not in valid_votes:
-        data["vote"] = "hold_steady"
+    # Confidence: new schema uses 0.0-1.0 float
+    conf = data.get("confidence", 0.5)
+    if isinstance(conf, int) and conf > 1:
+        # Old schema used 1-10 integer — convert
+        conf = conf / 10.0
+    data["confidence"] = max(0.0, min(1.0, float(conf)))
 
-    # Validate position value
-    valid_positions = {"defensive", "neutral", "offensive"}
-    if data["position"] not in valid_positions:
-        data["position"] = "neutral"
+    # Parameters with defaults
+    params = data.get("parameters", {})
+    params.setdefault("position_sizing_multiplier", PARAMETER_DEFAULTS["position_sizing_multiplier"])
+    params.setdefault("cash_reserve_target_pct", PARAMETER_DEFAULTS["cash_reserve_target_pct"])
+    params.setdefault("scan_aggressiveness", PARAMETER_DEFAULTS["scan_aggressiveness"])
+    data["parameters"] = params
+
+    # Other fields with defaults
+    data.setdefault("sector_tilts", {"prefer": [], "avoid": []})
+    data.setdefault("key_reasoning", "")
+    data.setdefault("key_risk", "")
+    data.setdefault("falsifiable_prediction", None)
+
+    # Backward compat: populate old-schema fields for _store_votes()
+    # FIX #2: Map new fields to old column names
+    data["position"] = {"bullish": "offensive", "neutral": "neutral", "bearish": "defensive"}.get(
+        data["direction"], "neutral"
+    )
+    data["confidence_int"] = max(1, min(10, int(data["confidence"] * 10)))
+    data["recommendation"] = data.get("key_reasoning", "")
+    data["key_data_points"] = []
+    data["risk_flags"] = [data["key_risk"]] if data.get("key_risk") else []
+    data["vote"] = {"bullish": "increase_exposure", "neutral": "hold_steady", "bearish": "reduce_exposure"}.get(
+        data["direction"], "hold_steady"
+    )
 
     return data
 
 
 def _default_response(agent_name: str, reason: str = "") -> dict:
-    """Return a cautious default response when parsing fails."""
+    """Return a safe default when an agent fails."""
     return {
         "agent": agent_name,
+        "direction": "neutral",
+        "confidence": 0.1,
+        "parameters": PARAMETER_DEFAULTS.copy(),
+        "sector_tilts": {"prefer": [], "avoid": []},
+        "key_reasoning": f"Agent unavailable: {reason}" if reason else "Agent unavailable",
+        "key_risk": "Unable to assess",
+        "falsifiable_prediction": None,
+        "_parse_failed": True,
+        # Backward compat fields
         "position": "neutral",
-        "confidence": 3,
-        "recommendation": f"Unable to produce full analysis. {reason}",
+        "confidence_int": 1,
+        "recommendation": f"Agent unavailable: {reason}",
         "key_data_points": [],
         "risk_flags": [reason] if reason else [],
         "vote": "hold_steady",
     }
 
 
-def build_shared_context(db_path: str) -> str:
-    """Build a shared context summary that all agents receive."""
+# ── Shared context ────────────────────────────────────────────────
+
+def build_shared_context(db_path: str = "ai_research_desk.sqlite3") -> str:
+    """Build shared market context for all agents."""
     from src.council.agents import _query_db
 
-    parts = []
+    parts = [f"Session date: {datetime.now(ET).strftime('%Y-%m-%d %H:%M ET')}"]
 
     try:
-        recent_recs = _query_db(
-            """SELECT COUNT(*) as count, AVG(priority_score) as avg_score
-               FROM recommendations
-               WHERE created_at >= datetime('now', '-1 day')""",
+        recs = _query_db(
+            "SELECT COUNT(*) as count, AVG(priority_score) as avg_score "
+            "FROM recommendations WHERE created_at >= datetime('now', '-1 day')",
             db_path=db_path,
         )
-        if recent_recs:
-            r = recent_recs[0]
-            parts.append(
-                f"Today's scan: {r.get('count', 0)} candidates, "
-                f"avg score {r.get('avg_score', 0):.1f}"
-            )
+        if recs:
+            r = recs[0]
+            parts.append(f"Today's scan: {r.get('count', 0)} candidates, avg score {r.get('avg_score', 0):.1f}")
     except Exception as e:
-        logger.warning("[COUNCIL] Failed to query recent recommendations: %s", e)
+        logger.warning("[COUNCIL] Failed to query recommendations: %s", e)
 
     try:
-        open_count = _query_db(
-            "SELECT COUNT(*) as n FROM shadow_trades WHERE status = 'open'",
-            db_path=db_path,
-        )
-        if open_count:
-            parts.append(f"Open shadow trades: {open_count[0]['n']}")
+        oc = _query_db("SELECT COUNT(*) as n FROM shadow_trades WHERE status = 'open'", db_path=db_path)
+        if oc:
+            parts.append(f"Open positions: {oc[0]['n']}")
     except Exception as e:
-        logger.warning("[COUNCIL] Failed to query open shadow trades: %s", e)
+        logger.warning("[COUNCIL] Failed to query open trades: %s", e)
 
     try:
         from src.evaluation.hshs_live import compute_hshs
-        hshs = compute_hshs()
-        parts.append(f"System Health (HSHS): {hshs.get('hshs', 0):.1f}/100 "
-                     f"(P={hshs['dimensions'].get('performance', 0):.0f} "
-                     f"M={hshs['dimensions'].get('model_quality', 0):.0f} "
-                     f"D={hshs['dimensions'].get('data_asset', 0):.0f} "
-                     f"F={hshs['dimensions'].get('flywheel_velocity', 0):.0f} "
-                     f"C={hshs['dimensions'].get('defensibility', 0):.0f})")
-    except Exception as e:
-        logger.warning("[COUNCIL] HSHS query failed: %s", e)
+        hshs = compute_hshs(db_path)
+        dims = hshs.get("dimensions", {})
+        parts.append(
+            f"System Health (HSHS): {hshs.get('hshs', 0):.1f}/100 "
+            f"(P={dims.get('performance', 0):.0f} M={dims.get('model_quality', 0):.0f} "
+            f"D={dims.get('data_asset', 0):.0f} F={dims.get('flywheel_velocity', 0):.0f} "
+            f"C={dims.get('defensibility', 0):.0f})"
+        )
+    except Exception:
+        pass
 
+    # Traffic Light
+    try:
+        import sqlite3 as _sql
+        with _sql.connect(db_path) as _conn:
+            tl = _conn.execute("SELECT current_regime, last_total_score FROM traffic_light_state WHERE id = 1").fetchone()
+            if tl:
+                parts.append(f"Traffic Light: {tl[0]} (score {tl[1]}/6)")
+    except Exception:
+        pass
+
+    # VIX
     try:
         vix = _query_db(
-            "SELECT vix_close FROM vix_daily ORDER BY date DESC LIMIT 1",
+            "SELECT vix_close FROM vix_term_structure ORDER BY date DESC LIMIT 1",
             db_path=db_path,
         )
         if vix:
-            parts.append(f"Latest VIX: {vix[0]['vix_close']}")
-    except Exception as e:
-        logger.warning("[COUNCIL] Failed to query VIX data: %s", e)
+            parts.append(f"VIX: {vix[0]['vix_close']:.1f}")
+    except Exception:
+        pass
 
-    return "\n".join(parts) if parts else "No shared context data available."
+    return "\n".join(parts) if parts else "No shared context available."
 
 
-# ---------------------------------------------------------------------------
-# Protocol rounds
-# ---------------------------------------------------------------------------
-
+# ── Protocol rounds ───────────────────────────────────────────────
 
 def run_round_1(
     shared_context: str,
-    db_path: str,
-    temperature: float = 0.8,
+    session_id: str | None = None,
+    db_path: str = "ai_research_desk.sqlite3",
+    custom_question: str | None = None,
 ) -> list[dict]:
-    """Round 1: Independent assessment.
+    """Round 1: All 5 agents assess independently. Always runs.
 
-    Each agent receives its private data payload plus the shared context,
-    then produces an independent assessment.
+    Args:
+        shared_context: Market context shared across agents.
+        session_id: For debug log storage. Optional.
+        db_path: Database path.
+        custom_question: For strategic sessions — overrides default prompt.
+
+    Returns:
+        List of 5 parsed agent assessments.
     """
-    assessments: list[dict] = []
+    from src.council.agents import AGENT_PROMPTS, AGENT_DATA_FUNCTIONS
 
-    for agent_name in AGENT_NAMES:
-        if agent_name == "devils_advocate":
-            continue  # Devil's advocate runs after Round 1
+    assessments = []
 
-        system_prompt = AGENT_PROMPTS[agent_name]
-        data_fn = AGENT_DATA_FUNCTIONS[agent_name]
-        payload = data_fn(db_path=db_path)
+    for agent_name, system_prompt in AGENT_PROMPTS.items():
+        # Gather agent-specific data (returns formatted string)
+        data_fn = AGENT_DATA_FUNCTIONS.get(agent_name)
+        agent_data = data_fn(db_path) if data_fn else "No specialist data available."
 
-        user_prompt = (
-            f"SHARED CONTEXT:\n{shared_context}\n\n"
-            f"YOUR PRIVATE DATA:\n{json.dumps(payload, indent=2, default=str)}\n\n"
-            "Provide your independent assessment as a JSON object."
-        )
+        # Build user prompt
+        if custom_question:
+            user_prompt = (
+                f"STRATEGIC QUESTION FROM FOUNDER:\n{custom_question}\n\n"
+                f"SHARED MARKET CONTEXT:\n{shared_context}\n\n"
+                f"YOUR SPECIALIST DATA:\n{agent_data}\n\n"
+                "Analyze this question through your specific analytical framework.\n"
+                "Direction: bullish = proceed/yes, neutral = wait/unclear, bearish = don't/no.\n"
+                "Produce your assessment as a JSON object. No preamble, no markdown fences."
+            )
+        else:
+            user_prompt = (
+                f"SHARED MARKET CONTEXT:\n{shared_context}\n\n"
+                f"YOUR SPECIALIST DATA:\n{agent_data}\n\n"
+                "Produce your assessment as a JSON object. No preamble, no markdown fences."
+            )
 
-        raw = _call_claude(system_prompt, user_prompt, temperature=temperature)
+        # Call API with timing
+        raw, debug = _call_claude(system_prompt, user_prompt)
         assessment = _parse_agent_response(raw, agent_name)
         assessments.append(assessment)
+
         logger.info(
-            "Round 1 - %s: position=%s, confidence=%d, vote=%s",
-            agent_name,
-            assessment["position"],
-            assessment["confidence"],
-            assessment["vote"],
+            "Round 1 — %s: direction=%s confidence=%.2f",
+            agent_name, assessment["direction"], assessment["confidence"],
         )
 
-    # Now run the devil's advocate with Round 1 results
-    da_system = AGENT_PROMPTS["devils_advocate"]
-    da_payload = gather_devils_advocate_data(assessments, db_path=db_path)
-    da_user = (
-        f"ROUND 1 ASSESSMENTS FROM OTHER AGENTS:\n"
-        f"{json.dumps(assessments, indent=2, default=str)}\n\n"
-        f"HISTORICAL CONTEXT:\n"
-        f"{json.dumps(da_payload.get('past_sessions', []), indent=2, default=str)}\n\n"
-        "Argue against the emerging consensus. Provide your assessment as a JSON object."
-    )
-    raw = _call_claude(da_system, da_user, temperature=temperature)
-    da_assessment = _parse_agent_response(raw, "devils_advocate")
-    assessments.append(da_assessment)
-    logger.info(
-        "Round 1 - devils_advocate: position=%s, confidence=%d, vote=%s",
-        da_assessment["position"],
-        da_assessment["confidence"],
-        da_assessment["vote"],
-    )
+        # Store debug log if session_id provided
+        if session_id:
+            _store_debug_log(
+                session_id, agent_name, 1, system_prompt, user_prompt,
+                debug, assessment, db_path,
+            )
 
     return assessments
 
 
 def run_round_2(
     round1_assessments: list[dict],
-    temperature: float = 0.85,
-) -> list[dict]:
-    """Round 2: Cross-examination.
+    shared_context: str,
+    session_id: str | None = None,
+    db_path: str = "ai_research_desk.sqlite3",
+) -> tuple[list[dict], list[str]]:
+    """Round 2: Agents see others' views. Conditional — only when <3/5 consensus.
 
-    Each agent sees all Round 1 outputs and is asked to maintain, strengthen,
-    or revise their position.
+    Returns:
+        (updated_assessments, sycophancy_flags)
     """
-    assessments: list[dict] = []
+    from src.council.agents import AGENT_PROMPTS
 
-    round1_summary = json.dumps(round1_assessments, indent=2, default=str)
-
-    for agent_name in AGENT_NAMES:
-        system_prompt = AGENT_PROMPTS[agent_name]
-
-        # Find this agent's Round 1 position
-        own_r1 = next(
-            (a for a in round1_assessments if a["agent"] == agent_name),
-            None,
+    # Summarize Round 1 for all agents
+    r1_lines = ["ROUND 1 RESULTS (other agents' assessments):"]
+    for a in round1_assessments:
+        r1_lines.append(
+            f"  {a.get('agent', '?')}: {a.get('direction', '?')} "
+            f"(confidence {a.get('confidence', 0):.2f}) — "
+            f"{a.get('key_reasoning', '')[:120]}"
         )
-        own_summary = (
-            json.dumps(own_r1, indent=2, default=str) if own_r1 else "N/A"
-        )
+    r1_summary = "\n".join(r1_lines)
+
+    original_directions = {a["agent"]: a.get("direction", "neutral") for a in round1_assessments}
+
+    updated = []
+    sycophancy_flags = []
+
+    for a in round1_assessments:
+        agent_name = a["agent"]
+        system_prompt = AGENT_PROMPTS.get(agent_name, "")
 
         user_prompt = (
-            f"ALL ROUND 1 ASSESSMENTS:\n{round1_summary}\n\n"
-            f"YOUR ROUND 1 POSITION:\n{own_summary}\n\n"
-            "Having seen all perspectives, you may MAINTAIN, STRENGTHEN, or REVISE "
-            "your position. Explain any changes. Respond with a JSON object."
+            f"SHARED CONTEXT:\n{shared_context}\n\n"
+            f"{r1_summary}\n\n"
+            f"You previously assessed: {a.get('direction', 'neutral')} "
+            f"with confidence {a.get('confidence', 0):.2f}.\n"
+            f"Your reasoning: {a.get('key_reasoning', '')}\n\n"
+            "After seeing others' views, you may update your assessment or maintain it.\n"
+            "If you change direction, explain why. Respond with a JSON object."
         )
 
-        raw = _call_claude(system_prompt, user_prompt, temperature=temperature)
-        assessment = _parse_agent_response(raw, agent_name)
-        assessments.append(assessment)
-        logger.info(
-            "Round 2 - %s: position=%s, confidence=%d, vote=%s",
-            agent_name,
-            assessment["position"],
-            assessment["confidence"],
-            assessment["vote"],
-        )
+        raw, debug = _call_claude(system_prompt, user_prompt)
+        parsed = _parse_agent_response(raw, agent_name)
+        updated.append(parsed)
 
-    return assessments
+        # Sycophancy detection
+        if parsed.get("direction") != original_directions.get(agent_name):
+            sycophancy_flags.append(agent_name)
+            logger.info(
+                "[COUNCIL] SYCOPHANCY FLAG: %s flipped %s → %s",
+                agent_name, original_directions[agent_name], parsed["direction"],
+            )
+
+        if session_id:
+            _store_debug_log(
+                session_id, agent_name, 2, system_prompt, user_prompt,
+                debug, parsed, db_path,
+            )
+
+    return updated, sycophancy_flags
 
 
-def run_round_3(
-    round2_assessments: list[dict],
-    temperature: float = 0.9,
-) -> list[dict]:
-    """Round 3: Final vote with confidence weighting.
+# ── Vote aggregation ──────────────────────────────────────────────
+# FIX #3: Replaces old tally_votes() — uses new direction/confidence schema
 
-    Each agent casts a final vote after seeing the Round 2 cross-examination.
+def aggregate_votes(
+    assessments: list[dict],
+    session_type: str = "daily",
+) -> dict:
+    """Confidence-weighted aggregated vote.
+
+    Returns dict with aggregated_score, direction, vote_distribution,
+    consensus_reached, round2_needed, and parameter_recommendations.
     """
-    assessments: list[dict] = []
+    weights = DOMAIN_WEIGHTS.get(session_type, DOMAIN_WEIGHTS["daily"])
 
-    round2_summary = json.dumps(round2_assessments, indent=2, default=str)
+    numerator = 0.0
+    denominator = 0.0
+    vote_dist = {"bullish": 0, "neutral": 0, "bearish": 0}
+    confidences = []
 
-    for agent_name in AGENT_NAMES:
-        system_prompt = AGENT_PROMPTS[agent_name]
+    # Parameter aggregation (confidence-weighted average)
+    param_num = {"position_sizing_multiplier": 0.0, "cash_reserve_target_pct": 0.0}
+    param_den = 0.0
+    scan_votes = {"conservative": 0.0, "normal": 0.0, "aggressive": 0.0}
 
-        user_prompt = (
-            f"ROUND 2 CROSS-EXAMINATION RESULTS:\n{round2_summary}\n\n"
-            "This is the FINAL ROUND. Cast your definitive vote with your final "
-            "confidence level. Your confidence weighting will affect the consensus. "
-            "Be precise. Respond with a JSON object."
-        )
+    for a in assessments:
+        agent = a.get("agent", "unknown")
+        direction = a.get("direction", "neutral")
+        confidence = a.get("confidence", 0.5)
+        domain_weight = weights.get(agent, 1.0)
 
-        raw = _call_claude(system_prompt, user_prompt, temperature=temperature)
-        assessment = _parse_agent_response(raw, agent_name)
-        assessments.append(assessment)
-        logger.info(
-            "Round 3 - %s: position=%s, confidence=%d, vote=%s",
-            agent_name,
-            assessment["position"],
-            assessment["confidence"],
-            assessment["vote"],
-        )
+        vote_val = DIRECTION_MAP.get(direction, 0.0)
+        w = confidence * domain_weight
 
-    return assessments
+        numerator += vote_val * w
+        denominator += w
+        vote_dist[direction] = vote_dist.get(direction, 0) + 1
+        confidences.append(confidence)
 
+        # Aggregate parameters
+        params = a.get("parameters", {})
+        for pname in param_num:
+            pval = params.get(pname, PARAMETER_DEFAULTS.get(pname, 1.0))
+            param_num[pname] += float(pval) * w
+        param_den += w
 
-def tally_votes(final_assessments: list[dict]) -> dict:
-    """Tally Round 3 votes with confidence weighting.
+        # Scan aggressiveness (weighted vote)
+        scan_agg = params.get("scan_aggressiveness", "normal")
+        if scan_agg in scan_votes:
+            scan_votes[scan_agg] += w
 
-    Returns the consensus result. If no vote achieves a >66% supermajority
-    of weighted confidence, the result is marked as contested.
-    """
-    vote_weights: dict[str, float] = {}
-    total_weight = 0.0
+    score = numerator / denominator if denominator > 0 else 0.0
+    confidence_avg = sum(confidences) / len(confidences) if confidences else 0.0
 
-    for assessment in final_assessments:
-        vote = assessment.get("vote", "hold_steady")
-        confidence = assessment.get("confidence", 1)
-        weight = float(confidence)
-        vote_weights[vote] = vote_weights.get(vote, 0.0) + weight
-        total_weight += weight
+    # Consensus
+    max_votes = max(vote_dist.values()) if vote_dist else 0
+    total_agents = len(assessments)
+    consensus_reached = max_votes >= 3
+    consensus_type = f"{max_votes}-{total_agents - max_votes}" if total_agents > 0 else "0-0"
 
-    if total_weight == 0:
-        return {
-            "consensus": "hold_steady",
-            "confidence_weighted_score": 0.0,
-            "is_contested": True,
-            "vote_breakdown": {},
-            "reason": "No votes cast",
-        }
+    # Direction from score
+    if score > DECISION_THRESHOLDS["lean_bullish"]:
+        direction = "bullish"
+    elif score < DECISION_THRESHOLDS["neutral_low"]:
+        direction = "bearish"
+    else:
+        direction = "neutral"
 
-    # Find the leading vote
-    leading_vote = max(vote_weights, key=vote_weights.get)  # type: ignore[arg-type]
-    leading_pct = vote_weights[leading_vote] / total_weight
-
-    is_contested = leading_pct < 0.66
-
-    # Build breakdown as percentages
-    vote_breakdown = {
-        vote: round(w / total_weight * 100, 1) for vote, w in vote_weights.items()
-    }
+    # Aggregated parameters
+    param_recs = {}
+    if param_den > 0:
+        for pname in param_num:
+            param_recs[pname] = round(param_num[pname] / param_den, 3)
+    param_recs["scan_aggressiveness"] = max(scan_votes, key=scan_votes.get) if scan_votes else "normal"
 
     return {
-        "consensus": leading_vote if not is_contested else "contested",
-        "leading_vote": leading_vote,
-        "confidence_weighted_score": round(leading_pct * 100, 1),
-        "is_contested": is_contested,
-        "vote_breakdown": vote_breakdown,
-        "reason": (
-            "contested -- human review required"
-            if is_contested
-            else f"{leading_vote} with {leading_pct:.0%} weighted confidence"
-        ),
+        "aggregated_score": round(score, 4),
+        "direction": direction,
+        "confidence_avg": round(confidence_avg, 3),
+        "vote_distribution": vote_dist,
+        "consensus_reached": consensus_reached,
+        "consensus_type": consensus_type,
+        "round2_needed": not consensus_reached,
+        "parameter_recommendations": param_recs,
     }
+
+
+# Keep backward-compat alias
+def tally_votes(final_assessments: list[dict]) -> dict:
+    """Backward-compat wrapper → aggregate_votes with daily weights."""
+    result = aggregate_votes(final_assessments, "daily")
+    # Map to old format for callers expecting it
+    return {
+        "consensus": result["direction"] if result["consensus_reached"] else "contested",
+        "leading_vote": {"bullish": "increase_exposure", "neutral": "hold_steady", "bearish": "reduce_exposure"}.get(
+            result["direction"], "hold_steady"
+        ),
+        "confidence_weighted_score": round(abs(result["aggregated_score"]) * 100, 1),
+        "is_contested": not result["consensus_reached"],
+        "vote_breakdown": result["vote_distribution"],
+        "reason": f"{result['consensus_type']} consensus" if result["consensus_reached"] else "contested",
+        # New fields (available to callers that know about them)
+        "_v2": result,
+    }
+
+
+# ── Rate limiters ─────────────────────────────────────────────────
+# FIX #4: Implements weekly cumulative check
+
+def apply_rate_limiters(
+    recommended: dict,
+    current: dict,
+    db_path: str = "ai_research_desk.sqlite3",
+) -> dict:
+    """Apply rate limiters to council parameter recommendations.
+
+    Checks both daily (±25%) and weekly (±50% cumulative from baseline) limits.
+    """
+    applied = {}
+    rate_limited = False
+
+    for param, rec_val in recommended.items():
+        if param == "scan_aggressiveness":
+            applied[param] = rec_val
+            continue
+
+        curr_val = float(current.get(param, PARAMETER_DEFAULTS.get(param, 1.0)))
+        rec_val = float(rec_val)
+
+        # Hard bounds
+        bounds = PARAMETER_BOUNDS.get(param)
+        if bounds:
+            rec_val = max(bounds[0], min(bounds[1], rec_val))
+
+        # Daily rate limit: ±25%
+        max_daily = max(abs(curr_val) * RATE_LIMITS["max_daily_change_pct"], 0.05)
+        if abs(rec_val - curr_val) > max_daily:
+            rec_val = curr_val + max_daily if rec_val > curr_val else curr_val - max_daily
+            rate_limited = True
+            logger.info("[COUNCIL] Daily rate limit on %s: clipped to %.3f", param, rec_val)
+
+        # Weekly cumulative limit: ±50% from baseline
+        try:
+            week_ago = (datetime.now(ET) - timedelta(days=7)).isoformat()
+            baseline = PARAMETER_DEFAULTS.get(param, 1.0)
+            with sqlite3.connect(db_path) as conn:
+                # Get the parameter value from 7 days ago
+                row = conn.execute(
+                    "SELECT applied_value FROM council_parameter_log "
+                    "WHERE parameter_name = ? AND attribution_start <= ? "
+                    "ORDER BY attribution_start DESC LIMIT 1",
+                    (param, week_ago),
+                ).fetchone()
+                if row:
+                    baseline = float(row[0])
+
+            max_weekly = abs(baseline) * RATE_LIMITS["max_weekly_change_pct"]
+            if abs(rec_val - baseline) > max_weekly:
+                rec_val = baseline + max_weekly if rec_val > baseline else baseline - max_weekly
+                rate_limited = True
+                logger.info("[COUNCIL] Weekly rate limit on %s: clipped to %.3f (baseline=%.3f)", param, rec_val, baseline)
+        except Exception as e:
+            logger.debug("[COUNCIL] Weekly rate limit check failed: %s", e)
+
+        # Re-apply hard bounds after rate limiting
+        if bounds:
+            rec_val = max(bounds[0], min(bounds[1], rec_val))
+
+        applied[param] = round(rec_val, 3)
+
+    applied["_rate_limited"] = rate_limited
+    return applied
+
+
+# ── Debug log storage ─────────────────────────────────────────────
+
+def _store_debug_log(
+    session_id: str,
+    agent_name: str,
+    round_num: int,
+    system_prompt: str,
+    user_prompt: str,
+    debug: dict,
+    assessment: dict,
+    db_path: str = "ai_research_desk.sqlite3",
+) -> None:
+    """Store debug log entry for full replay capability."""
+    try:
+        import hashlib
+        with sqlite3.connect(db_path) as conn:
+            conn.execute(
+                "INSERT OR IGNORE INTO council_debug_log "
+                "(debug_id, session_id, agent_name, round, system_prompt_hash, "
+                "user_message, raw_response, parsed_successfully, parse_error, "
+                "latency_ms, created_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    str(uuid.uuid4()),
+                    session_id,
+                    agent_name,
+                    round_num,
+                    hashlib.md5(system_prompt.encode()).hexdigest()[:12],
+                    user_prompt[:5000],  # Truncate to prevent DB bloat
+                    debug.get("raw", "")[:5000],
+                    0 if assessment.get("_parse_failed") else 1,
+                    assessment.get("key_reasoning", "")[:500] if assessment.get("_parse_failed") else None,
+                    debug.get("latency_ms", 0),
+                    datetime.now(ET).isoformat(),
+                ),
+            )
+    except Exception as e:
+        logger.debug("[COUNCIL] Debug log insert failed: %s", e)
