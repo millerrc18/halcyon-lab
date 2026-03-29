@@ -1,446 +1,204 @@
-# REINFORCE++ for financial LLM RL on consumer GPUs
+# Halcyon Lab Strategy #2: Short-term mean reversion wins decisively
 
-**REINFORCE++ is mathematically superior to GRPO for small-dataset reinforcement learning, but it is not yet available in TRL.** The best practical path for Halcyon Lab is TRL's `GRPOTrainer` with `loss_type="dr_grpo"` (which removes GRPO's known biases) running through Unsloth on your consumer GPUs, combined with a multi-component financial reward function inspired by Trading-R1's volatility-normalized curriculum. This guide covers the complete implementation: algorithm selection with mathematical justification, reward function design drawing from four 2025 financial RL papers, exact GPU configurations for both your RTX 3060 and planned 3090, and a validated SFT → GRPO pipeline that skips DPO entirely — consistent with Fin-o1's finding that DPO produces inconsistent results in financial reasoning.
+**Short-term mean reversion on S&P 100 stocks is the optimal second strategy for Halcyon Lab.** It offers the best decorrelation with pullback-in-uptrend (empirically **−0.35 correlation** per Balvers and Wu 2006), profits precisely when momentum crashes (Daniel and Moskowitz 2016), and has a proven implementation framework via Connors' RSI(2) with **65–75% win rates** on large-cap stocks. While the raw reversal effect has decayed **50–75%** since Jegadeesh (1990) and Lehmann (1990) first documented it, enhanced signals — residual reversals, VIX-conditional sizing, and multi-factor filters — sustain net Sharpe ratios of **0.7–1.0** on S&P 100 stocks. No other candidate strategy matches this combination of decorrelation, evidence strength, and implementation feasibility under Halcyon's long-only, 1–15 day hold constraints.
 
----
-
-## 1. Why REINFORCE++ beats GRPO on small datasets — and what to use instead
-
-### The mathematical core of the problem
-
-GRPO (DeepSeek, Shao et al. 2024) generates k samples per prompt and normalizes advantages *locally* within each prompt's group. For prompt q with k responses {o₁,...,oₖ} receiving rewards {r₁,...,rₖ}, GRPO computes:
-
-$$\hat{A}_i = \frac{r_i - \text{mean}(\{r_j\}_{j=1}^k)}{\text{std}(\{r_j\}_{j=1}^k)}$$
-
-**Hu et al. (2025, arXiv:2501.03262) prove this estimator is biased for any finite group size k ≥ 2.** The bias arises because the numerator (centered reward) and denominator (local standard deviation) are not independent — they share the same random variables. More critically, when std approaches zero (all samples score similarly), advantages explode, injecting catastrophic gradient noise.
-
-REINFORCE++ replaces this with **global batch normalization**. For the single-sample variant (k=1), each prompt generates one response, and the advantage is normalized across the entire training batch:
-
-$$A^{\text{norm}}_{q,o_t} = \frac{A_{q,o_t} - \mu_{\text{batch}}}{\sigma_{\text{batch}}}$$
-
-As global batch size N grows (typically **512–1024**), μ_batch and σ_batch converge to constants, making the estimator effectively unbiased. REINFORCE++ also uses the **k2 (MSE) KL estimator**, which is unbiased, versus GRPO's k3 forward-KL estimator that has high variance.
-
-### The gradient variance disaster with 100 prompts
-
-Walk through your specific scenario: **100 prompts with k=4 samples each yields 400 total samples, but advantages are normalized within groups of just 4.** Each group's standard deviation estimate has only 3 degrees of freedom — an extraordinarily noisy denominator. When a group happens to have similar rewards (common in financial commentary where most responses are reasonable), std → 0 and advantages explode. The policy receives massive, meaningless gradient updates for those prompts.
-
-With REINFORCE++ (k=1), those same 100 prompts produce 100 samples normalized globally. The batch statistics draw from all 100 data points, giving **25× more stable normalization** than GRPO's groups of 4. The paper demonstrates this directly: "GRPO (local norm) overfits completely, while REINFORCE++ (global norm) generalizes." GRPO's reward rises quickly but KL divergence explodes — classic reward hacking.
-
-### Dr. GRPO fixes biases but not the fundamental architecture
-
-Dr. GRPO (Liu et al., 2025, arXiv:2503.20783) identifies three biases in standard GRPO and removes two:
-
-- **Length bias**: GRPO divides by response length |o|, which incentivizes shorter correct responses and longer incorrect ones (creating the illusory "Aha moment")
-- **Difficulty bias**: Dividing by std(rₖ) amplifies easy questions (low variance) and suppresses hard questions (high variance) — exactly backwards from optimal curriculum design
-
-Dr. GRPO's fix is elegant: simply remove 1/|o| and std(rₖ) from the objective. The result is mathematically equivalent to RLOO up to a constant factor of 1/(K-1). **However, Dr. GRPO still uses per-prompt advantage estimation.** It does not adopt global normalization. For datasets under ~2,000 prompts, the per-prompt approach retains high variance. REINFORCE++ remains architecturally better suited for Halcyon Lab's 100–1,000 trade scenario.
-
-### Implementation reality: TRL has Dr. GRPO but not REINFORCE++
-
-**REINFORCE++ is not available in TRL** (tested through v0.29.1, March 2026). TRL's RL trainers are `GRPOTrainer`, `RLOOTrainer`, and `PPOTrainer`. The REINFORCE++ paper is referenced in TRL's paper index, but no trainer class exists.
-
-The canonical REINFORCE++ implementation lives in **OpenRLHF** (github.com/OpenRLHF/OpenRLHF), the framework from the paper's authors. It supports `--advantage_estimator reinforce | reinforce_baseline | group_norm | dr_grpo | rloo`. **verl** (Volcano Engine, github.com/volcengine/verl) also implements REINFORCE++. Both are designed for multi-GPU Ray/FSDP clusters and **lack BitsAndBytes/QLoRA integration** — making them impractical for your consumer GPU setup.
-
-**The practical recommendation**: Use TRL's `GRPOTrainer` with `loss_type="dr_grpo"` (which eliminates length and difficulty biases) through **Unsloth** (which provides ~80% VRAM savings). This gives you the best available algorithm within the consumer-GPU-compatible ecosystem. For the `num_generations` parameter, keep k low (2–4) to maximize prompt diversity per batch, which partially compensates for the lack of global normalization.
-
-| Algorithm | Implementation | QLoRA support | Consumer GPU | Best for small datasets |
-|-----------|---------------|---------------|-------------|------------------------|
-| REINFORCE++ | OpenRLHF, verl | ❌ No | ❌ Cluster-only | ⭐⭐⭐⭐⭐ |
-| RLOO | TRL `RLOOTrainer` | ✅ Yes | ✅ Yes | ⭐⭐⭐⭐ |
-| Dr. GRPO | TRL `GRPOTrainer` `loss_type="dr_grpo"` | ✅ Yes | ✅ Yes | ⭐⭐⭐⭐ |
-| GRPO (DAPO) | TRL `GRPOTrainer` `loss_type="dapo"` | ✅ Yes | ✅ Yes (Unsloth) | ⭐⭐⭐ |
-| GRPO (original) | TRL `GRPOTrainer` `loss_type="grpo"` | ✅ Yes | ✅ Yes | ⭐⭐ (biased) |
-
-### VRAM savings: k=1 versus k=4–8
-
-Each generation requires KV cache memory. For Qwen3 8B with 32 layers and K/V dimension 1024, at 1,024 completion tokens: **~125 MB per sequence**. GRPO with k=8 requires ~1 GB of KV cache alone, plus ~2.4 GB for logits (vocab size 152K × 8 sequences × 1024 tokens × 2 bytes). REINFORCE++ with k=1 needs ~125 MB KV cache and ~300 MB logits — **saving roughly 3 GB**, which is the difference between fitting and not fitting on a 12 GB GPU.
+The mathematical case for adding a new strategy rather than expanding the stock universe is overwhelming: a second uncorrelated strategy reduces portfolio variance by **~50%**, while expanding from 100 to 325 stocks with the same pullback strategy reduces variance by only **~1.6%**. This report ranks all candidates, then provides a complete implementation specification for mean reversion as Strategy #2.
 
 ---
 
-## 2. Reward function design for financial trade commentary
+## 1. Ranked candidate list with scores and evidence
 
-### Lessons from four 2025 financial RL papers
+The table below scores each candidate on five dimensions (1–5 scale, higher = better) and provides a composite rank. Decorrelation is weighted 2× because it is the primary purpose of Strategy #2.
 
-**Trading-R1** (Xiao et al., Sep 2025, arXiv:2509.11420) introduces the most directly relevant approach: a three-stage curriculum where process quality is learned before outcome optimization. Stage I rewards structural formatting, Stage II rewards evidence-grounded claims with citations, and Stage III applies a **volatility-normalized outcome reward** — forward returns divided by rolling 20-period volatility across 3/7/15-day horizons (weighted 0.3/0.5/0.2). This Sharpe-like signal automatically adjusts for market regime.
+| Rank | Strategy | Decorrelation (2×) | Evidence strength | Impl. complexity | Data needs | Training feasibility | Composite | Est. Sharpe | Corr. w/ pullback |
+|------|----------|-------------------|-------------------|-----------------|------------|---------------------|-----------|-------------|-------------------|
+| **1** | **Short-term mean reversion** | **5** (−0.35) | **4** | **4** (low) | **5** (minimal) | **5** | **32** | 0.7–1.0 | −0.30 to −0.40 |
+| 2 | Volatility-timed equity | 4 (negative) | 3 | 4 | 5 (VIX data) | 3 | 23 | 0.4–0.7 | −0.20 to −0.35 |
+| 3 | Sector rotation | 2 (+0.3–0.5) | 4 | 4 | 4 | 4 | 22 | 0.5–0.8 | +0.30 to +0.50 |
+| 4 | Overnight returns | 2 (positive) | 3 | 4 | 5 | 2 | 20 | 0.3–0.6 | +0.15 to +0.30 |
+| 5 | Calendar/flow effects | 3 (low) | 2 | 5 (trivial) | 5 | 2 | 20 | 0.1–0.3 | ~0.00 to +0.10 |
+| 6 | Intraday momentum | 3 | 3 | 1 (HFT) | 2 | 1 | 15 | N/A retail | Unknown |
 
-**Alpha-R1** (Jiang et al., Dec 2025, arXiv:2512.23515) achieved remarkable zero-shot generalization from CSI 300 to CSI 1000 (**Sharpe 4.03 on unseen data**) by training the LLM to reason about *why* alpha factors are relevant rather than memorizing statistical patterns. Removing RL entirely caused Sharpe to drop to **-0.77**, proving RL is essential, not optional. The key insight: reward the model for economic reasoning, not pattern matching.
+### Detailed candidate assessments
 
-**Fin-o1** (Qian et al., Feb 2025, arXiv:2502.08127) systematically compared PPO, DPO, and GRPO for financial reasoning. **GRPO yielded reliable gains; PPO and DPO did not.** DPO failed because financial reasoning requires dynamic, context-dependent evaluation that fixed preference pairs cannot capture.
+**Short-term mean reversion** dominates on decorrelation. Balvers and Wu (2006) documented **−35% correlation** between momentum and mean reversion across 18 developed equity markets. Nagel (2012) in the *Review of Financial Studies* proved that reversal returns spike with VIX — a **1-point VIX increase predicts 9 basis points higher daily reversal return** for large-caps. Daniel and Moskowitz (2016) showed momentum crashes occur in bear-market rebounds, exactly when mean reversion thrives. The strategy's worst periods (strong trending bull markets) are pullback's best periods, creating natural portfolio-level hedging.
 
-**The Risk-Aware RL Reward paper** (Srivastava et al., Jun 2025, arXiv:2506.04358) formalizes composite rewards: R = w₁·R_ann − w₂·σ_down + w₃·D_ret + w₄·Treynor. The multi-component design prevents reward hacking — single-metric rewards (Sharpe alone, return alone) create exploitable surfaces.
+**Volatility-timed equity** (Moreira and Muir 2017, *Journal of Finance*) ranks second. The concept — reduce equity exposure when volatility is high — produces in-sample alphas across market, value, and momentum factors. However, Cederburg et al. (2020) found out-of-sample implementation disappointing, and Wang and Yan showed vol-managed portfolios outperform in only **53 of 103 equity portfolios**. Downside-volatility management performs better (89 of 94 anomalies showed positive alphas), but as a standalone strategy the evidence is weaker than mean reversion. Best deployed as a **position-sizing overlay** rather than a standalone strategy.
 
-### Composite reward function for Halcyon Lab
+**Sector rotation** (Moskowitz and Grinblatt 1999, *Journal of Finance*) has strong evidence — industry momentum explained "much of the individual stock momentum anomaly" — but its **+0.30 to +0.50 correlation** with stock-level momentum defeats the diversification purpose. Momentum was the best-performing factor globally in 2024 (96th percentile over 50 years per SSGA), but Morgan Stanley warns that after top-decile momentum runs, returns typically reverse by **−25% over 10 months**. Sector momentum would amplify, not hedge, pullback strategy risk.
 
-Drawing from these papers, here is a four-component reward function designed for trade commentary RL with ~100–1,000 closed trades:
+**Overnight returns** (Aboody, Levi, and Trueman 2018, *JFQA*) remain persistent — Lin (2025) confirmed **92.6% of QQQ total gains** accrue overnight. Alpaca supports this via `time_in_force="cls"` (buy at close) and `time_in_force="opg"` (sell at open). However, Lou, Polk, and Skouras (2019, *JFE*) proved that **all momentum alpha occurs overnight**, meaning overnight returns are positively correlated with momentum/pullback. This kills the diversification benefit. Transaction costs from daily round-trips also erode the thin edge.
 
-```python
-import numpy as np
+**Calendar effects** have largely been arbitraged away. A February 2025 QuantSeeker analysis found the classic turn-of-month [0:3] window **shows no statistically significant returns** for US equity ETFs. Only the broader [-3:+3] window retains marginal significance (5–12 bps/day). The effect size is too small to justify a dedicated strategy with LLM infrastructure.
 
-def halcyon_reward(completion: str, trade_metadata: dict) -> float:
-    """
-    Composite reward for financial trade commentary RL.
-    
-    trade_metadata contains:
-        pnl: float (realized P&L in dollars)
-        atr_at_entry: float (14-period ATR at trade entry)
-        mae_dollars: float (maximum adverse excursion)
-        position_size: float
-        conviction_stated: str ("low", "moderate", "high", "very_high")
-        regime_volatility: float (rolling 20-day VIX or realized vol)
-    """
-    
-    # === Component 1: Volatility-Normalized Outcome (weight: 0.30) ===
-    # Inspired by Trading-R1's Sharpe-like signal
-    pnl = trade_metadata['pnl']
-    atr = trade_metadata['atr_at_entry']
-    position_size = trade_metadata['position_size']
-    
-    # Normalize P&L by ATR (risk-adjusted return per unit of expected move)
-    r_normalized = (pnl / position_size) / atr if atr > 0 else 0
-    # Clip to [-3, 3] to prevent outlier domination
-    outcome_score = np.clip(r_normalized, -3.0, 3.0) / 3.0  # Scale to [-1, 1]
-    
-    # === Component 2: Process Quality Rubric (weight: 0.35) ===
-    # 6 dimensions, each scored 0-5 by rubric (rule-based or LLM judge)
-    rubric_scores = score_commentary_rubric(completion)
-    # Dimensions: thesis_clarity, evidence_quality, risk_identification,
-    #             catalyst_specificity, position_sizing_logic, exit_plan_clarity
-    process_score = sum(rubric_scores.values()) / 30.0  # Normalize to [0, 1]
-    
-    # === Component 3: Conviction-Outcome Calibration (weight: 0.20) ===
-    conviction_map = {"low": 0.25, "moderate": 0.50, "high": 0.75, "very_high": 1.0}
-    conviction = extract_conviction(completion, conviction_map)
-    won = pnl > 0
-    
-    if won:
-        # Reward high conviction on winners, mild reward for low conviction
-        calibration_score = 0.5 + 0.5 * conviction
-    else:
-        # Penalize high conviction on losers, no penalty for low conviction
-        calibration_score = 1.0 - conviction  
-        # "high conviction loss" → 0.25, "low conviction loss" → 0.75
-    
-    # === Component 4: Risk Management (MAE/ATR) (weight: 0.15) ===
-    mae = abs(trade_metadata['mae_dollars'] / position_size)
-    mae_atr_ratio = mae / atr if atr > 0 else 0
-    
-    if mae_atr_ratio < 1.0:
-        risk_score = 1.0  # Stop was tight relative to ATR — good
-    elif mae_atr_ratio < 2.0:
-        risk_score = 1.0 - 0.5 * (mae_atr_ratio - 1.0)  # Linear decay
-    else:
-        risk_score = max(0.0, 0.5 - 0.25 * (mae_atr_ratio - 2.0))  # Heavy penalty
-    
-    # === Composite Reward ===
-    weights = {'outcome': 0.30, 'process': 0.35, 
-               'calibration': 0.20, 'risk': 0.15}
-    
-    reward = (
-        weights['outcome'] * outcome_score +
-        weights['process'] * process_score +
-        weights['calibration'] * calibration_score +
-        weights['risk'] * risk_score
-    )
-    
-    return reward
-```
-
-### Handling "good process, bad outcome" trades
-
-The weight distribution above is deliberate: **process quality (35%) outweighs outcome (30%)**. A trade with excellent analysis (process_score = 0.9), low conviction appropriately (calibration_score = 0.75), tight stop (risk_score = 1.0), but an unlucky loss (outcome_score = -0.3) receives:
-
-> 0.30 × (-0.3) + 0.35 × 0.9 + 0.20 × 0.75 + 0.15 × 1.0 = **+0.375**
-
-This is a *positive* reward — the model learns that disciplined analysis with unlucky outcomes is acceptable. Conversely, a sloppy analysis with a lucky win gets penalized:
-
-> 0.30 × 0.5 + 0.35 × 0.2 + 0.20 × 0.5 + 0.15 × 0.3 = **+0.365**
-
-The lucky win barely outscores the unlucky disciplined trade, preventing the model from learning that outcomes trump process.
-
-### Reward hacking failure modes and countermeasures
-
-The most dangerous failure mode is **"moderate conviction convergence"**: the model always outputs "moderate conviction" to minimize calibration penalties. Counter this by tracking conviction distribution entropy across generations — if >80% of outputs use the same conviction level, add a diversity bonus or audit the calibration component. Trading-R1's asymmetric quantile thresholds (85%/53%/15%/3%) specifically address this by forcing non-uniform label distributions.
-
-**Regime-aware scaling** prevents another failure mode: the model learning that "hold" or "no strong view" minimizes errors in sideways markets. Normalize the outcome component by regime volatility (divide r_normalized by regime_volatility/median_volatility) so that smaller moves in quiet markets carry equal weight to larger moves in volatile markets.
-
-The **credit assignment problem** — separating trade quality from market luck — is addressed by two mechanisms: (1) the multi-component reward structure ensures process quality dominates short-term outcome noise, and (2) volatility normalization (P&L/ATR) creates a Sharpe-like signal where a +2% gain in low-volatility environment registers differently than during high volatility, automatically adjusting for market conditions.
+**Intraday momentum** (Gao et al. 2018, *JFE*) requires high-frequency execution incompatible with Alpaca's architecture. Eliminated.
 
 ---
 
-## 3. Exact GPU configurations for RTX 3060 and RTX 3090
+## 2. Why a new strategy beats universe expansion
 
-### Base memory budget
+The portfolio variance formula demonstrates this with mathematical clarity. For N equally-weighted stocks with variance σ² and average pairwise correlation ρ:
 
-Qwen3 8B in 4-bit NF4 quantization: **~4.5–5 GB**. QDoRA adapter (rank 32, all linear targets): **~200–400 MB** trainable parameters. AdamW 8-bit optimizer states: **~400–800 MB**. Gradient checkpointing saves ~60–70% of activation memory. These components total roughly **6–7 GB** before generation overhead.
+**Portfolio Variance = σ²[(1−ρ)/N + ρ]**
 
-The critical variable is RL-specific memory: each generation requires KV cache (~125 MB per 1024-token sequence) plus logit storage (vocab 152K × seq_len × 2 bytes = ~296 MB per sequence). With k=4, that's **~1.7 GB** for generation overhead alone.
+At typical intra-strategy correlations of **ρ = 0.30** (Moskowitz, Ooi, and Pedersen 2012 documented correlations of 0.37–0.38 for time-series momentum), expanding from 100 to 325 stocks reduces variance from **0.307σ²** to **0.302σ²** — a **1.6% improvement**. Adding one uncorrelated strategy with a 50/50 capital split reduces combined variance by approximately **50%**. The new strategy provides **25–50× more diversification benefit**.
 
-### RTX 3060 12GB: tight but viable with Unsloth
+McLean and Pontiff (2016, *Journal of Finance*) found anomaly returns are **higher in stocks with high idiosyncratic risk and lower liquidity**, supporting mid-cap expansion in principle. But this addresses alpha magnitude, not portfolio variance reduction. The correct sequencing is: add Strategy #2 first (massive diversification benefit), then consider universe expansion later (incremental alpha boost).
 
-**Unsloth is non-negotiable on 12 GB.** Its chunked logit computation and standby mode (sharing vLLM inference memory with training weights) reduce VRAM by ~80% compared to vanilla TRL. The RTX 3060 supports BF16 natively (Ampere GA106, Compute Capability 8.6).
-
-```python
-import os
-os.environ["UNSLOTH_VLLM_STANDBY"] = "1"  # Critical for 12GB
-
-from unsloth import FastLanguageModel, PatchFastRL
-PatchFastRL("GRPO", FastLanguageModel)
-from trl import GRPOConfig, GRPOTrainer
-
-model, tokenizer = FastLanguageModel.from_pretrained(
-    model_name="unsloth/Qwen3-8B",
-    max_seq_length=1024,
-    load_in_4bit=True,
-    fast_inference=True,
-    max_lora_rank=32,
-    gpu_memory_utilization=0.90,  # Leave 1.2GB headroom
-)
-
-model = FastLanguageModel.get_peft_model(
-    model, r=32, lora_alpha=32,
-    target_modules=["q_proj","k_proj","v_proj","o_proj",
-                     "gate_proj","up_proj","down_proj"],
-    use_gradient_checkpointing="unsloth",
-)
-
-training_args = GRPOConfig(
-    output_dir="halcyon-rl-3060",
-    per_device_train_batch_size=1,
-    gradient_accumulation_steps=8,      # Effective batch = 8
-    num_generations=2,                   # k=2 for 12GB (try 4 with Unsloth)
-    max_prompt_length=256,
-    max_completion_length=512,           # Push to 1024 with Unsloth standby
-    learning_rate=5e-6,
-    max_grad_norm=0.1,
-    loss_type="dr_grpo",                # Best bias-corrected variant
-    beta=0.04,                          # KL penalty (prevent drift from SFT)
-    bf16=True,
-    num_train_epochs=1,
-    warmup_ratio=0.1,
-    lr_scheduler_type="cosine",
-    logging_steps=1,
-    save_steps=50,
-    report_to="none",
-)
-```
-
-**Estimated peak VRAM**: ~10–11 GB with Unsloth standby mode, leaving ~1 GB headroom.
-
-### RTX 3090 24GB: comfortable with room for larger k
-
-```python
-model, tokenizer = FastLanguageModel.from_pretrained(
-    model_name="unsloth/Qwen3-8B",
-    max_seq_length=2048,
-    load_in_4bit=True,
-    fast_inference=True,
-    max_lora_rank=32,
-    gpu_memory_utilization=0.95,
-)
-
-training_args = GRPOConfig(
-    output_dir="halcyon-rl-3090",
-    per_device_train_batch_size=1,       # Can try 2
-    gradient_accumulation_steps=4,
-    num_generations=4,                    # k=4 comfortable; k=8 possible
-    max_prompt_length=512,
-    max_completion_length=1024,           # Push to 2048 with Unsloth
-    learning_rate=5e-6,
-    max_grad_norm=0.1,
-    loss_type="dr_grpo",
-    beta=0.04,
-    bf16=True,
-    num_train_epochs=1,
-    warmup_ratio=0.1,
-    lr_scheduler_type="cosine",
-    logging_steps=1,
-    save_steps=50,
-)
-```
-
-**Estimated peak VRAM**: ~16–18 GB, leaving 6–8 GB headroom for larger k or longer sequences.
-
-### Qwen3 14B on RTX 3090: feasible but constrained
-
-14B in 4-bit ≈ 8–9 GB base model. With RL overhead, total VRAM lands around **20–22 GB** with k=2 and max_completion_length=512. This is tight but workable. Use `num_generations=2` and keep sequences short. **Not recommended unless you have a specific need for 14B** — 8B with well-designed RL will likely outperform 14B-SFT-only for your task.
-
-### Training time estimates
-
-On RTX 3090 with Qwen3 8B, k=4, 1024 completion length: **~30–120 seconds per step** (generation is ~70% of step time). For 500 prompts at 1 epoch: ~500 steps → **7–17 hours**. For 100 prompts at 3 epochs: ~300 steps → **2.5–10 hours**. Unsloth's vLLM integration provides ~1.5–2× speedup over standard HuggingFace generation.
-
-### Loading your existing SFT QDoRA adapter
-
-Two approaches exist. The recommended path for Halcyon Lab:
-
-```python
-# Approach: Merge SFT adapter → Apply fresh LoRA for RL
-from peft import PeftModel
-from transformers import AutoModelForCausalLM, BitsAndBytesConfig
-import torch
-
-# Load and merge SFT adapter
-bnb_config = BitsAndBytesConfig(
-    load_in_4bit=True, bnb_4bit_quant_type="nf4",
-    bnb_4bit_compute_dtype=torch.bfloat16,
-    bnb_4bit_use_double_quant=True,
-)
-base = AutoModelForCausalLM.from_pretrained(
-    "Qwen/Qwen3-8B", quantization_config=bnb_config, device_map="auto"
-)
-model = PeftModel.from_pretrained(base, "path/to/sft_qdora_adapter")
-model = model.merge_and_unload()  # SFT knowledge baked into base weights
-
-# Now the merged model becomes the reference for KL divergence
-# GRPOTrainer will apply a fresh LoRA and track KL against this reference
-```
-
-This approach is cleaner than continuing training on the same adapter, avoids a known TRL issue where `_prepare_peft_model()` can freeze LoRA weights when passed a `PeftModel` (TRL issue #3926), and means the KL divergence penalty operates against your SFT model — exactly what you want to prevent catastrophic forgetting of supervised knowledge.
+Mid-cap liquidity accommodates portfolios up to **~$10M** without significant market impact. At $10M with 20 positions of $500K each, positions represent ~5% of daily volume for bottom-quartile S&P MidCap 400 stocks. Above $50M, multi-day execution becomes necessary. Universe expansion remains viable as a Phase 2 optimization.
 
 ---
 
-## 4. Pipeline design: skip DPO, go straight to RL
+## 3. PEAD as a pullback feature, not a standalone strategy
 
-### The evidence against DPO for financial reasoning
+While pure PEAD drift is dead in large-caps — Martineau (2022) confirmed stock prices now fully adjust on announcement day, and Subrahmanyam's 2025 UCLA working paper showed apparent revivals were driven by microcap contamination — **earnings information retains powerful value as a filter** within the pullback strategy.
 
-Fin-o1's systematic comparison is definitive: **GRPO yielded reliable gains across all financial datasets; DPO did not.** The failure mechanism is fundamental: DPO relies on static preference pairs, but financial reasoning involves ambiguous ground truth where reasonable analysts can disagree. A preference pair saying "analysis A is better than analysis B" for a given trade may reverse under different market conditions. GRPO's online policy optimization adapts to this non-stationarity; DPO's offline approach cannot.
+Novy-Marx (2015, *Journal of Financial Economics*) delivered the pivotal finding: **earnings momentum subsumes price momentum** in both cross-sectional and time-series tests. Price momentum is "a weak expression of earnings momentum." This means the fundamental driver of pullback-in-uptrend success is the underlying earnings trajectory. A positive-SUE filter should improve pullback signal quality significantly.
 
-Both Fin-R1 and Fin-o1 validated the **SFT → GRPO pipeline** without DPO:
-- Fin-o1-8B (LLaMA-3.1-8B): SFT on FinCoT + GRPO → **85.0 ConvFinQA, 76.0 FinQA**
-- Fin-o1-14B (Qwen2.5-14B): SFT + GRPO → 61.07% on FinReason, outperforming GPT-o1 (54.05%)
+Kaczmarek and Zaremba (2025, *Finance Research Letters*) revived PEAD using elastic net regression on **12 quarters of historical SUE** (standardized unexpected earnings), nearly doubling Sharpe ratios compared to single-quarter models. Critically, gains were **"especially strong among large-cap stocks, where the latest surprises are quickly priced in, but older ones remain overlooked."** Their approach extracts nonlinear patterns from earnings history that market participants miss.
 
-The emerging 2025 consensus, reinforced by DeepSeek-R1's demonstration that RL alone can induce reasoning: **SFT → RL is sufficient.** DPO adds pipeline complexity without clear benefit for specialized domains.
+The practical integration is straightforward: score each S&P 100 stock on multi-quarter SUE pattern (top 2–3 quintiles = positive fundamental backdrop), then **only execute pullback entries in stocks with confirmed positive earnings trajectory**. This adds a fundamental "catalyst confirmation" layer. Chan, Jegadeesh, and Lakonishok (1996) showed double-sorting on returns and earnings surprises generates higher profits than either signal alone.
 
-### Can GRPO provide DPO's alignment benefits?
-
-Yes. GRPO's KL penalty (β parameter) naturally constrains the policy near the reference (SFT) model, providing the same "stay aligned" pressure DPO gives. The group-relative advantage normalization additionally provides a form of preference learning — the model learns which responses are better *relative to its own current capability* for each prompt, which is conceptually similar to DPO's preference optimization but with online, adaptive updates.
-
-### GGUF export for Ollama deployment
-
-The workflow is identical to SFT adapter export:
-
-```bash
-# 1. Merge RL adapter into base model (Python)
-model = PeftModel.from_pretrained(base_model, "path/to/rl_adapter")
-merged = model.merge_and_unload()
-merged.save_pretrained("merged_rl_model/")
-
-# 2. Convert to GGUF
-python llama.cpp/convert_hf_to_gguf.py merged_rl_model/ \
-    --outfile halcyon-rl-F16.gguf --outtype f16
-
-# 3. Generate importance matrix for better quantization
-./llama-imatrix -m halcyon-rl-F16.gguf -f calibration_trades.txt \
-    --chunk 512 -o halcyon-imatrix.dat -ngl 32
-
-# 4. Quantize
-./llama-quantize --imatrix halcyon-imatrix.dat \
-    halcyon-rl-F16.gguf halcyon-rl-Q4_K_M.gguf Q4_K_M
-
-# 5. Create Ollama Modelfile and deploy
-echo 'FROM ./halcyon-rl-Q4_K_M.gguf' > Modelfile
-ollama create halcyon-rl -f Modelfile
-```
-
-With Unsloth, this simplifies to one line: `model.save_pretrained_gguf("output/", tokenizer, quantization_method="q4_k_m")`. **Critical**: use the same chat template during inference as during training. Mismatched templates cause gibberish or infinite generation.
-
-### Incremental RL as trade data accumulates
-
-Multiple rounds of GRPO are straightforward as your dataset grows from 100 to 200, 300, 500 trades:
-
-```python
-# Round N+1: Load previous checkpoint + expanded dataset
-model = AutoModelForCausalLM.from_pretrained("checkpoint_round_n/")
-# Mix 30% replay from old data with 70% new trades
-combined = concatenate_datasets([
-    old_dataset.select(range(int(len(old_dataset) * 0.3))),
-    new_trades_dataset
-])
-trainer = GRPOTrainer(model=model, train_dataset=combined, ...)
-trainer.train()
-```
-
-RL is **naturally more robust to catastrophic forgetting than SFT** — policy gradient updates are more conservative than supervised loss updates. The KL penalty from the reference model acts as an automatic regularizer. NVIDIA's Nemotron paper additionally recommends **periodically resetting the reference policy and optimizer states** during prolonged RL to restore training stability.
+For the mean reversion strategy specifically, earnings filters serve a different purpose: **exclude stocks pulling back on negative earnings surprises** (genuine breakdowns) from the mean reversion candidate pool. A stock that drops 5% on a positive surprise is likely reverting; one that drops 5% on a negative surprise may be beginning a sustained decline.
 
 ---
 
-## 5. Monitoring, failure modes, and when to rollback
+## 4. Detailed implementation spec for short-term mean reversion
 
-### Epoch-by-epoch metrics with specific thresholds
+### Signal construction: entry triggers
 
-| Metric | Healthy range | Warning threshold | Rollback trigger |
-|--------|--------------|-------------------|-----------------|
-| Reward mean | Smooth upward trend | Sudden jump >20% in 10 steps | Sustained decline for 3+ checkpoints |
-| Reward std | Gradual decrease | Increasing variance | — |
-| Policy entropy | Slow steady decrease | <1.0 nats | **<0.5 nats** (entropy collapse) |
-| KL divergence | <5–10 | >10 | **>15** (excessive policy drift) |
-| Gradient norm | Stable, <1.0 | Spikes >5× baseline | Persistent instability after lr reduction |
-| Completion diversity | Multiple distinct outputs per prompt | >80% identical outputs | All k generations identical |
-| Holdout reward | Tracks in-sample | Diverges >15% from in-sample | Holdout drops while in-sample rises |
+The entry system uses a **three-layer filter architecture** that the LLM evaluates holistically:
 
-**Entropy collapse is the dominant failure mode in GRPO-family training.** The DAPO paper (ByteDance) shows that default symmetric clipping (ε=0.2) causes entropy collapse. The fix is asymmetric clipping: set `epsilon=0.2` (lower bound) and `epsilon_high=0.28` (upper bound) in `GRPOConfig`, which DAPO's default loss type already implements. For additional safety, monitor entropy every logging step and halt training if it drops below 0.5 nats.
+**Layer 1 — Oversold signal (required).** Primary signal is RSI(2) < 5, which Connors validated across hundreds of thousands of trades on S&P 500 stocks with win rates exceeding 70%. The lower the RSI reading, the higher subsequent returns. For confirmation, require at least one of: Bollinger Band(20,2) lower band touch, Z-score of 5-day returns < −2.0, or Connors RSI (3,2,100) < 10.
 
-### How Alpha-R1 achieved zero-shot generalization
+**Layer 2 — Regime filter (required).** Trade mean reversion **only when VIX > 18** or when VIX is above its 20-day moving average. Nagel (2012) proved reversal returns are a direct function of VIX level — expected returns spike during elevated volatility. When VIX < 15 and declining, the pullback strategy dominates and mean reversion signals should be suppressed. This creates natural capital rotation between strategies.
 
-Alpha-R1's generalization from CSI 300 (training) to CSI 1000 (unseen, Sharpe 4.03) worked because the model learned **economic reasoning principles** rather than statistical patterns. The ablation is revealing: replacing natural language factor descriptions with raw mathematical formulas dropped Sharpe from 1.62 to 0.83. The model wasn't memorizing factor returns — it was reasoning about *why* factors should work given current market conditions. This has a direct lesson for Halcyon Lab: your reward function should incentivize *reasoning about trade logic* (process component), not just outcome prediction accuracy.
+**Layer 3 — Quality filter (recommended).** Exclude stocks with: negative earnings surprise in most recent quarter (PEAD filter), price below 200-day SMA by more than 15% (genuine breakdown, not temporary dip), pending binary events (FDA decisions, M&A), or sector in persistent downtrend (sector ETF below 50-day SMA). Include stocks with: multi-quarter positive SUE trend (Kaczmarek-Zaremba filter), above-average institutional ownership (limits manipulation risk), and capitulation-signature volume (≥1.5× 20-day average volume on the down move).
 
-### Financial-specific failure modes
+### Exit rules
 
-**Reward hacking via hedging language**: The model generates non-committal "markets could go either way" commentary that minimizes penalties without providing actionable insight. Detect by tracking the distribution of conviction levels and analysis specificity. Counter with a minimum specificity threshold in the process rubric.
+**Primary exit:** Close position when RSI(2) crosses above 65 or price closes above its 5-day simple moving average. Connors' research confirmed the 5-day SMA crossover as the optimal mean reversion exit for large-cap stocks.
 
-**Catastrophic forgetting of SFT knowledge**: The model produces higher-reward but lower-quality text (grammatical errors, lost formatting). Detect by running a general-quality rubric alongside the financial reward. Counter with KL penalty (β=0.04) and replay buffer mixing.
+**Time-based exit:** If no reversion occurs within **5 trading days**, exit at close regardless. Mean reversion that hasn't triggered within a week is likely a trend continuation, not a temporary dip. This limits capital commitment and aligns with the 1–15 day hold constraint.
 
-**Spurious feature exploitation**: The model learns that certain keywords ("bullish momentum," "strong support") correlate with positive rewards regardless of analytical validity. Counter by ensuring your rubric rewards evidence-grounded claims — the model must cite specific data points, not just deploy financial jargon.
+**Regime exit:** If VIX drops below 15 during a mean reversion trade, tighten exit to RSI(2) > 50 or first profitable close. The regime has shifted unfavorably.
 
-### Champion-challenger evaluation framework
+**Trend-violation exit:** If the stock closes below its 200-day SMA during the trade, exit immediately. The long-term trend has broken and the mean reversion thesis is invalidated.
 
-```python
-from scipy.stats import wilcoxon
-import numpy as np
+### Stop-loss placement
 
-def evaluate_rl_vs_sft(sft_model, rl_model, holdout_trades, reward_fn):
-    sft_rewards = [reward_fn(sft_model.generate(t)) for t in holdout_trades]
-    rl_rewards = [reward_fn(rl_model.generate(t)) for t in holdout_trades]
-    
-    differences = np.array(rl_rewards) - np.array(sft_rewards)
-    non_zero = differences[differences != 0]
-    
-    if len(non_zero) >= 10:
-        stat, p_value = wilcoxon(non_zero, alternative='greater')
-        win_rate = np.mean(differences > 0)
-        # Promote RL model if: p < 0.05 AND win_rate > 55%
-        return {'win_rate': win_rate, 'p_value': p_value,
-                'mean_improvement': np.mean(differences),
-                'promote': p_value < 0.05 and win_rate > 0.55}
-```
+Connors' research — counterintuitively but consistently — showed that traditional percentage stop-losses **damage mean reversion performance** because they cut positions when the signal is strongest (deeper oversold = higher expected return). Instead:
 
-Reserve **20–30% of your trade data** as a holdout set. Never train on holdout data. Run this evaluation after each RL round and after each incremental training cycle.
+Use an **ATR-based catastrophic stop** at 3× ATR(14) below entry price. For a typical S&P 100 stock with daily ATR of 2%, this places the stop approximately 6% below entry. This protects against genuine black-swan events while giving normal mean reversion room to work. Complement with a **portfolio-level circuit breaker**: if total mean reversion portfolio drawdown exceeds **−12%**, close all positions and pause the strategy for 5 trading days.
+
+### Position sizing
+
+**Per-trade sizing:** Allocate **20% of Strategy #2 capital** to each mean reversion position, allowing up to 5 simultaneous positions. This matches the Quantitativo finding that 3–5 parallel mean reversion positions optimize risk-adjusted returns.
+
+**Strategy-level allocation:** Begin with **equal risk parity** between pullback and mean reversion — allocate capital inversely proportional to each strategy's trailing 60-day realized volatility. If pullback vol = 12% and mean reversion vol = 16%, allocate 57% pullback / 43% mean reversion. Rebalance monthly.
+
+**VIX-conditional scaling:** When VIX > 25, increase mean reversion allocation by 25% (funded by reducing pullback allocation). When VIX < 15, decrease mean reversion allocation by 25%. This follows Nagel's (2012) finding that reversal returns scale linearly with volatility.
 
 ---
 
-## 6. Complete algorithm comparison
+## 5. LLM adapter design for mean reversion
 
-| Feature | GRPO (original) | GRPO (DAPO loss) | Dr. GRPO | RLOO | REINFORCE++ |
-|---------|-----------------|-------------------|----------|------|-------------|
-| **TRL class** | `GRPOTrainer` `loss_type="grpo"` | `GRPOTrainer` `loss_type="dapo"` | `GRPOTrainer` `loss_type="dr_grpo"` | `RLOOTrainer` | ❌ Not in TRL |
-| **Unsloth support** | ✅ | ✅ | ✅ | ✅ | ❌ |
-| **Other frameworks** | OpenRLHF, verl, ms-swift | TRL, Unsloth | TRL, Unsloth | TRL | OpenRLHF, verl |
-| **QLoRA compatible** | ✅ | ✅ | ✅ | ✅ | ❌ (cluster frameworks) |
-| **Samples per prompt (k)** | 8–16 typical | 8–16 | k>1 | K>1 (4–8 typical) | **k=1 supported** |
-| **Advantage normalization** | Local (biased) | Local + DAPO fixes | Local (no std) | Local (leave-one-out, unbiased) | **Global batch** |
-| **Estimator bias** | ⚠️ Proven biased | Reduced (DAPO fixes) | ✅ Unbiased | ✅ Unbiased | ✅ Effectively unbiased |
-| **KL estimator** | k3 (biased, high variance) | k3 | β=0 (removed) | In reward signal | **k2 (unbiased)** |
-| **Length bias** | ⚠️ Yes (1/\|o\| term) | ✅ Fixed | ✅ Fixed | N/A | N/A |
-| **Difficulty bias** | ⚠️ Yes (std division) | Partially addressed | ✅ Fixed | N/A | N/A |
-| **VRAM (8B, 4-bit, k=4)** | ~18 GB | ~18 GB | ~18 GB | ~18 GB | **~12 GB (k=1)** |
-| **Small dataset (<2K prompts)** | ⭐⭐ Poor (overfits) | ⭐⭐⭐ Better | ⭐⭐⭐⭐ Good | ⭐⭐⭐⭐ Good | ⭐⭐⭐⭐⭐ Best |
-| **Financial LLM evidence** | Fin-o1 (works), Alpha-R1 | Default in TRL | — | — | Logic-RL, ProRLv2 |
-| **Training speed vs PPO** | ~50% faster | ~50% faster | ~50% faster | 2–3× faster | **138% faster** |
-| **Reasoning benchmarks** | AIME avg 22.58 | — | AIME 43.3% | Outperforms PPO, DPO | **AIME avg 24.10** |
+### System prompt concept
 
-### The recommendation for Halcyon Lab
+The mean reversion LoRA adapter transforms Qwen3-8B into a **reversion probability estimator**. Unlike the pullback adapter (which evaluates trend continuation probability), this adapter evaluates the probability that an oversold stock will revert to mean within 1–5 trading days.
 
-**Primary**: TRL `GRPOTrainer` with `loss_type="dr_grpo"` through Unsloth. This gives you the best bias-corrected algorithm available on consumer GPUs with QLoRA. Use k=2 on your RTX 3060 (expanding to k=4 on RTX 3090), `beta=0.04` for KL regularization, and the composite reward function above.
+```
+System: You are a quantitative mean reversion analyst for S&P 100 stocks.
+Your task: Given a stock's current technical state, fundamental backdrop,
+and market regime, estimate the probability (0-100) that this stock will
+revert ≥1.5% upward within 5 trading days. Also output: recommended
+position size (0.5x/1.0x/1.5x standard), expected reversion magnitude,
+and confidence level.
 
-**If you later gain access to multi-GPU infrastructure**: Switch to OpenRLHF with REINFORCE++ (`--advantage_estimator reinforce`), which provides global normalization and k=1 sampling — ideal for your small-dataset scenario.
+Consider: RSI(2), Connors RSI, Z-score of returns, volume signature,
+VIX level, sector relative strength, earnings surprise history (12Q),
+whether other S&P 100 stocks in same sector are also oversold (cluster
+signal), and recent analyst revision direction.
+```
 
-**Monitor aggressively**: Log entropy, KL, and holdout reward at every step. Save checkpoints every 50 steps. Rollback if entropy drops below 0.5 nats or KL exceeds 15. Run champion-challenger evaluation against your SFT baseline after each training round. With only 100–1,000 prompts, overfitting is your primary risk — the KL penalty and replay buffer are your most important defenses.
+### Feature template for each candidate trade
+
+```
+STOCK: {ticker} | SECTOR: {gics_sector}
+PRICE: ${current} | 200d SMA: ${sma200} | 50d SMA: ${sma50}
+RSI(2): {rsi2} | RSI(14): {rsi14} | Connors RSI: {crsi}
+BOLLINGER: {bb_position}% (0=lower band, 100=upper band)
+Z-SCORE 5d: {zscore5} | Z-SCORE 10d: {zscore10}
+VOLUME TODAY: {vol_ratio}x 20d avg | DOWN DAYS: {consecutive_down}
+VIX: {vix} | VIX vs 20d MA: {vix_vs_ma}%
+SECTOR ETF RSI(14): {sector_rsi} | SECTOR vs 50d: {sector_rel}%
+LAST EARNINGS: SUE={sue} Q-{quarters_ago} | SUE TREND 4Q: {sue_trend}
+ATR(14): {atr}% | IMPLIED VOL: {iv}% | IV RANK: {iv_rank}%
+PULLBACK STRATEGY STATUS: {pullback_active} positions open
+SIMILAR STOCKS OVERSOLD: {cluster_count} in same sector
+```
+
+### Training data generation approach
+
+Generate **self-blinded training data** using a walk-forward methodology:
+
+**Step 1 — Label generation.** For each trading day from 2010–2024, identify all S&P 100 stocks where RSI(2) < 10. Record the feature vector at signal time. Then measure the forward 5-day maximum return. Label as **STRONG_REVERT** (>3% reversion), **MODERATE_REVERT** (1.5–3%), **WEAK_REVERT** (0–1.5%), or **CONTINUED_DECLINE** (<0%).
+
+**Step 2 — Point-in-time reconstruction.** All features must use only data available at signal time. Earnings data uses the most recent reported quarter with a 1-day lag (to avoid using pre-announcement data). Analyst estimates use consensus available on the prior trading day. This eliminates look-ahead bias.
+
+**Step 3 — Walk-forward splits.** Train on 2010–2018, validate on 2019–2021, test on 2022–2024. The test set is held out entirely until final evaluation. Within the training set, use rolling 3-year windows with 6-month embargo periods between train and validation folds.
+
+**Step 4 — Natural language conversion.** Convert each labeled example into the feature template format above, paired with an "analyst assessment" response that explains the reasoning chain: regime assessment → signal strength → risk factors → position recommendation → probability estimate. Use the actual forward outcome to generate the correct assessment, but **structure the reasoning as if the analyst is making a forward prediction** (causal language, not hindsight).
+
+**Expected dataset size:** With ~100 stocks × ~250 trading days × 15 years × ~10% signal frequency, expect approximately **35,000–40,000 labeled examples**. After filtering for quality (clear outcomes, no confounding events like M&A announcements), expect **20,000–25,000 training examples** — well above the threshold for effective LoRA fine-tuning (FinLlama achieved strong results with 34,180 examples at r=8, α=16).
+
+**Step 5 — LoRA configuration.** Based on FinLlama (Iacovides et al., ICAIF 2024) and TradingGroup (2025, which fine-tuned Qwen3-8B specifically): rank **r=16**, alpha **α=32**, dropout **0.05**, target all attention projection layers. This produces ~8M trainable parameters on Qwen3-8B. Trainable on RTX 3060 (12GB) with QLoRA (4-bit quantization); more comfortable on RTX 3090 (24GB) without quantization.
+
+---
+
+## 6. Integration with existing pullback infrastructure
+
+### Capital rotation between strategies
+
+The two strategies share the same universe (S&P 100) but activate under different regimes. Implement a **soft capital rotation** governed by VIX and market trend:
+
+- **VIX < 18, SPY > 50d SMA (trending bull):** 70% pullback / 30% mean reversion. Pullback dominates; mean reversion runs with reduced allocation but catches occasional volatility spikes.
+- **VIX 18–28, mixed trend:** 50% pullback / 50% mean reversion. Both strategies active at full allocation.
+- **VIX > 28, SPY < 50d SMA (stress/bear):** 30% pullback / 70% mean reversion. Mean reversion dominates; pullback allocation reduced because uptrend condition fails more frequently.
+
+### Conflict resolution
+
+When both strategies signal the same stock simultaneously (unlikely but possible — e.g., a stock in an uptrend pulls back enough to trigger both the pullback entry and the mean reversion entry): **execute the pullback signal** and record it against the pullback strategy. The pullback signal is more selective (requires confirmed uptrend + controlled pullback), while mean reversion is broader. The LLM can note the mean reversion confirmation as an additional confidence factor for the pullback trade.
+
+### Shared infrastructure
+
+Both strategies consume the same data pipeline: daily OHLCV for S&P 100, VIX, sector ETFs, and earnings data. Mean reversion requires adding: RSI(2), Connors RSI, Bollinger Bands, and Z-score calculations — trivial additions to existing technical indicator computation. The earnings SUE data (for both PEAD-filter and mean reversion quality filter) requires quarterly EPS actuals vs. estimates from a provider like Financial Modeling Prep or Alpha Vantage. Total additional API cost: **~$30–50/month**.
+
+### Single portfolio, dual adapters
+
+The Qwen3-8B base model loads once. The pullback LoRA adapter and mean reversion LoRA adapter are swapped at inference time — LoRA weights are ~32MB each and swap in milliseconds. Each evening after market close, the system runs both adapters against the current S&P 100 state: pullback adapter evaluates stocks meeting pullback criteria, mean reversion adapter evaluates stocks meeting oversold criteria. Signals are merged into a unified order book with position sizing reflecting strategy-level allocations.
+
+---
+
+## 7. Implementation timeline
+
+| Phase | Duration | Activities | Milestone |
+|-------|----------|-----------|-----------|
+| **Research & data** | Weeks 1–3 | Finalize signal parameters, acquire 15 years of point-in-time S&P 100 data + earnings, compute all features | Feature database complete |
+| **Backtest** | Weeks 4–7 | Walk-forward backtest of mean reversion signals (non-ML baseline), validate RSI(2) parameters on 2022–2024 holdout, measure correlation with pullback backtest | Baseline Sharpe > 0.5 on test set |
+| **Training data generation** | Weeks 8–9 | Generate 20K+ labeled examples, convert to natural language, quality-check for look-ahead bias | Training dataset validated |
+| **LoRA fine-tuning** | Weeks 10–11 | Train mean reversion adapter (QLoRA on RTX 3060 or full LoRA on 3090), hyperparameter sweep, evaluate on validation set | Adapter accuracy > baseline |
+| **Paper trading** | Weeks 12–19 (8 weeks) | Run Strategy #2 alongside Strategy #1 on Alpaca paper trading, monitor decorrelation, signal quality, execution | Paper Sharpe > 0.4, correlation < 0 with pullback |
+| **Gradual live deployment** | Week 20+ | Start with 25% of target allocation, scale to 100% over 4 weeks if metrics hold | Live trading operational |
+
+**Critical go/no-go gates:** (1) Backtest Sharpe must exceed **0.5 net of estimated costs** (Harvey-Liu-Zhu threshold) on the 2022–2024 holdout. (2) Realized correlation with pullback strategy must be **< +0.20** during paper trading. (3) Paper trading drawdown must not exceed **−15%**. If any gate fails, iterate on signal construction before proceeding.
+
+---
+
+## The academic evidence in context
+
+The mean reversion anomaly's trajectory follows the classic McLean-Pontiff pattern: raw effect decayed **~58%** post-publication. But three factors sustain it for Halcyon's implementation. First, the effect persists in the most liquid stocks because transaction costs are near-zero — De Groot, Huij, and Zhou (2012, *Journal of Banking & Finance*) showed large-cap reversal strategies generate **30–50 basis points per week net of costs**. Second, the residual reversal variant (Blitz, Huij, and Martens 2013, *Journal of Financial Markets*) — reversals after removing factor exposures — earned **>8% per annum net of costs** even for the 500 largest stocks and outperformed conventional reversals in every single decade from 1929–2008. Third, the regime-conditional approach concentrating trades in elevated-VIX environments captures the **liquidity provision premium** documented by Nagel (2012), which has not been arbitraged away because it requires bearing risk precisely when most participants are reducing it.
+
+The backtest-to-live Sharpe decay literature suggests a realistic **33–50% haircut** (Quantpedia 2023 analysis of 355 strategies; CFM 2022 finding 33% decay for largest-1000-stock strategies; Suhonen et al. 2017 documenting 75% decay for complex strategies). A backtested Sharpe of 1.0 should deliver **0.5–0.65 live**. This remains above the Harvey-Liu-Zhu (2016) threshold of ~0.5 for genuine alpha, though margins are thin. The LLM adapter's ability to synthesize multiple features (technical, fundamental, regime) should provide an incremental edge over static rule-based implementations — TradingGroup (2025) demonstrated that fine-tuned Qwen3-8B outperformed GPT-4o-mini on return metrics, validating the architecture.
+
+The deepest risk is that mean reversion's similarity to pullback-in-uptrend — both strategies fundamentally buy dips — produces higher-than-expected correlation. The key differentiator is the **regime filter**: mean reversion activates most aggressively in stressed markets (VIX > 25) where pullback signals are suppressed (uptrend condition fails). If this regime separation is maintained through disciplined implementation, the portfolio-level Sharpe improvement from combining two **~0.6 Sharpe strategies with −0.35 correlation** is substantial — a combined Sharpe near **0.8–0.9** with significantly reduced maximum drawdown compared to either strategy alone.
