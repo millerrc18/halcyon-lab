@@ -95,6 +95,31 @@ IV Skew: {features.get('iv_skew', 0):.2f} | Unusual Activity: {'YES' if features
 {event_type} in {features.get('event_proximity_days', '?')} day(s): {features.get('event_proximity_desc', '')}
 Events within 3 days: {features.get('events_within_3d', 0)}"""
 
+    # SECTION 7.7: Earnings Context (PEAD)
+    earnings = features.get("earnings_signals", {})
+    if earnings.get("include_in_prompt", False):
+        earnings_lines = ["\n=== EARNINGS CONTEXT ==="]
+        proximity = earnings.get("earnings_proximity_days")
+        if proximity is not None:
+            earnings_lines.append(f"Days to next earnings: {proximity}")
+        surprise = earnings.get("last_surprise_pct")
+        if surprise is not None:
+            direction = earnings.get("last_surprise_direction", "unknown")
+            earnings_lines.append(f"Last earnings surprise: {surprise:+.1f}% ({direction})")
+        concordant = earnings.get("last_revenue_eps_concordant")
+        if concordant is not None:
+            earnings_lines.append(f"Revenue-EPS concordance: {'concordant' if concordant else 'mixed'}")
+        rev_vel = earnings.get("analyst_revision_velocity_30d")
+        if rev_vel is not None:
+            trend_word = "rising" if rev_vel > 0 else "falling" if rev_vel < 0 else "stable"
+            earnings_lines.append(f"Analyst revision trend (30d): {trend_word} ({rev_vel:+.1f}%)")
+        inconsistent = earnings.get("recommendation_inconsistency")
+        if inconsistent is not None:
+            earnings_lines.append(f"Recommendation vs surprise: {'inconsistent (stronger signal)' if inconsistent else 'consistent'}")
+        strength = earnings.get("earnings_signal_strength", "none")
+        earnings_lines.append(f"Earnings signal strength: {strength}")
+        prompt += "\n".join(earnings_lines)
+
     # SECTION 8: Entry/Stop/Targets
     prompt += f"""
 

@@ -845,7 +845,7 @@ def handle_command(command: str, args: str) -> str:
         elif command == "/scoring":
             return _cmd_scoring()
         elif command == "/council":
-            return _cmd_council()
+            return _cmd_council(args)
         elif command == "/health":
             return _cmd_health()
         elif command == "/log":
@@ -1120,58 +1120,88 @@ def _cmd_scoring() -> str:
         return "📝 No scoring data available."
 
 
-def _cmd_council() -> str:
-    """Run an on-demand AI council session and format the result."""
+def _cmd_council(question: str = "") -> str:
+    """Run an AI council session and format the result.
+
+    If a question is provided (e.g., /council Should we buy the 3090?),
+    runs a strategic session. Otherwise runs a daily tactical session.
+    """
     try:
         from src.council.engine import CouncilEngine
         engine = CouncilEngine()
-        result = engine.run_session(session_type="ad_hoc", trigger_reason="Telegram /council command")
+
+        if question.strip():
+            result = engine.run_session(
+                session_type="strategic",
+                trigger_reason=question.strip(),
+                custom_question=question.strip(),
+            )
+        else:
+            result = engine.run_session(
+                session_type="daily",
+                trigger_reason="Telegram /council command",
+            )
     except Exception as e:
         return f"❌ Council session failed: {str(e)[:200]}"
 
     now = datetime.now(ET).strftime("%H:%M ET")
-    consensus = result.get("consensus", "unknown").upper()
-    confidence = result.get("confidence_weighted_score", 0)
-    confidence_pct = int(confidence * 100) if confidence and confidence <= 1 else int(confidence or 0)
+    direction = result.get("consensus", "unknown").upper()
+    consensus_type = result.get("consensus_type", "?")
+    confidence = result.get("confidence_avg", 0)
 
     lines = [f"🏛️ <b>AI COUNCIL SESSION</b> ({now})"]
-    lines.append(f"Consensus: <b>{consensus}</b> ({confidence_pct}% confidence)")
+    if question.strip():
+        lines.append(f"📋 <i>{question.strip()[:100]}</i>")
+    lines.append(f"Direction: <b>{direction}</b> ({consensus_type}, {confidence:.0%} avg confidence)")
 
     if result.get("is_contested"):
-        lines.append("⚠️ <i>Contested — agents disagreed</i>")
+        lines.append("⚠️ <i>No consensus — required Round 2</i>")
 
     lines.append("")
 
-    # Agent emoji mapping
+    # V2 agent emoji and label mappings
     agent_emojis = {
-        "risk_officer": "🔴",
-        "alpha_strategist": "🟡",
-        "data_scientist": "🔵",
-        "regime_analyst": "🟠",
-        "devils_advocate": "😈",
+        "tactical_operator": "⚡",
+        "strategic_architect": "🏗️",
+        "red_team": "🔴",
+        "innovation_engine": "💡",
+        "macro_navigator": "🌍",
     }
     agent_labels = {
-        "risk_officer": "Risk Officer",
-        "alpha_strategist": "Alpha Strategist",
-        "data_scientist": "Data Scientist",
-        "regime_analyst": "Regime Analyst",
-        "devils_advocate": "Devil's Advocate",
+        "tactical_operator": "Tactical",
+        "strategic_architect": "Strategic",
+        "red_team": "Red Team",
+        "innovation_engine": "Innovation",
+        "macro_navigator": "Macro",
     }
 
-    # Use round 3 (final vote) if available, else round 1
-    final_round = result.get("round3") or result.get("round2") or result.get("round1") or []
-    for assessment in final_round:
+    # Use agent_assessments from v2 result
+    assessments = result.get("agent_assessments", [])
+    for assessment in assessments:
         agent = assessment.get("agent", "unknown")
         emoji = agent_emojis.get(agent, "⚪")
         label = agent_labels.get(agent, agent.replace("_", " ").title())
-        position = assessment.get("position", "N/A")
-        conf = assessment.get("confidence", "?")
-        lines.append(f"{emoji} {label}: {position} ({conf}/10)")
+        direction_a = assessment.get("direction", "neutral")
+        conf_a = assessment.get("confidence", 0)
+        reasoning = assessment.get("key_reasoning", "")[:80]
+        dir_emoji = {"bullish": "🟢", "neutral": "⚪", "bearish": "🔴"}.get(direction_a, "⚪")
+        lines.append(f"{emoji} {label}: {dir_emoji} {direction_a} ({conf_a:.0%})")
+        if reasoning:
+            lines.append(f"   <i>{reasoning}...</i>")
+
+    # Parameter adjustments
+    params = result.get("parameter_adjustments", {})
+    if params:
+        lines.append("")
+        for p, detail in params.items():
+            if isinstance(detail, dict):
+                prev = detail.get("previous", "?")
+                applied = detail.get("applied", "?")
+                if prev != applied:
+                    lines.append(f"📊 {p}: {prev} → {applied}")
 
     if result.get("total_cost"):
-        lines.append(f"\n💰 Cost: ${result['total_cost']:.4f}")
-
-    lines.append(f"Rounds: {result.get('rounds_completed', 0)}/3")
+        lines.append(f"\n💰 ${result['total_cost']:.4f} | Rounds: {result.get('rounds_completed', 0)}")
 
     return "\n".join(lines)
 

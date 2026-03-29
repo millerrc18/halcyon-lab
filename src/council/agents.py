@@ -1,7 +1,18 @@
-"""AI Council agent definitions and system prompts.
+"""AI Council agent definitions — vote-first protocol.
 
-Each agent has a distinct analytical framework, bias direction, and data
-gathering function that pulls relevant context from the SQLite database.
+Five analytical lenses, each producing structured JSON.
+Research: AI_Council_Redesign_v2__Architecture_and_Implementation.md
+
+Agents:
+  tactical_operator   — Market microstructure, short-term price action
+  strategic_architect  — Portfolio theory, Kelly, phase gates
+  red_team             — Adversarial pre-mortem, tail risk
+  innovation_engine    — R&D pipeline, ML experiments
+  macro_navigator      — Macro-financial, regulatory, structural
+
+FIX #7:  _query_db helper preserved from original agents.py
+FIX #9:  Red Team prompt uses independent data analysis for Round 1
+FIX #11: gather functions accept session_type for future per-type depth
 """
 
 import json
@@ -9,176 +20,15 @@ import logging
 import sqlite3
 from datetime import datetime, timedelta
 from typing import Any
+from zoneinfo import ZoneInfo
 
 logger = logging.getLogger(__name__)
 
 DB_PATH = "ai_research_desk.sqlite3"
+ET = ZoneInfo("America/New_York")
 
-# ---------------------------------------------------------------------------
-# Agent system prompts
-# ---------------------------------------------------------------------------
 
-RISK_OFFICER_PROMPT = """\
-You are the Risk Officer on a five-member AI trading council. Your mandate is
-capital preservation above all else.
-
-ANALYTICAL FRAMEWORK:
-- Evaluate portfolio drawdown risk, correlation clustering, and sector exposure.
-- Flag any position that exceeds 5% of equity or any sector above 25%.
-- Monitor VIX levels and credit spread trends for regime deterioration.
-- Apply a conservative bias: when uncertain, recommend reducing exposure.
-
-SPECIFIC QUESTIONS TO ADDRESS:
-1. What is the current portfolio heat (total risk-on exposure)?
-2. Are open positions correlated in a way that compounds drawdown risk?
-3. Does the VIX term structure signal rising fear or complacency?
-4. Are there any single-name concentration risks?
-5. What is the max drawdown scenario if the worst 2-sigma event occurs?
-
-OUTPUT FORMAT: Respond with a single JSON object (no markdown fencing):
-{
-  "agent": "risk_officer",
-  "position": "defensive" | "neutral" | "offensive",
-  "confidence": <1-10>,
-  "recommendation": "<your analysis>",
-  "key_data_points": ["point1", "point2"],
-  "risk_flags": ["flag1"],
-  "vote": "reduce_exposure" | "hold_steady" | "increase_exposure" | "selective_buying"
-}
-"""
-
-ALPHA_STRATEGIST_PROMPT = """\
-You are the Alpha Strategist on a five-member AI trading council. Your mandate
-is identifying the highest-conviction setups for capital deployment.
-
-ANALYTICAL FRAMEWORK:
-- Evaluate signal quality, setup conviction, and reward-to-risk ratios.
-- Prioritize setups with multiple confirming factors (trend, momentum, volume).
-- Apply an aggressive bias: when the data supports opportunity, push for action.
-- Consider the regime context but do not let caution override strong signals.
-
-SPECIFIC QUESTIONS TO ADDRESS:
-1. Which candidates have the strongest composite scores and why?
-2. What is the expected reward-to-risk for the top setups?
-3. Are there any catalysts (earnings, sector rotation) that amplify conviction?
-4. How does the current regime support or undermine these setups?
-5. What position sizing makes sense given the opportunity set?
-
-OUTPUT FORMAT: Respond with a single JSON object (no markdown fencing):
-{
-  "agent": "alpha_strategist",
-  "position": "defensive" | "neutral" | "offensive",
-  "confidence": <1-10>,
-  "recommendation": "<your analysis>",
-  "key_data_points": ["point1", "point2"],
-  "risk_flags": ["flag1"],
-  "vote": "reduce_exposure" | "hold_steady" | "increase_exposure" | "selective_buying"
-}
-"""
-
-DATA_SCIENTIST_PROMPT = """\
-You are the Data Scientist on a five-member AI trading council. Your mandate
-is ensuring model integrity and data quality before any capital is deployed.
-
-ANALYTICAL FRAMEWORK:
-- Evaluate model health: scoring distribution, calibration drift, holdout performance.
-- Monitor training data quality and recency.
-- Apply an empirical bias: only trust what the data demonstrates, not narratives.
-- Flag any signs of overfitting, data leakage, or degraded signal quality.
-
-SPECIFIC QUESTIONS TO ADDRESS:
-1. Is the scoring model well-calibrated (scores mapping to actual outcomes)?
-2. Has there been distribution shift in recent candidate scores vs. historical?
-3. What is the holdout set performance trend over the last 30 days?
-4. Are there data quality issues (stale prices, missing features, outliers)?
-5. Should we increase or decrease trust in the model's current output?
-
-OUTPUT FORMAT: Respond with a single JSON object (no markdown fencing):
-{
-  "agent": "data_scientist",
-  "position": "defensive" | "neutral" | "offensive",
-  "confidence": <1-10>,
-  "recommendation": "<your analysis>",
-  "key_data_points": ["point1", "point2"],
-  "risk_flags": ["flag1"],
-  "vote": "reduce_exposure" | "hold_steady" | "increase_exposure" | "selective_buying"
-}
-"""
-
-REGIME_ANALYST_PROMPT = """\
-You are the Regime Analyst on a five-member AI trading council. Your mandate
-is reading the macro environment to inform position sizing and strategy tilt.
-
-ANALYTICAL FRAMEWORK:
-- Evaluate the current market regime: risk-on, risk-off, transitional.
-- Monitor FRED economic indicators, VIX term structure, market breadth, and
-  sector rotation patterns.
-- Apply a macro bias: individual setups matter less than the environment they
-  trade in.
-- Identify regime transitions early before they are obvious.
-
-SPECIFIC QUESTIONS TO ADDRESS:
-1. What is the current macro regime (expansion, contraction, transition)?
-2. Is the VIX term structure in contango or backwardation, and what does it signal?
-3. What do breadth indicators (advance-decline, new highs/lows) suggest?
-4. Are there sector rotation signals indicating leadership change?
-5. What is the appropriate overall portfolio tilt given the macro backdrop?
-
-OUTPUT FORMAT: Respond with a single JSON object (no markdown fencing):
-{
-  "agent": "regime_analyst",
-  "position": "defensive" | "neutral" | "offensive",
-  "confidence": <1-10>,
-  "recommendation": "<your analysis>",
-  "key_data_points": ["point1", "point2"],
-  "risk_flags": ["flag1"],
-  "vote": "reduce_exposure" | "hold_steady" | "increase_exposure" | "selective_buying"
-}
-"""
-
-DEVILS_ADVOCATE_PROMPT = """\
-You are the Devil's Advocate on a five-member AI trading council. Your mandate
-is to argue against the emerging consensus and stress-test the group's logic.
-
-ANALYTICAL FRAMEWORK:
-- Identify the consensus position from the Round 1 assessments.
-- Construct the strongest possible counter-argument.
-- Highlight blind spots, confirmation bias, and under-weighted risks.
-- Apply a contrarian bias: if everyone agrees, something is being missed.
-
-SPECIFIC QUESTIONS TO ADDRESS:
-1. What is the consensus position and what assumptions does it rest on?
-2. What is the strongest argument against the consensus?
-3. What tail risks or black swan scenarios are being ignored?
-4. Where might groupthink be distorting the analysis?
-5. Under what conditions would you agree with the consensus?
-
-OUTPUT FORMAT: Respond with a single JSON object (no markdown fencing):
-{
-  "agent": "devils_advocate",
-  "position": "defensive" | "neutral" | "offensive",
-  "confidence": <1-10>,
-  "recommendation": "<your analysis>",
-  "key_data_points": ["point1", "point2"],
-  "risk_flags": ["flag1"],
-  "vote": "reduce_exposure" | "hold_steady" | "increase_exposure" | "selective_buying"
-}
-"""
-
-AGENT_PROMPTS = {
-    "risk_officer": RISK_OFFICER_PROMPT,
-    "alpha_strategist": ALPHA_STRATEGIST_PROMPT,
-    "data_scientist": DATA_SCIENTIST_PROMPT,
-    "regime_analyst": REGIME_ANALYST_PROMPT,
-    "devils_advocate": DEVILS_ADVOCATE_PROMPT,
-}
-
-AGENT_NAMES = list(AGENT_PROMPTS.keys())
-
-# ---------------------------------------------------------------------------
-# Data payload gathering functions
-# ---------------------------------------------------------------------------
-
+# ── Shared helper (FIX #7: preserved from original agents.py) ────
 
 def _query_db(query: str, params: tuple = (), db_path: str = DB_PATH) -> list[dict]:
     """Execute a read query and return rows as list of dicts."""
@@ -188,254 +38,573 @@ def _query_db(query: str, params: tuple = (), db_path: str = DB_PATH) -> list[di
         return [dict(row) for row in cursor.fetchall()]
 
 
-def gather_risk_officer_data(db_path: str = DB_PATH) -> dict[str, Any]:
-    """Gather data payload for the Risk Officer.
+# ── JSON output schema (appended to every agent prompt) ──────────
 
-    Sees: open shadow trades, recent closed trades, VIX term structure, credit spreads.
-    """
+AGENT_OUTPUT_SCHEMA = """\
+OUTPUT FORMAT: Respond with ONLY a JSON object (no markdown, no preamble, no code fences):
+{
+  "agent": "<your_agent_name>",
+  "direction": "bullish" | "neutral" | "bearish",
+  "confidence": <float 0.0 to 1.0>,
+  "parameters": {
+    "position_sizing_multiplier": <float 0.25 to 1.5>,
+    "cash_reserve_target_pct": <int 10 to 50>,
+    "scan_aggressiveness": "conservative" | "normal" | "aggressive"
+  },
+  "sector_tilts": {
+    "prefer": ["sector1"],
+    "avoid": ["sector2"]
+  },
+  "key_reasoning": "<one paragraph maximum>",
+  "key_risk": "<one sentence>",
+  "falsifiable_prediction": {
+    "claim": "<specific testable claim>",
+    "confidence": <float 0.0 to 1.0>,
+    "verification_date": "YYYY-MM-DD"
+  }
+}
+"""
+
+
+# ══════════════════════════════════════════════════════════════════
+# AGENT SYSTEM PROMPTS
+# ══════════════════════════════════════════════════════════════════
+
+TACTICAL_OPERATOR_PROMPT = f"""\
+You are the Tactical Operator on a five-member AI trading council for Halcyon Lab,
+an autonomous equity pullback trading system on S&P 100 stocks.
+
+ANALYTICAL FRAMEWORK:
+- Market microstructure analysis: volume patterns, spread dynamics, order flow
+- Regime detection: classify conditions using VIX, credit spreads, trend indicators
+- Short-term price action: momentum and mean reversion signals over 1-5 day horizons
+- Volatility assessment: is vol expanding (danger) or contracting (opportunity)?
+
+CORE QUESTION: "What does current data tell us about the next 1-5 trading days?"
+
+EVALUATION CRITERIA:
+1. Is the current regime favorable for pullback entries? (trending + moderate vol = ideal)
+2. Is VIX term structure in contango (complacency) or backwardation (fear)?
+3. Are recent scans finding quality setups, or is the system struggling?
+4. Are open positions behaving as expected (P&L trajectory, holding time)?
+5. Should we be more aggressive (more setups, larger sizes) or defensive?
+
+{AGENT_OUTPUT_SCHEMA}
+"""
+
+STRATEGIC_ARCHITECT_PROMPT = f"""\
+You are the Strategic Architect on a five-member AI trading council for Halcyon Lab,
+an autonomous equity pullback trading system scaling from $100K paper to $3M AUM.
+
+ANALYTICAL FRAMEWORK:
+- Portfolio theory: diversification, risk parity, correlation management
+- Kelly criterion: optimal sizing given estimated edge and variance
+- Phase gate evaluation: are we on track for the 50-trade gate? 100-trade gate?
+- Resource allocation: where should development effort be focused?
+
+CORE QUESTION: "Are we on track, and how should we allocate capital and attention?"
+
+EVALUATION CRITERIA:
+1. How many closed trades vs the 50-trade Phase 1 gate? Expected timeline?
+2. Is the system health score (HSHS) improving or degrading?
+3. Are we building the data asset fast enough? (training data growth rate)
+4. Is the training pipeline healthy? (retrain frequency, quality scores, fallback rate)
+5. Should we hold capital in reserve for better opportunities, or deploy more?
+
+{AGENT_OUTPUT_SCHEMA}
+"""
+
+RED_TEAM_PROMPT = f"""\
+You are the Red Team analyst on a five-member AI trading council for Halcyon Lab.
+Your SOLE purpose is adversarial analysis. You are paid to find problems.
+
+ANALYTICAL FRAMEWORK:
+- Pre-mortem: assume the system fails in the next 30 days — what caused it?
+- Tail risk: what is the worst 2-sigma event for the current portfolio?
+- Model degradation: is the LLM producing worse analysis over time?
+- Concentration risk: are positions correlated in ways we haven't measured?
+- Competitive threats: are other traders crowding our signals?
+
+CORE QUESTION: "What are we missing, and what kills us?"
+
+EVALUATION CRITERIA:
+1. What is the maximum portfolio loss if all positions move against us simultaneously?
+2. Is drawdown trajectory concerning? (accelerating, decelerating, stable)
+3. Are sector concentrations within safe limits even under stress?
+4. Is the model's template fallback rate increasing? (sign of degradation)
+5. What external event (Fed, earnings, geopolitical) could overwhelm our bracket stops?
+
+BIAS: You are ALWAYS skeptical. When uncertain, lean bearish. Your value comes
+from identifying risks others overlook, not from agreeing with the consensus.
+Base your analysis on the DATA provided, not on what other agents might think.
+
+{AGENT_OUTPUT_SCHEMA}
+"""
+
+INNOVATION_ENGINE_PROMPT = f"""\
+You are the Innovation Engine on a five-member AI trading council for Halcyon Lab.
+You focus on the ML pipeline, data quality, and technical improvements.
+
+ANALYTICAL FRAMEWORK:
+- Data-centric AI: is training data quality improving or degrading?
+- Model evaluation: are quality scores, fallback rates, and calibration trending well?
+- Feature engineering: are all data sources contributing signal, or is some noise?
+- R&D pipeline: what should be built or investigated next?
+
+CORE QUESTION: "What should we build or fix next, and is the ML pipeline healthy?"
+
+EVALUATION CRITERIA:
+1. Is the template fallback rate decreasing over time? (target: <10%)
+2. Are training data quality scores improving? (target: avg >20/30)
+3. Is the training data growing fast enough? (target: 50+ new examples/month)
+4. Are there quick wins in the feature pipeline? (new data sources, better formatting)
+5. Is the Saturday retrain cycle running reliably?
+
+{AGENT_OUTPUT_SCHEMA}
+"""
+
+MACRO_NAVIGATOR_PROMPT = f"""\
+You are the Macro Navigator on a five-member AI trading council for Halcyon Lab,
+an autonomous equity pullback system trading S&P 100 stocks.
+
+ANALYTICAL FRAMEWORK:
+- Macro-financial analysis: yield curve, credit conditions, inflation, employment
+- Economic cycle positioning: where are we in the business cycle?
+- Regime change detection: identifying structural shifts before they're obvious
+- Sector rotation: which sectors benefit from current macro conditions?
+
+CORE QUESTION: "How is the world changing around us, and what regime risks exist?"
+
+EVALUATION CRITERIA:
+1. Is the yield curve signaling recession risk? (2y-10y spread, 3m-10y spread)
+2. Are credit spreads widening (risk-off) or tightening (risk-on)?
+3. What macro data releases are upcoming that could move markets?
+4. Which sectors are aligned with current macro conditions?
+5. Are there regulatory or structural changes that affect our operations?
+
+{AGENT_OUTPUT_SCHEMA}
+"""
+
+AGENT_PROMPTS = {
+    "tactical_operator": TACTICAL_OPERATOR_PROMPT,
+    "strategic_architect": STRATEGIC_ARCHITECT_PROMPT,
+    "red_team": RED_TEAM_PROMPT,
+    "innovation_engine": INNOVATION_ENGINE_PROMPT,
+    "macro_navigator": MACRO_NAVIGATOR_PROMPT,
+}
+
+AGENT_NAMES = list(AGENT_PROMPTS.keys())
+
+
+# ══════════════════════════════════════════════════════════════════
+# DATA GATHERING FUNCTIONS
+# ══════════════════════════════════════════════════════════════════
+# Each returns a formatted STRING (not dict). LLMs process natural
+# text better than raw JSON with escapes and nulls.
+# Every query is wrapped in try/except — never crashes.
+
+
+def gather_tactical_data(db_path: str = DB_PATH) -> str:
+    """Gather market microstructure and short-term data for Tactical Operator."""
+    parts = []
     try:
-        open_trades = _query_db(
-            """SELECT ticker, direction, entry_price, stop_price,
-                      target_1, target_2, planned_shares, status,
-                      created_at
-               FROM shadow_trades
-               WHERE status = 'open'
-               ORDER BY created_at DESC
-               LIMIT 50""",
-            db_path=db_path,
-        )
+        with sqlite3.connect(db_path) as conn:
+            conn.row_factory = sqlite3.Row
 
-        recent_closed = _query_db(
-            """SELECT ticker, direction, entry_price, actual_exit_price,
-                      pnl_dollars, pnl_pct, exit_reason,
-                      max_adverse_excursion, max_favorable_excursion
-               FROM shadow_trades
-               WHERE status = 'closed'
-               ORDER BY actual_exit_time DESC
-               LIMIT 20""",
-            db_path=db_path,
-        )
+            # VIX and term structure
+            try:
+                vix = conn.execute(
+                    "SELECT vix_close, vix9d, vix3m FROM vix_term_structure "
+                    "ORDER BY date DESC LIMIT 1"
+                ).fetchone()
+                if vix:
+                    parts.append(f"VIX: {vix['vix_close']:.1f} | VIX9D: {vix['vix9d']:.1f} | VIX3M: {vix['vix3m']:.1f}")
+                    if vix['vix_close'] and vix['vix3m']:
+                        structure = "contango (complacency)" if vix['vix_close'] < vix['vix3m'] else "backwardation (fear)"
+                        parts.append(f"Term structure: {structure}")
+            except Exception as e:
+                logger.debug("[COUNCIL] Tactical VIX query: %s", e)
 
-        vix_data = _query_db(
-            """SELECT collected_date as date, vix as vix_close,
-                      vix9d, vix3m, vix1y, term_structure_slope
-               FROM vix_term_structure
-               ORDER BY collected_date DESC
-               LIMIT 10""",
-            db_path=db_path,
-        )
+            # Traffic Light
+            try:
+                tl = conn.execute(
+                    "SELECT current_regime, last_total_score FROM traffic_light_state WHERE id = 1"
+                ).fetchone()
+                if tl:
+                    parts.append(f"Traffic Light: {tl['current_regime']} (score {tl['last_total_score']}/6)")
+            except Exception:
+                pass
 
-        credit_spreads = _query_db(
-            """SELECT collected_date as date, series_id, value
-               FROM macro_snapshots
-               WHERE series_id IN ('BAMLH0A0HYM2', 'BAMLC0A4CBBB')
-               ORDER BY collected_date DESC
-               LIMIT 20""",
-            db_path=db_path,
-        )
+            # Recent scan results
+            try:
+                scans = conn.execute(
+                    "SELECT scan_time, packet_worthy, llm_success, llm_total, avg_conviction "
+                    "FROM scan_metrics ORDER BY created_at DESC LIMIT 5"
+                ).fetchall()
+                if scans:
+                    parts.append("\nRecent scans:")
+                    for s in scans:
+                        fb = ""
+                        if s['llm_total'] and s['llm_total'] > 0:
+                            fb = f" fallback={((s['llm_total'] - (s['llm_success'] or 0)) / s['llm_total'] * 100):.0f}%"
+                        parts.append(f"  {s['scan_time']}: {s['packet_worthy']} packets, "
+                                     f"conv {s['avg_conviction']:.1f}{fb}")
+            except Exception as e:
+                logger.debug("[COUNCIL] Tactical scan query: %s", e)
 
-        return {
-            "open_trades": open_trades,
-            "recent_closed": recent_closed,
-            "vix_data": vix_data,
-            "credit_spreads": credit_spreads,
-            "open_trade_count": len(open_trades),
-        }
+            # Open positions with P&L
+            try:
+                positions = conn.execute(
+                    "SELECT ticker, pnl_pct, sector, "
+                    "CAST(julianday('now') - julianday(actual_entry_time) AS INTEGER) as days "
+                    "FROM shadow_trades WHERE status = 'open' ORDER BY pnl_pct DESC"
+                ).fetchall()
+                if positions:
+                    winners = sum(1 for p in positions if (p['pnl_pct'] or 0) > 0)
+                    total_pnl = sum(p['pnl_pct'] or 0 for p in positions)
+                    parts.append(f"\nOpen positions ({len(positions)}): {winners} green, "
+                                 f"{len(positions) - winners} red, aggregate {total_pnl:+.1f}%")
+                    for p in positions[:8]:
+                        e = "📈" if (p['pnl_pct'] or 0) > 0 else "📉"
+                        parts.append(f"  {e} {p['ticker']} ({p['sector'] or '?'}): "
+                                     f"{(p['pnl_pct'] or 0):+.1f}% ({p['days'] or 0}d)")
+                else:
+                    parts.append("\nNo open positions.")
+            except Exception as e:
+                logger.debug("[COUNCIL] Tactical positions query: %s", e)
+
     except Exception as e:
-        logger.warning("Risk officer data gather failed: %s", e)
-        return {}
+        logger.warning("[COUNCIL] Tactical data gather failed: %s", e)
+
+    return "\n".join(parts) if parts else "No tactical data available."
 
 
-def gather_alpha_strategist_data(db_path: str = DB_PATH) -> dict[str, Any]:
-    """Gather data payload for the Alpha Strategist.
-
-    Sees: top candidates, scores, regime context, recent recommendations.
-    """
+def gather_strategic_data(db_path: str = DB_PATH) -> str:
+    """Gather portfolio strategy and phase gate data for Strategic Architect."""
+    parts = []
     try:
-        top_candidates = _query_db(
-            """SELECT ticker, company_name, priority_score, confidence_score,
-                      setup_type, trend_state, relative_strength_state,
-                      pullback_depth_pct, market_regime, entry_zone,
-                      stop_level, target_1, target_2
-               FROM recommendations
-               WHERE created_at >= datetime('now', '-3 days')
-               ORDER BY priority_score DESC
-               LIMIT 15""",
-            db_path=db_path,
-        )
+        with sqlite3.connect(db_path) as conn:
+            conn.row_factory = sqlite3.Row
 
-        recent_performance = _query_db(
-            """SELECT ticker, pnl_pct, exit_reason,
-                      CAST(julianday(actual_exit_time) - julianday(created_at) AS INTEGER) as hold_days
-               FROM shadow_trades
-               WHERE status = 'closed'
-               ORDER BY actual_exit_time DESC
-               LIMIT 10""",
-            db_path=db_path,
-        )
+            # Trade count vs gates
+            try:
+                closed = conn.execute("SELECT COUNT(*) as n FROM shadow_trades WHERE status = 'closed'").fetchone()
+                total = conn.execute("SELECT COUNT(*) as n FROM shadow_trades").fetchone()
+                n_closed = closed['n'] if closed else 0
+                n_open = (total['n'] if total else 0) - n_closed
+                parts.append(f"Trades: {n_closed} closed, {n_open} open")
+                parts.append(f"Phase 1 gate: {n_closed}/50 ({n_closed / 50 * 100:.0f}%)")
+            except Exception as e:
+                logger.debug("[COUNCIL] Strategic trade count: %s", e)
 
-        regime = _query_db(
-            """SELECT ticker, market_regime
-               FROM recommendations
-               WHERE created_at >= datetime('now', '-1 day')
-               LIMIT 1""",
-            db_path=db_path,
-        )
+            # P&L summary
+            try:
+                pnl = conn.execute(
+                    "SELECT SUM(pnl_dollars) as total, AVG(pnl_pct) as avg, "
+                    "COUNT(CASE WHEN pnl_dollars > 0 THEN 1 END) as wins, COUNT(*) as n "
+                    "FROM shadow_trades WHERE status = 'closed' AND pnl_dollars IS NOT NULL"
+                ).fetchone()
+                if pnl and pnl['n'] > 0:
+                    wr = pnl['wins'] / pnl['n'] * 100
+                    parts.append(f"P&L: ${pnl['total']:.2f} total, {pnl['avg']:.2f}% avg, "
+                                 f"{wr:.0f}% WR ({pnl['wins']}/{pnl['n']})")
+            except Exception as e:
+                logger.debug("[COUNCIL] Strategic P&L: %s", e)
 
-        return {
-            "top_candidates": top_candidates,
-            "recent_performance": recent_performance,
-            "current_regime": regime[0]["market_regime"] if regime else "unknown",
-        }
+            # Training data
+            try:
+                td = conn.execute(
+                    "SELECT COUNT(*) as n, AVG(quality_score) as q "
+                    "FROM training_examples"
+                ).fetchone()
+                if td:
+                    q_str = f", avg quality {td['q']:.1f}" if td['q'] else ", no quality scores"
+                    parts.append(f"\nTraining: {td['n']} examples{q_str}")
+            except Exception:
+                pass
+
+            # HSHS
+            try:
+                from src.evaluation.hshs_live import compute_hshs
+                h = compute_hshs(db_path)
+                parts.append(f"HSHS: {h.get('hshs', 0):.1f}/100 (phase: {h.get('phase', '?')})")
+                for dim, val in h.get("dimensions", {}).items():
+                    parts.append(f"  {dim}: {val:.0f}")
+            except Exception:
+                pass
+
+            # Model versions
+            try:
+                v = conn.execute("SELECT COUNT(*) as n FROM model_versions").fetchone()
+                if v:
+                    parts.append(f"Model versions trained: {v['n']}")
+            except Exception:
+                pass
+
     except Exception as e:
-        logger.warning("Alpha strategist data gather failed: %s", e)
-        return {}
+        logger.warning("[COUNCIL] Strategic data gather failed: %s", e)
+
+    return "\n".join(parts) if parts else "No strategic data available."
 
 
-def gather_data_scientist_data(db_path: str = DB_PATH) -> dict[str, Any]:
-    """Gather data payload for the Data Scientist.
-
-    Sees: scoring distribution, quality metrics, holdout performance, model info.
-    """
+def gather_risk_data(db_path: str = DB_PATH) -> str:
+    """Gather risk and concentration data for Red Team."""
+    parts = []
     try:
-        score_distribution = _query_db(
-            """SELECT
-                 COUNT(*) as total,
-                 AVG(priority_score) as avg_score,
-                 MIN(priority_score) as min_score,
-                 MAX(priority_score) as max_score,
-                 AVG(confidence_score) as avg_confidence
-               FROM recommendations
-               WHERE created_at >= datetime('now', '-7 days')""",
-            db_path=db_path,
-        )
+        with sqlite3.connect(db_path) as conn:
+            conn.row_factory = sqlite3.Row
 
-        scoring_backlog = _query_db(
-            """SELECT COUNT(*) as pending
-               FROM recommendations
-               WHERE created_at >= datetime('now', '-1 day')
-                 AND priority_score IS NULL""",
-            db_path=db_path,
-        )
+            # Sector concentration
+            try:
+                sectors = conn.execute(
+                    "SELECT sector, COUNT(*) as n, SUM(planned_allocation) as alloc "
+                    "FROM shadow_trades WHERE status = 'open' AND sector IS NOT NULL "
+                    "GROUP BY sector ORDER BY n DESC"
+                ).fetchall()
+                if sectors:
+                    parts.append("Sector concentration (open):")
+                    for s in sectors:
+                        alloc = f" (${s['alloc']:.0f})" if s['alloc'] else ""
+                        parts.append(f"  {s['sector']}: {s['n']} positions{alloc}")
+                else:
+                    parts.append("No open positions for sector analysis.")
+            except Exception as e:
+                logger.debug("[COUNCIL] Risk sector: %s", e)
 
-        quality_samples = _query_db(
-            """SELECT quality_score_auto as quality_score, source, difficulty
-               FROM training_examples
-               WHERE created_at >= datetime('now', '-7 days')
-               ORDER BY created_at DESC
-               LIMIT 50""",
-            db_path=db_path,
-        )
+            # Recent losses
+            try:
+                losses = conn.execute(
+                    "SELECT ticker, pnl_pct, exit_reason, actual_exit_time "
+                    "FROM shadow_trades WHERE status = 'closed' AND pnl_pct < 0 "
+                    "ORDER BY actual_exit_time DESC LIMIT 5"
+                ).fetchall()
+                if losses:
+                    parts.append("\nRecent losses:")
+                    for l in losses:
+                        parts.append(f"  {l['ticker']}: {l['pnl_pct']:.1f}% "
+                                     f"({l['exit_reason']}) {(l['actual_exit_time'] or '')[:10]}")
+            except Exception as e:
+                logger.debug("[COUNCIL] Risk losses: %s", e)
 
-        model_versions = _query_db(
-            """SELECT version_name, status, created_at,
-                      training_examples_count
-               FROM model_versions
-               ORDER BY created_at DESC
-               LIMIT 5""",
-            db_path=db_path,
-        )
+            # Template fallback rate (model health)
+            try:
+                fb = conn.execute(
+                    "SELECT SUM(llm_success) as ok, SUM(llm_total) as total "
+                    "FROM scan_metrics WHERE created_at > datetime('now', '-7 days')"
+                ).fetchone()
+                if fb and fb['total'] and fb['total'] > 0:
+                    rate = (1 - fb['ok'] / fb['total']) * 100
+                    status = "⚠️ ELEVATED" if rate > 20 else "✓ normal"
+                    parts.append(f"\n7-day fallback rate: {rate:.1f}% ({status})")
+            except Exception:
+                pass
 
-        return {
-            "score_distribution": score_distribution,
-            "scoring_backlog": scoring_backlog,
-            "quality_samples": quality_samples,
-            "model_versions": model_versions,
-        }
+            # Cumulative P&L for drawdown context
+            try:
+                cum = conn.execute(
+                    "SELECT SUM(pnl_dollars) as total FROM shadow_trades WHERE status = 'closed'"
+                ).fetchone()
+                if cum and cum['total'] is not None:
+                    parts.append(f"Cumulative closed P&L: ${cum['total']:.2f}")
+            except Exception:
+                pass
+
+            # Max adverse excursion (worst intra-trade drawdown)
+            try:
+                mae = conn.execute(
+                    "SELECT ticker, MIN(max_adverse_excursion) as worst_mae "
+                    "FROM shadow_trades WHERE status = 'closed' AND max_adverse_excursion IS NOT NULL"
+                ).fetchone()
+                if mae and mae['worst_mae'] is not None:
+                    parts.append(f"Worst MAE (single trade): {mae['worst_mae']:.1f}%")
+            except Exception:
+                pass
+
     except Exception as e:
-        logger.warning("Data scientist data gather failed: %s", e)
-        return {}
+        logger.warning("[COUNCIL] Risk data gather failed: %s", e)
+
+    return "\n".join(parts) if parts else "No risk data available."
 
 
-def gather_regime_analyst_data(db_path: str = DB_PATH) -> dict[str, Any]:
-    """Gather data payload for the Regime Analyst.
-
-    Sees: macro indicators, VIX term structure, sector breakdown.
-    """
+def gather_innovation_data(db_path: str = DB_PATH) -> str:
+    """Gather ML pipeline and training data for Innovation Engine."""
+    parts = []
     try:
-        macro_data = _query_db(
-            """SELECT series_id, collected_date as date, value, previous_value, change_pct
-               FROM macro_snapshots
-               ORDER BY collected_date DESC
-               LIMIT 50""",
-            db_path=db_path,
-        )
+        with sqlite3.connect(db_path) as conn:
+            conn.row_factory = sqlite3.Row
 
-        vix_term = _query_db(
-            """SELECT collected_date as date, vix as vix_close,
-                      vix9d, vix3m, vix1y, term_structure_slope, near_term_ratio
-               FROM vix_term_structure
-               ORDER BY collected_date DESC
-               LIMIT 20""",
-            db_path=db_path,
-        )
+            now = datetime.now(ET)
+            week_ago = (now - timedelta(days=7)).isoformat()
+            month_ago = (now - timedelta(days=30)).isoformat()
 
-        sector_breakdown = _query_db(
-            """SELECT sector_context, COUNT(*) as count,
-                      AVG(priority_score) as avg_score
-               FROM recommendations
-               WHERE created_at >= datetime('now', '-7 days')
-                 AND sector_context IS NOT NULL
-               GROUP BY sector_context
-               ORDER BY count DESC""",
-            db_path=db_path,
-        )
+            # Training data trends
+            try:
+                total = conn.execute("SELECT COUNT(*) as n FROM training_examples").fetchone()
+                new_wk = conn.execute(
+                    "SELECT COUNT(*) as n FROM training_examples WHERE created_at > ?", (week_ago,)
+                ).fetchone()
+                new_mo = conn.execute(
+                    "SELECT COUNT(*) as n FROM training_examples WHERE created_at > ?", (month_ago,)
+                ).fetchone()
+                parts.append(f"Training data: {total['n']} total, "
+                             f"+{new_wk['n']} this week, +{new_mo['n']} this month")
+            except Exception:
+                pass
 
-        # Financial conditions from macro_snapshots
-        fin_conditions = _query_db(
-            """SELECT series_id, collected_date as date, value
-               FROM macro_snapshots
-               WHERE series_id IN ('NFCI', 'STLFSI2', 'T10Y2Y', 'TEDRATE', 'BAMLH0A0HYM2')
-               ORDER BY collected_date DESC
-               LIMIT 25""",
-            db_path=db_path,
-        )
+            # Quality scores
+            try:
+                q = conn.execute(
+                    "SELECT AVG(quality_score) as avg, MIN(quality_score) as min, "
+                    "MAX(quality_score) as max, "
+                    "COUNT(CASE WHEN quality_score IS NULL OR quality_score = 0 THEN 1 END) as unscored "
+                    "FROM training_examples"
+                ).fetchone()
+                if q:
+                    parts.append(f"Quality: avg={q['avg']:.1f}, range [{q['min']:.0f}-{q['max']:.0f}], "
+                                 f"{q['unscored']} unscored" if q['avg'] else f"Quality: {q['unscored']} unscored")
+            except Exception:
+                pass
 
-        return {
-            "macro_data": macro_data,
-            "vix_term_structure": vix_term,
-            "sector_breakdown": sector_breakdown,
-            "financial_conditions": fin_conditions,
-        }
+            # Source distribution
+            try:
+                sources = conn.execute(
+                    "SELECT source, COUNT(*) as n FROM training_examples "
+                    "GROUP BY source ORDER BY n DESC"
+                ).fetchall()
+                if sources:
+                    parts.append("\nSources:")
+                    for s in sources:
+                        parts.append(f"  {s['source'] or 'unknown'}: {s['n']}")
+            except Exception:
+                pass
+
+            # Curriculum stage distribution
+            try:
+                stages = conn.execute(
+                    "SELECT curriculum_stage, COUNT(*) as n FROM training_examples "
+                    "WHERE curriculum_stage IS NOT NULL GROUP BY curriculum_stage"
+                ).fetchall()
+                if stages:
+                    parts.append("Curriculum:")
+                    for s in stages:
+                        parts.append(f"  {s['curriculum_stage']}: {s['n']}")
+            except Exception:
+                pass
+
+            # Fallback rate trend
+            try:
+                fb = conn.execute(
+                    "SELECT DATE(created_at) as day, "
+                    "CAST(SUM(llm_total - COALESCE(llm_success, 0)) AS FLOAT) / "
+                    "NULLIF(SUM(llm_total), 0) * 100 as fb_pct "
+                    "FROM scan_metrics WHERE llm_total > 0 "
+                    "GROUP BY DATE(created_at) ORDER BY day DESC LIMIT 7"
+                ).fetchall()
+                if fb:
+                    parts.append("\nFallback rate (7 days):")
+                    for f in fb:
+                        parts.append(f"  {f['day']}: {f['fb_pct']:.1f}%")
+            except Exception:
+                pass
+
     except Exception as e:
-        logger.warning("Regime analyst data gather failed: %s", e)
-        return {}
+        logger.warning("[COUNCIL] Innovation data gather failed: %s", e)
+
+    return "\n".join(parts) if parts else "No innovation data available."
 
 
-def gather_devils_advocate_data(
-    round1_assessments: list[dict],
-    db_path: str = DB_PATH,
-) -> dict[str, Any]:
-    """Gather data payload for the Devil's Advocate.
-
-    Sees: all Round 1 assessments from the other agents, plus historical
-    council session outcomes for calibration.
-    """
+def gather_macro_data(db_path: str = DB_PATH) -> str:
+    """Gather macroeconomic and regime data for Macro Navigator."""
+    parts = []
     try:
-        past_sessions = _query_db(
-            """SELECT session_id, consensus, confidence_weighted_score,
-                      is_contested, created_at
-               FROM council_sessions
-               ORDER BY created_at DESC
-               LIMIT 10""",
-            db_path=db_path,
-        )
+        with sqlite3.connect(db_path) as conn:
+            conn.row_factory = sqlite3.Row
 
-        return {
-            "round1_assessments": round1_assessments,
-            "past_sessions": past_sessions,
-        }
+            # Key macro indicators
+            try:
+                indicators = [
+                    ("DFF", "Fed Funds Rate"),
+                    ("T10Y2Y", "10Y-2Y Spread"),
+                    ("T10Y3M", "10Y-3M Spread"),
+                    ("BAMLH0A0HYM2", "HY Spread (OAS)"),
+                    ("UNRATE", "Unemployment"),
+                ]
+                lines = []
+                for sid, label in indicators:
+                    row = conn.execute(
+                        "SELECT value, date FROM macro_snapshots "
+                        "WHERE series_id = ? ORDER BY date DESC LIMIT 1", (sid,)
+                    ).fetchone()
+                    if row:
+                        lines.append(f"  {label}: {row['value']:.2f} ({row['date']})")
+                if lines:
+                    parts.append("Macro indicators:")
+                    parts.extend(lines)
+            except Exception as e:
+                logger.debug("[COUNCIL] Macro indicators: %s", e)
+
+            # Yield curve
+            try:
+                spread = conn.execute(
+                    "SELECT value FROM macro_snapshots "
+                    "WHERE series_id = 'T10Y2Y' ORDER BY date DESC LIMIT 1"
+                ).fetchone()
+                if spread:
+                    v = spread['value']
+                    if v < 0:
+                        parts.append(f"\n⚠️ Yield curve INVERTED ({v:.2f}%)")
+                    elif v < 0.5:
+                        parts.append(f"\nYield curve flat ({v:.2f}%)")
+                    else:
+                        parts.append(f"\nYield curve normal ({v:.2f}%)")
+            except Exception:
+                pass
+
+            # Credit conditions
+            try:
+                hy = conn.execute(
+                    "SELECT value FROM macro_snapshots "
+                    "WHERE series_id = 'BAMLH0A0HYM2' ORDER BY date DESC LIMIT 1"
+                ).fetchone()
+                hy_avg = conn.execute(
+                    "SELECT AVG(value) as avg FROM macro_snapshots "
+                    "WHERE series_id = 'BAMLH0A0HYM2' AND date > date('now', '-365 days')"
+                ).fetchone()
+                if hy and hy_avg and hy_avg['avg']:
+                    z = (hy['value'] - hy_avg['avg']) / max(0.1, abs(hy_avg['avg'] * 0.15))
+                    status = "tight" if z < 0 else "normal" if z < 1 else "widening" if z < 2 else "STRESS"
+                    parts.append(f"Credit: {status} (HY OAS z ≈ {z:.1f})")
+            except Exception:
+                pass
+
+            # Sector performance from closed trades
+            try:
+                sp = conn.execute(
+                    "SELECT sector, AVG(pnl_pct) as avg, COUNT(*) as n "
+                    "FROM shadow_trades WHERE status = 'closed' AND sector IS NOT NULL "
+                    "GROUP BY sector HAVING n >= 2 ORDER BY avg DESC"
+                ).fetchall()
+                if sp:
+                    parts.append("\nSector performance (closed trades):")
+                    for s in sp:
+                        e = "🟢" if s['avg'] > 0 else "🔴"
+                        parts.append(f"  {e} {s['sector']}: {s['avg']:+.1f}% ({s['n']})")
+            except Exception:
+                pass
+
     except Exception as e:
-        logger.warning("Devils advocate data gather failed: %s", e)
-        return {"round1_assessments": round1_assessments}
+        logger.warning("[COUNCIL] Macro data gather failed: %s", e)
+
+    return "\n".join(parts) if parts else "No macro data available."
 
 
-# Mapping agent names to their data-gathering functions.
-# The devil's advocate is intentionally excluded here because it requires
-# Round 1 results as input (handled separately in the protocol).
+# ── Agent-to-function mapping ─────────────────────────────────────
+# All 5 agents run in Round 1 (no special-casing like old devils_advocate)
+
 AGENT_DATA_FUNCTIONS = {
-    "risk_officer": gather_risk_officer_data,
-    "alpha_strategist": gather_alpha_strategist_data,
-    "data_scientist": gather_data_scientist_data,
-    "regime_analyst": gather_regime_analyst_data,
+    "tactical_operator": gather_tactical_data,
+    "strategic_architect": gather_strategic_data,
+    "red_team": gather_risk_data,
+    "innovation_engine": gather_innovation_data,
+    "macro_navigator": gather_macro_data,
 }

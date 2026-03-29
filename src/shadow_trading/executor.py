@@ -68,11 +68,13 @@ def open_shadow_trade(
         from src.risk.governor import RiskGovernor, get_portfolio_state
         governor = RiskGovernor(config)
         portfolio = get_portfolio_state(db_path)
+        tl_mult = features.get("traffic_light_multiplier", 1.0)
         check = governor.check_trade(
             packet.ticker,
             packet.position_sizing.allocation_dollars,
             features,
             portfolio,
+            traffic_light_multiplier=tl_mult,
         )
         if not check["approved"]:
             reason = check.get("rejection_reason", "Risk check failed")
@@ -275,6 +277,23 @@ def open_shadow_trade(
 
     trade_id = insert_shadow_trade(trade_data, db_path)
 
+    # Implementation Shortfall tracking
+    signal_price = features.get("signal_price")
+    actual_fill = trade_data.get("actual_entry_price", entry_price)
+    if signal_price and signal_price > 0 and trade_id:
+        try:
+            is_bps = ((actual_fill - signal_price) / signal_price) * 10000
+            with sqlite3.connect(db_path) as _is_conn:
+                _is_conn.execute(
+                    "UPDATE shadow_trades SET signal_price = ?, implementation_shortfall_bps = ? "
+                    "WHERE trade_id = ?",
+                    (signal_price, round(is_bps, 2), trade_id),
+                )
+            logger.info("[IS] %s: signal=$%.2f fill=$%.2f IS=%.1f bps",
+                        packet.ticker, signal_price, actual_fill, is_bps)
+        except Exception as e:
+            logger.warning("[IS] Failed to store IS for %s: %s", packet.ticker, e)
+
     # Update journal with shadow entry
     if recommendation_id:
         update_recommendation(
@@ -303,8 +322,12 @@ def open_shadow_trade(
 
 def check_and_manage_open_trades(
     db_path: str = "ai_research_desk.sqlite3",
+    source_filter: str | None = None,
 ) -> list[dict]:
     """Check all open shadow trades and manage exits.
+
+    Args:
+        source_filter: If set, only manage trades with this source (e.g., "live", "paper").
 
     Returns a list of action dicts describing what happened.
     """
@@ -313,6 +336,8 @@ def check_and_manage_open_trades(
     timeout_days = shadow_cfg.get("timeout_days", 15)
 
     open_trades = get_open_shadow_trades(db_path)
+    if source_filter:
+        open_trades = [t for t in open_trades if t.get("source") == source_filter]
     actions = []
 
     et = ZoneInfo("America/New_York")
@@ -605,8 +630,8 @@ def open_live_trade(
                         f"Live equity ${live_equity:.2f} below 50% of starting ${starting_capital:.2f}. "
                         f"Live trading halted.",
                     )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("[LIVE] Capital guard Telegram alert failed: %s", e)
             return None
     except Exception as e:
         logger.warning("[LIVE] Could not check live account: %s — skipping", e)
@@ -641,8 +666,8 @@ def open_live_trade(
                         f"Live daily P&L ${daily_live_pnl:.2f} exceeds -5% of ${starting_capital:.2f}. "
                         f"No more live trades today.",
                     )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("[LIVE] Daily loss Telegram alert failed: %s", e)
             return None
     except Exception as e:
         logger.debug("[LIVE] Daily loss check failed: %s", e)
@@ -657,8 +682,8 @@ def open_live_trade(
         if len(open_live_trades) >= max_positions:
             logger.info("[LIVE] At live position limit (%d), skipping", max_positions)
             return None
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("[LIVE] Position limit check failed: %s — continuing", e)
 
     # Duplicate check (live-specific)
     ticker = packet.ticker
@@ -670,8 +695,8 @@ def open_live_trade(
         if any(t["ticker"] == ticker for t in open_live_trades):
             logger.info("[LIVE] Already have live trade for %s, skipping", ticker)
             return None
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("[LIVE] Duplicate check failed: %s — continuing", e)
 
     # Use live-specific risk parameters
     live_risk = live_cfg.get("risk", {})
@@ -775,8 +800,8 @@ def open_live_trade(
                 setup_confidence=features.get("setup_confidence"),
                 source="live",
             )
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("[LIVE] Telegram notify_trade_opened failed: %s", e)
 
     # 1F. Check for live trade open milestones
     _check_open_milestones(db_path, source="live")
@@ -1037,8 +1062,8 @@ def _check_sector_exposure(db_path: str = "ai_research_desk.sqlite3") -> None:
                     import yfinance as yf
                     info = yf.Ticker(ticker).info
                     sector = info.get("sector", "Unknown")
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug("[EXPOSURE] yfinance sector lookup failed for %s: %s", ticker, e)
                 sectors.setdefault(sector, []).append(ticker)
 
         total_positions = len(open_trades)
@@ -1063,8 +1088,8 @@ def _get_current_price_safe(ticker: str) -> float | None:
         price = get_current_price(ticker)
         if price:
             return price
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("[PRICE] Alpaca price fetch failed for %s: %s", ticker, e)
 
     # Fallback to yfinance
     try:
@@ -1072,7 +1097,7 @@ def _get_current_price_safe(ticker: str) -> float | None:
         data = fetch_ohlcv([ticker], period="5d")
         if ticker in data and not data[ticker].empty:
             return float(data[ticker]["Close"].iloc[-1])
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("[PRICE] yfinance price fetch failed for %s: %s", ticker, e)
 
     return None

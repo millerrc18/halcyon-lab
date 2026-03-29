@@ -526,6 +526,16 @@ class WatchLoop:
         except Exception as e:
             logger.warning("[WATCH] Trade management failed: %s", e)
 
+        # Independent live trade check (fires even if paper trading disabled)
+        try:
+            from src.shadow_trading.executor import check_and_manage_open_trades as _check_live
+            _live_actions = _check_live(source_filter="live")
+            _live_closed = len([a for a in _live_actions if a.get("type") == "closed"])
+            if _live_closed:
+                logger.info("[WATCH] Live trade check: %d trades closed", _live_closed)
+        except Exception as e:
+            logger.warning("[WATCH] Independent live trade check failed: %s", e)
+
         try:
             broadcast_sync("scan_complete", {"tickers_scanned": len(universe),
                                              "packets": len(packet_worthy)})
@@ -727,6 +737,26 @@ class WatchLoop:
             """CREATE TABLE IF NOT EXISTS research_docs (
                 id TEXT PRIMARY KEY, filename TEXT, title TEXT, category TEXT,
                 content TEXT, size_kb REAL, updated_at TEXT)""",
+            """CREATE TABLE IF NOT EXISTS council_calibrations (
+                calibration_id TEXT PRIMARY KEY,
+                session_id TEXT NOT NULL,
+                agent_name TEXT,
+                prediction TEXT NOT NULL,
+                prediction_confidence REAL NOT NULL,
+                verification_date TEXT NOT NULL,
+                actual_outcome TEXT,
+                correct INTEGER,
+                created_at TEXT NOT NULL)""",
+            """CREATE TABLE IF NOT EXISTS traffic_light_state (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                current_regime TEXT NOT NULL DEFAULT 'GREEN',
+                pending_regime TEXT,
+                pending_count INTEGER DEFAULT 0,
+                last_vix_score INTEGER DEFAULT 0,
+                last_trend_score INTEGER DEFAULT 0,
+                last_credit_score INTEGER DEFAULT 0,
+                last_total_score INTEGER DEFAULT 0,
+                updated_at TEXT)""",
         ]
         # Slippage columns on shadow_trades
         slippage_cols = [
@@ -754,6 +784,16 @@ class WatchLoop:
                         conn.execute(f"ALTER TABLE edgar_filings ADD COLUMN {col} {typ}")
                     except Exception as e:
                         logger.debug("[WATCH] ALTER TABLE edgar_filings ADD %s (likely exists): %s", col, e)
+                # Council + IS columns
+                for _alter in [
+                    "ALTER TABLE council_sessions ADD COLUMN result_json TEXT",
+                    "ALTER TABLE shadow_trades ADD COLUMN signal_price REAL",
+                    "ALTER TABLE shadow_trades ADD COLUMN implementation_shortfall_bps REAL",
+                ]:
+                    try:
+                        conn.execute(_alter)
+                    except Exception as e:
+                        logger.debug("[WATCH] %s (likely exists): %s", _alter[:50], e)
             logger.info("[WATCH] All SQLite tables verified/created")
 
             # Populate research docs from markdown files
@@ -1297,12 +1337,31 @@ class WatchLoop:
             if is_telegram_enabled():
                 model_name = get_active_model_name()
                 counts = get_training_example_counts()
+                # Compute week-over-week training metrics
+                _retrain_total = counts.get("total", 0)
+                try:
+                    import sqlite3 as _sq
+                    from datetime import timedelta as _td
+                    with _sq.connect("ai_research_desk.sqlite3") as _rc:
+                        _week_ago = (datetime.now(ET) - _td(days=7)).isoformat()
+                        _new_wk = _rc.execute(
+                            "SELECT COUNT(*) FROM training_examples WHERE created_at > ?",
+                            (_week_ago,)
+                        ).fetchone()[0]
+                        _new_paper = _rc.execute(
+                            "SELECT COUNT(*) FROM training_examples WHERE created_at > ? AND source LIKE '%paper%'",
+                            (_week_ago,)
+                        ).fetchone()[0]
+                except Exception:
+                    _new_wk = 0
+                    _new_paper = 0
+
                 notify_retrain_report(
                     model_name=model_name,
-                    training_examples=counts.get("total", 0),
-                    prev_examples=counts.get("total", 0),
-                    new_this_week=counts.get("total", 0),
-                    new_paper=0,
+                    training_examples=_retrain_total,
+                    prev_examples=_retrain_total - _new_wk,
+                    new_this_week=_new_wk,
+                    new_paper=_new_paper,
                     new_live=0,
                     canary_status="STABLE",
                     perplexity=0.0,
@@ -1340,25 +1399,18 @@ class WatchLoop:
 
     # ── Overnight Schedule Methods ────────────────────────────────────
 
-    def _get_overnight_logger(self):
-        """Get OvernightPipeline instance for task logging to overnight_run_log."""
-        if not hasattr(self, '_overnight_pipeline'):
-            try:
-                from src.scheduler.overnight import OvernightPipeline
-                self._overnight_pipeline = OvernightPipeline()
-            except Exception as e:
-                logger.debug("[WATCH] OvernightPipeline init failed: %s", e)
-                self._overnight_pipeline = None
-        return self._overnight_pipeline
-
     def _log_overnight_task(self, task_name: str, status: str,
                             started_at: str, finished_at: str | None = None,
                             result: str | None = None, error: str | None = None):
-        """Log overnight task result via OvernightPipeline's run log."""
+        """Log overnight task result to activity log."""
         try:
-            pipeline = self._get_overnight_logger()
-            if pipeline:
-                pipeline._log_task(task_name, status, started_at, finished_at, result, error)
+            from src.logging.activity import log_activity
+            detail = f"{task_name}: {status}"
+            if result:
+                detail += f" — {result}"
+            if error:
+                detail += f" — ERROR: {error}"
+            log_activity("overnight_task", detail)
         except Exception as e:
             logger.debug("[WATCH] Failed to log overnight task: %s", e)
 
