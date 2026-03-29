@@ -7,6 +7,8 @@ Verifies each agent can gather data without crashing on:
 """
 
 import sqlite3
+from datetime import datetime, timedelta
+
 import pytest
 
 from src.council.agents import (
@@ -73,43 +75,58 @@ def db_path(tmp_path):
 @pytest.fixture
 def populated_db(db_path):
     """DB with some realistic data."""
+    # Use relative timestamps so tests don't break as time passes
+    now = datetime.utcnow()
+    recent = now.strftime("%Y-%m-%dT%H:%M:%S")
+    two_days_ago = (now - timedelta(days=2)).strftime("%Y-%m-%dT%H:%M:%S")
+    yesterday = (now - timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%S")
+    today = now.strftime("%Y-%m-%d")
+
     with sqlite3.connect(db_path) as conn:
         conn.execute(
             "INSERT INTO shadow_trades (trade_id, ticker, direction, entry_price, stop_price, "
             "target_1, planned_shares, status, created_at) "
-            "VALUES ('t1', 'AAPL', 'long', 250.0, 240.0, 270.0, 10, 'open', '2026-03-27T10:00:00')"
+            "VALUES ('t1', 'AAPL', 'long', 250.0, 240.0, 270.0, 10, 'open', ?)",
+            (recent,),
         )
         conn.execute(
             "INSERT INTO shadow_trades (trade_id, ticker, direction, entry_price, actual_exit_price, "
             "pnl_dollars, pnl_pct, exit_reason, status, created_at, actual_exit_time) "
             "VALUES ('t2', 'MSFT', 'long', 400.0, 420.0, 200.0, 5.0, 'target_hit', 'closed', "
-            "'2026-03-25T10:00:00', '2026-03-27T14:00:00')"
+            "?, ?)",
+            (two_days_ago, yesterday),
         )
         conn.execute(
             "INSERT INTO vix_term_structure (collected_date, vix, vix9d, vix3m, vix1y, "
             "term_structure_slope, near_term_ratio) "
-            "VALUES ('2026-03-27', 22.5, 24.0, 21.0, 20.0, -0.05, 1.08)"
+            "VALUES (?, 22.5, 24.0, 21.0, 20.0, -0.05, 1.08)",
+            (today,),
         )
         conn.execute(
             "INSERT INTO macro_snapshots (collected_date, series_id, series_name, value) "
-            "VALUES ('2026-03-27', 'BAMLH0A0HYM2', 'HY Spread', 3.45)"
+            "VALUES (?, 'BAMLH0A0HYM2', 'HY Spread', 3.45)",
+            (today,),
         )
         conn.execute(
             "INSERT INTO macro_snapshots (collected_date, series_id, series_name, value) "
-            "VALUES ('2026-03-27', 'NFCI', 'Financial Conditions', -0.35)"
+            "VALUES (?, 'NFCI', 'Financial Conditions', -0.35)",
+            (today,),
         )
         conn.execute(
             "INSERT INTO recommendations (recommendation_id, ticker, priority_score, "
             "confidence_score, market_regime, sector_context, created_at) "
-            "VALUES ('r1', 'CAT', 85, 7, 'TRANSITION', 'Industrials', '2026-03-27T12:00:00')"
+            "VALUES ('r1', 'CAT', 85, 7, 'TRANSITION', 'Industrials', ?)",
+            (recent,),
         )
         conn.execute(
             "INSERT INTO training_examples (example_id, created_at, source, quality_score_auto, difficulty) "
-            "VALUES ('ex1', '2026-03-27T16:00:00', 'blinded_win', 4.2, 'medium')"
+            "VALUES ('ex1', ?, 'blinded_win', 4.2, 'medium')",
+            (recent,),
         )
         conn.execute(
             "INSERT INTO model_versions (version_id, version_name, status, created_at, training_examples_count) "
-            "VALUES ('v1', 'halcyon-v1.0.0', 'active', '2026-03-27T10:00:00', 969)"
+            "VALUES ('v1', 'halcyon-v1.0.0', 'active', ?, 969)",
+            (recent,),
         )
     return db_path
 

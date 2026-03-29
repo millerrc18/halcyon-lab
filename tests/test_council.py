@@ -126,6 +126,26 @@ def council_db(tmp_path):
             vix_close REAL
         );
 
+        CREATE TABLE IF NOT EXISTS vix_term_structure (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            collected_date TEXT,
+            vix REAL,
+            vix9d REAL,
+            vix3m REAL,
+            vix1y REAL,
+            term_structure_slope REAL,
+            near_term_ratio REAL
+        );
+
+        CREATE TABLE IF NOT EXISTS macro_snapshots (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            series_id TEXT,
+            collected_date TEXT,
+            value REAL,
+            previous_value REAL,
+            change_pct REAL
+        );
+
         CREATE TABLE IF NOT EXISTS fred_observations (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             series_id TEXT,
@@ -137,8 +157,11 @@ def council_db(tmp_path):
             example_id TEXT PRIMARY KEY,
             created_at TEXT NOT NULL,
             quality_score REAL,
+            quality_score_auto REAL,
             quality_grade TEXT,
-            purpose TEXT
+            purpose TEXT,
+            source TEXT,
+            difficulty TEXT
         );
 
         CREATE TABLE IF NOT EXISTS model_versions (
@@ -168,6 +191,22 @@ def council_db(tmp_path):
     conn.execute(
         "INSERT INTO vix_daily VALUES (?, 15.0, 16.0, 14.5, 15.2)",
         (datetime.now(ET).strftime("%Y-%m-%d"),),
+    )
+    today = datetime.now(ET).strftime("%Y-%m-%d")
+    conn.execute(
+        "INSERT INTO vix_term_structure (collected_date, vix, vix9d, vix3m, vix1y, term_structure_slope, near_term_ratio) "
+        "VALUES (?, 15.2, 14.0, 16.5, 18.0, 0.05, 0.92)",
+        (today,),
+    )
+    conn.execute(
+        "INSERT INTO macro_snapshots (series_id, collected_date, value, previous_value, change_pct) "
+        "VALUES ('NFCI', ?, -0.5, -0.45, -11.1)",
+        (today,),
+    )
+    conn.execute(
+        "INSERT INTO macro_snapshots (series_id, collected_date, value, previous_value, change_pct) "
+        "VALUES ('BAMLH0A0HYM2', ?, 3.5, 3.4, 2.9)",
+        (today,),
     )
     conn.commit()
     conn.close()
