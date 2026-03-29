@@ -157,3 +157,11 @@
 - [ ] P2: FinBERT on CPU for earnings sentiment (3.9 bps daily alpha, yiyanghkust/finbert-tone, ONNX INT8)
 - [ ] P2: Walk-forward backtesting protocol (CPCV, multiple testing correction, DSR)
 - [ ] P2: Disaster recovery infrastructure ($300-500: UPS, cellular backup, cloud failover)
+
+## Research Decisions (4 new docs, March 29 batch 3)
+
+### New Roadmap Items:
+- [ ] P2: Monthly section ablation feature importance monitoring (35 min/month, no infra change)
+- [ ] P2: SEC EDGAR XBRL companyfacts.zip parser for PEAD enrichment (free, quarterly maintenance)
+- [ ] P2: Risk budgeting transition: 1/N now → ERC at 200 trades → Kelly at 500 trades
+- [ ] DECISION NEEDED: Wyoming LLC formation timing for 475(f) MTM election (75-day window)
