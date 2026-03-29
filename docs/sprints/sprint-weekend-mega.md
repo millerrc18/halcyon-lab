@@ -140,6 +140,18 @@ Cloud dashboard is BLIND to everything we built. Read `src/sync/render_sync.py` 
 - `council_sessions.result_json`
 - `council_votes.direction`, `council_votes.confidence_float`, `council_votes.assessment_json`
 
+## A4. Audit quick-fixes (from GitHub Issues #30-#39)
+
+CC and Codex filed 14 automated audit issues. These 5 are quick fixes (do them here):
+
+- **#30** `src/api/routes/system.py` line 291: bare `except` silently swallows errors in `data_collection_stats()` → add `as e` + `logger.warning`
+- **#31** `src/api/websocket.py` line 46: `broadcast_sync()` silently swallows all exceptions → add logging
+- **#32** `src/api/cloud_app.py` line 609: incorrect type annotation on `activity_feed` parameter → fix type hint
+- **#33** Delete `src/council/*_v1_backup.py` files (3 files, ~1154 lines of dead code). Council v2 is deployed and verified.
+- **#37** `src/data_collection/edgar_collector.py` line 96: dead code `_fetch_recent_filings()` → delete or document
+
+The remaining 9 issues (#26-29, #34-36, #38-39) are refactoring tasks (large files, long functions). Add to Phase 2 backlog, not this sprint.
+
 ---
 
 # ══════════════════════════════════════════════════════════════
