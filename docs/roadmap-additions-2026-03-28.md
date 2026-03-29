@@ -142,3 +142,18 @@
 - Alternative data ROI by source
 - Breakout signal integration into pullback adapter
 - And 13 more training/infrastructure/business topics
+
+## Research Decisions (5 new docs, March 29 batch 2)
+
+### Decided:
+- [DECISION] Traffic Light RED=0.1 stays as safety override. Volatility-adaptive sizing (Nagel 2012: wider stops + smaller positions + shorter holds) → Phase 2 enhancement layered on top
+- [DECISION] Event Calendar: implement full 0-10 continuous risk scoring with additive compounding, linear position-size reduction with 25% floor, hard cutoffs above score 8 → weekend mega sprint
+- [DECISION] Bracket orders: verify GTC (not DAY) immediately — P0 before Monday open
+
+### New Roadmap Items:
+- [ ] P0: Verify bracket orders use time_in_force=GTC (if DAY → urgent fix)
+- [ ] P1: Event calendar 0-10 risk scoring system (earnings 5-day, FOMC 2-day, OpEx/NFP/CPI sizing mods)
+- [ ] P2: Volatility-adaptive position management (wider ATR stops, ATR-scaled sizing, shorter holds at high VIX)
+- [ ] P2: FinBERT on CPU for earnings sentiment (3.9 bps daily alpha, yiyanghkust/finbert-tone, ONNX INT8)
+- [ ] P2: Walk-forward backtesting protocol (CPCV, multiple testing correction, DSR)
+- [ ] P2: Disaster recovery infrastructure ($300-500: UPS, cellular backup, cloud failover)
