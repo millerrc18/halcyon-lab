@@ -1,0 +1,70 @@
+=== EXAMPLE 1 / 5 ===
+Recommendation ID: b8ee881e-a0b7-4830-9cce-55ca70e2cd7d
+(DO NOT include this ID in ChatGPT — it's for your records)
+
+Analyze the following pullback-in-strong-trend setup:
+
+Ticker: COP
+Date: 2026-03-24
+Price: $129.52000427246094
+Score: 65.0
+
+
+---
+
+=== EXAMPLE 2 / 5 ===
+Recommendation ID: 266d5967-3d6d-4990-9794-49139cd6b80b
+(DO NOT include this ID in ChatGPT — it's for your records)
+
+Analyze the following pullback-in-strong-trend setup:
+
+Ticker: TGT
+Date: 2026-03-24
+Price: $114.15499877929688
+Score: 100.0
+
+
+---
+
+=== EXAMPLE 3 / 5 ===
+Recommendation ID: f41e72fb-c9fb-4c60-8edf-3a3e914adf7d
+(DO NOT include this ID in ChatGPT — it's for your records)
+
+Analyze the following pullback-in-strong-trend setup:
+
+Ticker: CSCO
+Date: 2026-03-24
+Price: $78.94000244140625
+Score: 90.0
+
+
+---
+
+=== EXAMPLE 4 / 5 ===
+Recommendation ID: e677ee4a-92fb-4dc7-b89e-283b680dd2cf
+(DO NOT include this ID in ChatGPT — it's for your records)
+
+Analyze the following pullback-in-strong-trend setup:
+
+Ticker: JNJ
+Date: 2026-03-24
+Price: $233.86000061035156
+Score: 65.0
+
+
+---
+
+=== EXAMPLE 5 / 5 ===
+Recommendation ID: 53b29a9d-2810-485c-a0ee-b9e7c8cc6383
+(DO NOT include this ID in ChatGPT — it's for your records)
+
+Analyze the following pullback-in-strong-trend setup:
+
+Ticker: LIN
+Date: 2026-03-24
+Price: $480.8299865722656
+Score: 100.0
+
+
+---
+
