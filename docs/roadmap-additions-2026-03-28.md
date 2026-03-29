@@ -112,3 +112,33 @@
 - [ ] Monthly planning sessions (requires 3 months calibration data)
 - [ ] Agent authority weighting based on calibration accuracy (ECE-based)
 - [ ] Auto-tighten council bounds if value-added negative 12+ weeks
+
+## Research-Informed Roadmap Additions (10 new docs, March 29)
+
+### P0 — This Week
+- [ ] Change timeout_days: pullback→7 (currently 15, research says 80-85% of edge in days 1-5)
+- [ ] Add strategy-specific timeout support (not one-size-fits-all)
+- [ ] Alpaca bracket order redundancy sprint: position monitoring, extended hours protection, partial fill handling (9 documented failure modes)
+
+### P1 — Phase 1 (training pipeline)
+- [ ] GBNF grammar enforcement via llama-cpp-python (solves 62% fallback rate, Ollama cannot do XML)
+- [ ] Switch training from BitsAndBytes to Unsloth (now fits RTX 3060 12GB, 60% lower VRAM)
+- [ ] Upgrade TRL 0.24 → 0.29.1 (Dr. GRPO built in)
+- [ ] Prompt caching on council sessions (agents share 10K+ prompt, 90% off for agents 2-5)
+- [ ] Data quality ingestion gates (Pandera + custom validator, ~50 lines, $0 cost)
+
+### P2 — Phase 2
+- [ ] Batch API for overnight scoring/generation (50% discount, Haiku 4.5 for scoring)
+- [ ] Conviction calibration (Platt scaling at 50-trade gate, isotonic at 200)
+- [ ] Multi-LoRA serving via llama-server (not Ollama, 10-50ms swap, all adapters fit on 3060)
+- [ ] MFE/MAE analysis framework for empirical holding period optimization (needs 100+ trades)
+- [ ] Numerical hallucination verification pipeline (pre-compute all math, NLI verifier)
+
+### Research Still Pending
+18 prompts from docs/sprints/deep-research-prompts-expanded-all.md not yet fired:
+- Sector rotation timing models
+- Options volatility surface for equity traders  
+- Fund formation legal requirements (Wyoming LLC → registered fund)
+- Alternative data ROI by source
+- Breakout signal integration into pullback adapter
+- And 13 more training/infrastructure/business topics
