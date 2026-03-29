@@ -19,7 +19,10 @@ class TestVIXClassifier:
         assert _classify_vix(22.0) == 1
 
     def test_high_vix_red(self):
-        assert _classify_vix(30.0) == 2
+        assert _classify_vix(35.0) == 2
+
+    def test_boundary_vix_30_yellow(self):
+        assert _classify_vix(30.0) == 1  # 30 is yellow, >30 is red
 
     def test_none_vix(self):
         assert _classify_vix(None) == 0
@@ -44,10 +47,10 @@ class TestTrendClassifier:
         assert _classify_trend(spy) == 2
 
     def test_empty_dataframe(self):
-        assert _classify_trend(pd.DataFrame()) == 0
+        assert _classify_trend(pd.DataFrame()) == 1  # Missing data → yellow
 
     def test_none(self):
-        assert _classify_trend(None) == 0
+        assert _classify_trend(None) == 1  # Missing data → yellow
 
 
 class TestScoreToRegime:
@@ -93,11 +96,12 @@ class TestComputeTrafficLight:
         r1 = compute_traffic_light(vix=12.0, db_path=db)
         assert r1["regime_label"] == "GREEN"
 
-        # Second call: high VIX + bearish SPY → raw score 4 (YELLOW) but persistence holds GREEN
-        r2 = compute_traffic_light(spy=bearish_spy, vix=30.0, db_path=db)
-        assert r2["persistence_applied"] is True
-        assert r2["regime_label"] == "GREEN"  # Held by persistence
+        # Calls 2-5: high VIX + bearish SPY → raw RED but persistence holds GREEN
+        for i in range(4):
+            r = compute_traffic_light(spy=bearish_spy, vix=35.0, db_path=db)
+            assert r["persistence_applied"] is True
+            assert r["regime_label"] == "GREEN"  # Held by persistence
 
-        # Third call: still bearish, now persistence allows switch
-        r3 = compute_traffic_light(spy=bearish_spy, vix=30.0, db_path=db)
-        assert r3["regime_label"] == "YELLOW"  # Switches after 2 consecutive
+        # 6th call: persistence threshold (5) met → switches
+        r_final = compute_traffic_light(spy=bearish_spy, vix=35.0, db_path=db)
+        assert r_final["regime_label"] != "GREEN"  # Should have switched

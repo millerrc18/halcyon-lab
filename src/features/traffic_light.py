@@ -1,12 +1,15 @@
 """Traffic Light regime overlay — controls position sizing.
 
 Three indicators scored 0-2 each (0=green, 1=yellow, 2=red):
-1. VIX Level: <18 → 0, 18-25 → 1, >25 → 2
-2. S&P 200-DMA Trend: above & rising → 0, above & flat/falling → 1, below → 2
+1. VIX Level: <20 → 0, 20-30 → 1, >30 → 2
+2. S&P 200-DMA Trend: >3% above → 0, within 3% → 1, below → 2
 3. HY Credit Spread Z-score: <0.5 → 0, 0.5-1.5 → 1, >1.5 → 2
 
 Total score 0-6 maps to: GREEN (0-2), YELLOW (3-4), RED (5-6)
-Persistence: must see same state 2 consecutive times before switching.
+Multipliers: GREEN=1.0, YELLOW=0.5, RED=0.1 (minimal, never zero)
+Persistence: must see same state 5 consecutive readings before switching.
+
+Research: docs/research/Quantitative_Regime_Detection_for_Halcyon_Lab.md
 """
 
 import logging
@@ -51,42 +54,41 @@ def _ensure_state_table(db_path: str = "ai_research_desk.sqlite3"):
 
 
 def _classify_vix(vix: float | None) -> int:
+    """VIX thresholds from research: <20 green, 20-30 yellow, >30 red."""
     if vix is None:
         return 0
-    if vix < 18:
+    if vix < 20:
         return 0
-    elif vix <= 25:
+    elif vix <= 30:
         return 1
     else:
         return 2
 
 
 def _classify_trend(spy: pd.DataFrame | None) -> int:
+    """Trend from research: >3% above 200-DMA = green, within 3% = yellow, below = red."""
     if spy is None or spy.empty or len(spy) < 200:
-        return 0
+        return 1  # Missing data → yellow (conservative)
     try:
         close = spy["Close"] if "Close" in spy.columns else spy["close"]
         sma200 = close.rolling(200).mean()
         current = float(close.iloc[-1])
         sma_val = float(sma200.iloc[-1])
 
-        if pd.isna(sma_val):
-            return 0
+        if pd.isna(sma_val) or sma_val <= 0:
+            return 1  # Missing data → yellow
 
-        above = current > sma_val
-        # Check slope: compare current SMA to 20 days ago
-        sma_prev = float(sma200.iloc[-20]) if len(sma200) >= 20 else sma_val
-        rising = sma_val > sma_prev
+        pct_above = (current - sma_val) / sma_val
 
-        if above and rising:
-            return 0  # Green
-        elif above:
-            return 1  # Yellow (above but flat/falling)
+        if pct_above > 0.03:
+            return 0  # Green: >3% above 200-DMA
+        elif pct_above >= 0.0:
+            return 1  # Yellow: above but within 3%
         else:
-            return 2  # Red (below 200-DMA)
+            return 2  # Red: below 200-DMA
     except Exception as e:
         logger.warning("[TRAFFIC] Trend classification failed: %s", e)
-        return 0
+        return 1  # Default yellow on error
 
 
 def _classify_credit(db_path: str = "ai_research_desk.sqlite3") -> int:
@@ -130,7 +132,8 @@ def _score_to_regime(total_score: int) -> str:
 
 
 def _regime_to_multiplier(regime: str) -> float:
-    return {"GREEN": 1.0, "YELLOW": 0.5, "RED": 0.0}.get(regime, 1.0)
+    """GREEN=full sizing, YELLOW=half, RED=minimal (never zero — always allow some trading)."""
+    return {"GREEN": 1.0, "YELLOW": 0.5, "RED": 0.1}.get(regime, 1.0)
 
 
 def compute_traffic_light(
@@ -173,8 +176,8 @@ def compute_traffic_light(
                 elif raw_regime == pending:
                     # Same as pending — increment count
                     new_count = (count or 0) + 1
-                    if new_count >= 2:
-                        # Persistence threshold met — switch
+                    if new_count >= 5:
+                        # Persistence threshold met (5 consecutive readings ≈ 2.5 hours)
                         final_regime = raw_regime
                         conn.execute(
                             f"UPDATE {STATE_TABLE} SET current_regime = ?, pending_regime = NULL, "
