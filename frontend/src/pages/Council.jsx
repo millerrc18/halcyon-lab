@@ -37,7 +37,7 @@ function VoteBadge({ vote }) {
 }
 
 function AgentCard({ agent }) {
-  const isDissenter = agent.role === 'devils_advocate' || agent.is_dissenter || agent.is_devils_advocate
+  const isDissenter = agent.is_dissenter || agent.is_devils_advocate
   return (
     <div className="rounded-lg p-4" style={{
       background: 'var(--slate-700)',

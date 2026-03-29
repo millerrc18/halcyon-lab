@@ -161,3 +161,10 @@ council:
   daily_minute_et: 30
   rounds: 3
   temperature: 0.8
+
+# ── Execution Configuration ─────────────────────────────────────
+# Controls how bracket orders are placed for shadow/live trades.
+# ─────────────────────────────────────────────────────────────────
+execution:
+  order_type: limit                # "market" or "limit"
+  limit_timeout_seconds: 300       # Cancel unfilled limit orders after N seconds
