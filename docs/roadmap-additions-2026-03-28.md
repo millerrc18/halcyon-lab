@@ -165,3 +165,7 @@
 - [ ] P2: SEC EDGAR XBRL companyfacts.zip parser for PEAD enrichment (free, quarterly maintenance)
 - [ ] P2: Risk budgeting transition: 1/N now → ERC at 200 trades → Kelly at 500 trades
 - [ ] DECISION NEEDED: Wyoming LLC formation timing for 475(f) MTM election (75-day window)
+
+### Batch 3 Decisions:
+- [DECISION] Tax strategy: Table for later. Need more live capital and trade volume before pursuing TTS/475(f). Wyoming LLC formation not urgent at current $100 live scale.
+- [DECISION] Risk budgeting: Equal weight confirmed correct for Phase 1. Transition to ERC at 200+ trades/strategy, Kelly at 500+. No action needed now.
