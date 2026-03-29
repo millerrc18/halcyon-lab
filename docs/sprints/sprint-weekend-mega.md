@@ -3,15 +3,23 @@
 
 > **CONTEXT:** The system ran its first full trading week (March 31 – April 4, 2026).
 > NO changes were made during the week except critical fixes.
-> This sprint integrates all 46+ research findings, closes every gap identified
+> This sprint integrates all 55+ research findings, closes every gap identified
 > during the week, and prepares the system for Phase 1 steady-state operation.
 >
-> **CONSTRAINT:** Fire remaining 18 deep research prompts BEFORE this sprint.
-> Wait for all research to return. This sprint incorporates ALL findings.
+> **RESEARCH STATUS:** 55 documents in library. 10 remaining prompts fired
+> (combined mega prompt). Integrate results as they return — don't block on them.
 >
 > **SCOPE:** This is the largest sprint Halcyon Lab has ever executed.
-> Estimated: 15-20 parts, 2000+ lines of changes across 30+ files.
+> Estimated: 20+ parts, 2000+ lines of changes across 30+ files.
 > Plan for a full CC session (proto branch, thorough testing, merge).
+>
+> **CC INSTRUCTIONS:** This sprint has two parts:
+> 1. PART 1 (you and Claude assistant together): Merge cleanup, rewrite council tests
+> 2. PART 2 (CC solo): All remaining implementation work
+>
+> Ryan and Claude will handle the council test rewrite collaboratively because
+> the v2 council schema is complex and CC's prior attempt fixed for v1.
+> CC handles everything else.
 
 ---
 
