@@ -1,6 +1,25 @@
-# The Halcyon Framework v2: Compute, Value, Moat, and Multi-Strategy Architecture
+# The Halcyon Framework v2.1: Compute, Value, Moat, and Multi-Strategy Architecture
 
-> **Updated March 28, 2026** — Incorporates findings from 3 new research documents: Multi-Strategy Scaling, Complete Research Agenda (13 questions), and AI Council Redesign.
+> **Updated March 29, 2026** — Incorporates findings from 51 research documents including 15 new deep research results: holding period optimization, volatility-adaptive position management, event calendar integration, bracket order failure modes, GBNF grammar enforcement, Unsloth/TRL upgrades, Claude cost optimization, FinBERT NLP, walk-forward backtesting, conviction calibration, disaster recovery, data quality gates, numerical hallucination prevention, multi-LoRA serving, and Qwen3 tokenization analysis.
+
+---
+
+## Changes from v2
+
+| Area | v2 | v2.1 (updated) |
+|---|---|---|
+| RL method | REINFORCE++ | **Dr. GRPO** (`loss_type="dr_grpo"` in TRL 0.29.1) — REINFORCE++ not in TRL |
+| Holding period | 2-15 days (Ryan's guess) | **Pullback: 7 days** (80-85% of edge in days 1-5), MR: 5, PEAD: 10 |
+| High-VIX behavior | Traffic Light RED = reduce to 0.1× | RED stays 0.1× safety override; **Phase 2: volatility-adaptive** (Nagel 2012: edge AMPLIFIES with VIX >30) |
+| Event risk | PEAD enrichment in prompt | **0-10 continuous risk scoring** with additive compounding, linear sizing reduction, 25% floor, hard block ≥8 |
+| XML compliance | Hope model formats correctly | **GBNF grammar enforcement** via llama-cpp-python (Ollama cannot do XML) |
+| Training framework | BitsAndBytes + TRL 0.24 | **Unsloth** (now fits RTX 3060) + **TRL 0.29.1** (Dr. GRPO built in) |
+| Council cost | ~$0.50/session | **~$0.27/session** with prompt caching (agents 2-5 get 90% off shared prompt) |
+| Bracket orders | Assumed safe | **9 documented failure modes**; verify GTC; bracket monitor every 5 min |
+| NLP enrichment | None | **FinBERT** on CPU (Phase 3): 3.9 bps daily alpha from text sentiment |
+| Backtesting | Not specified | **Walk-forward** with CPCV, DSR, multiple testing correction |
+| Disaster recovery | Not specified | GTC brackets + $300-500 infrastructure (UPS, cellular, cloud failover) |
+| Conviction scores | 1-10 integer | **Poorly calibrated** (ECE 0.12-0.40); Platt scaling at 50-trade gate |
 
 ---
 
@@ -9,7 +28,7 @@
 | Area | v1 | v2 (updated) |
 |---|---|---|
 | Strategy count | Single strategy assumed | 4-6 uncorrelated strategies at steady state, 8 max across 3 desks |
-| RL method | GRPO planned | **REINFORCE++** (GRPO overfits on small prompt datasets) |
+| RL method | GRPO planned | **Dr. GRPO** (`loss_type="dr_grpo"` in TRL GRPOTrainer), skip DPO |
 | PEFT method | QLoRA | **QDoRA** (`use_dora=True` — 8% VRAM savings, no quality loss) |
 | Adapter architecture | Single adapter | Per-strategy LoRA adapters; shared when >70% feature overlap |
 | Council | Decorative sentiment label | Vote-first deliberation with structured JSON output and parameter control |
