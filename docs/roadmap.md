@@ -1,6 +1,6 @@
 # Halcyon Lab — Development Roadmap
 
-**Last Updated:** 2026-03-26
+**Last Updated:** 2026-03-28
 **Principle:** Every gate is performance-based, not time-based.
 
 ## Desk Architecture
@@ -78,6 +78,8 @@ Each desk is gated: the PREVIOUS desk must be profitable before the next desk la
 - **Brand Sprint:** Kingfisher palette (teal/amber/slate), Space Grotesk + Inter + JetBrains Mono, all 11 pages + 12 components themed
 - **PWA:** Installable on iPhone/iPad via Add to Home Screen, service worker for offline shell caching
 - **Competitive benchmark:** 28/100 overall score (honest baseline), 15-dimension scorecard tracking monthly
+- **Reliability Sprint:** Safety fixes, wire orphans, eliminate silent failures, system validation dashboard
+- **File logging:** RotatingFileHandler (10MB, 7 backups) for crash evidence
 
 ---
 

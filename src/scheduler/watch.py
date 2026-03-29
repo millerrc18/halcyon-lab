@@ -5,7 +5,9 @@ Simple Python loop — no APScheduler or cron dependencies.
 
 import time
 import logging
+from logging.handlers import RotatingFileHandler
 from datetime import datetime, date
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from src.config import load_config
@@ -845,6 +847,19 @@ class WatchLoop:
 
     def run(self):
         """Main watch loop. Checks every 60 seconds."""
+        # Set up file logging with rotation
+        log_dir = Path("logs")
+        log_dir.mkdir(exist_ok=True)
+        fh = RotatingFileHandler(
+            log_dir / "halcyon.log", maxBytes=10_000_000, backupCount=7
+        )
+        fh.setLevel(logging.INFO)
+        fh.setFormatter(logging.Formatter(
+            "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+        ))
+        logging.getLogger().addHandler(fh)
+        logging.getLogger().setLevel(logging.INFO)
+
         self._print_banner()
 
         # Ensure all expected tables exist
