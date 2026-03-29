@@ -389,4 +389,30 @@ Current Council.jsx (324 lines) shows session history and agent votes. Redesign:
 2. **Score thresholds:** Hardcoded. Documented in this file with instructions for changing if needed. To modify: edit the `DECISION_THRESHOLDS` dict in `src/council/protocol.py` — the thresholds are co-located in a single constant, not scattered.
 3. **Negative value response:** Alert after 8 weeks negative. Auto-tighten bounds (reduce max parameter adjustment from ±25% to ±10%) after 12 consecutive weeks negative. Auto-restore after 4 consecutive weeks positive.
 4. **Per-agent value tracking:** YES from day 1. Track BOTH holistic council value-added AND per-agent attribution. Per-agent tracking uses the `agent_name` field in `council_parameter_log` — each parameter adjustment is attributed to the agent whose recommendation drove it (or "consensus" if aggregated).
-5. **Session frequency:** Daily tactical + weekly strategic from launch. Monthly planning sessions added after 3 months of calibration data.
+5. **Session frequency:** Daily tactical + weekly strategic from launch. Monthly planning sessions added after 3 months of calibration data. On-demand "strategic" sessions can be triggered manually via CLI or Telegram with a custom question.
+
+### On-Demand Strategic Sessions
+
+The council can deliberate on any business-level question — hardware purchases, new desk proposals, scaling decisions, fund formation timing, hiring, etc. Trigger via:
+
+```
+python -m src.main council --type strategic --question "Should we buy the RTX 3090 now or wait until revenue starts?"
+```
+
+Or via Telegram:
+```
+/council Should we add a mean reversion desk now or wait for the 50-trade gate?
+```
+
+**How it works:** The custom question replaces the default "daily tactical briefing" user message. Each agent still receives its specialist data AND applies its analytical framework to the question. The vote-first protocol runs identically — direction becomes "proceed" (bullish) / "wait" (neutral) / "don't do this" (bearish).
+
+**Agent lenses on business questions:**
+- **Tactical Operator:** How does this affect current trading operations? Timeline impact?
+- **Strategic Architect:** ROI analysis. Phase gate alignment. Resource allocation tradeoff.
+- **Red Team:** What could go wrong? What are we not considering? Opportunity cost?
+- **Innovation Engine:** Technical feasibility. What does this unlock or block? Build vs buy?
+- **Macro Navigator:** External factors. Market timing. Regulatory implications.
+
+**Stored identically** in council_sessions with `session_type = "strategic"` and `trigger_reason = "<the question>"`. Value tracking still applies if the decision involves parameter changes. Calibration tracking applies if agents make falsifiable predictions about the outcome.
+
+**Cost:** Same as a daily session (~$0.30-0.50 per strategic question). No limit on frequency, but the rate limiter prevents parameter changes from accumulating faster than ±50%/week even across multiple sessions.
